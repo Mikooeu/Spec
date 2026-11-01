@@ -1,0 +1,35 @@
+# Secrets : ne jamais versionner
+.env
+*.pem
+*.key
+
+# Données collectées
+data/
+*.duckdb
+*.duckdb.wal
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Appli : stats exportées (régénérées par `python -m scoring export`)
+app/public/stats.json
+app/node_modules/
+app/dist/
+app/src-tauri/target/
+
+# Serveur Cloudflare
+server/node_modules/
+server/.wrangler/
+app/.env.local
+
+# Divers
+.DS_Store
+*.local
+.claude/
+CLAUDE-SECURITY-*/
+*.key
+spec-env-backup

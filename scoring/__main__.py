@@ -1,0 +1,156 @@
+"""Commandes :
+  python -m scoring build
+  python -m scoring recommend --role mid --pool "Ahri, Orianna, Viktor" \
+      --allies "Darius, Vi, Jinx" --enemies "Sylas, Lee Sin, Syndra, Nautilus"
+"""
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+
+import os
+
+from dotenv import load_dotenv
+
+from .champions import Champions
+from .score import LOW_DATA_GAMES, Params, Stats, parse_role, recommend
+
+ROLE_LABELS = {"TOP": "Top", "JUNGLE": "Jungle", "MIDDLE": "Mid", "BOTTOM": "ADC", "UTILITY": "Support"}
+
+
+def pct(x: float) -> str:
+    return f"{x * 100:.1f} %".replace(".", ",")
+
+
+def pts(x: float) -> str:
+    return f"{x * 100:+.1f} pt".replace(".", ",")
+
+
+def names(champions: Champions, text: str | None) -> list[int]:
+    if not text:
+        return []
+    return [champions.resolve(n) for n in text.split(",") if n.strip()]
+
+
+def print_result(i: str, r, champions: Champions) -> None:
+    flag = "  ⚠ peu de données" if r.games < LOW_DATA_GAMES else ""
+    print(f" {i:>2}  {champions.name(r.champ):<14} {pct(r.score):>8}   "
+          f"(base {pct(r.base)} · vis-à-vis {pts(r.lane)} · counters {pts(r.counters)} · "
+          f"synergies {pts(r.synergies)}) · {int(r.games)} parties{flag}")
+    likely = [d for d in r.lane_detail if d[1] >= 0.15]
+    for e, p, d, g in likely[:2]:
+        print(f"      face à {champions.name(e)} (vis-à-vis probable à {round(p * 100)} %) : {pts(d)} sur {int(g)} parties")
+
+
+
+def run_calibration(db_path: Path, data_dir: Path, force: bool) -> None:
+    from .calibrate import MIN_TEST_MATCHES, calibrate
+    results, info = calibrate(db_path, data_dir / "stats_train.duckdb")
+    n = info["test_matches"]
+    print(f"\nCalibrage · patch {info['patch']} · {info['train_matches']} parties pour apprendre, "
+          f"{n} mises de côté pour tester\n")
+    if not results:
+        sys.exit("Aucune partie mise de côté : laisse tourner le collecteur plus longtemps.")
+
+    neutral = results[0]
+    base_best = min((r for r in results if r.label.startswith("Winrate")), key=lambda r: r.log_loss)
+    full_best = min((r for r in results if r.label.startswith("Score")), key=lambda r: r.log_loss)
+    print(f"{'Méthode':<42} {'log loss':>9} {'Brier':>7} {'précision':>10}")
+    for r in (neutral, base_best, full_best):
+        print(f"{r.label:<42} {r.log_loss:>9.4f} {r.brier:>7.4f} {pct(r.accuracy):>10}")
+
+    gain = (base_best.log_loss - full_best.log_loss) / base_best.log_loss * 100
+    print(f"\nLe score complet améliore la prédiction de {gain:.2f} % par rapport au winrate de base seul."
+          .replace(".", ",", 1) if gain > 0 else
+          "\nLe score complet ne fait pas mieux que le winrate de base seul sur ces données.")
+
+    if n < MIN_TEST_MATCHES and not force:
+        print(f"\n⚠ Seulement {n} parties de test (minimum conseillé : {MIN_TEST_MATCHES}). "
+              "Réglages non enregistrés : relance plus tard, ou ajoute --force.")
+        return
+    chosen = full_best if gain > 0 else base_best
+    chosen.params.save(data_dir / "params.json", {"test_matches": n, "patch": info["patch"]})
+    p = chosen.params
+    print(f"\nRéglages enregistrés dans data/params.json : α={p.alpha}, β={p.beta}, k={int(p.k_base)}.")
+    print("Ils seront utilisés automatiquement par `recommend`.")
+
+
+def main() -> None:
+    load_dotenv()
+    data_dir = Path(os.getenv("DB_PATH", "data/draft.duckdb")).parent
+    db_path = Path(os.getenv("DB_PATH", "data/draft.duckdb"))
+    stats_path = data_dir / "stats.duckdb"
+    champs_path = data_dir / "champions.json"
+
+    parser = argparse.ArgumentParser(prog="scoring")
+    sub = parser.add_subparsers(dest="command", required=True)
+    b = sub.add_parser("build", help="agréger les parties en stats")
+    b.add_argument("--patch", help="forcer un patch, ex. 15.21")
+    e = sub.add_parser("export", help="exporter les stats en JSON pour l'appli Spec")
+    e.add_argument("--out", default="app/public/stats.json")
+    e.add_argument("--upload", action="store_true", help="envoyer aussi les stats au serveur Cloudflare de Spec")
+    c = sub.add_parser("calibrate", help="vérifier et régler le score sur 10 %% de parties mises de côté")
+    c.add_argument("--force", action="store_true", help="écrire les réglages même avec peu de parties")
+    r = sub.add_parser("recommend", help="classer les champions pour une draft")
+    r.add_argument("--role", required=True)
+    r.add_argument("--pool", required=True, help="champions du pool, séparés par des virgules")
+    r.add_argument("--allies", default="")
+    r.add_argument("--enemies", default="")
+    r.add_argument("--bans", default="")
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    if args.command == "build":
+        from .build import build_stats
+        Champions.load(champs_path, refresh=True)
+        meta = build_stats(db_path, stats_path, args.patch)
+        prev = f" + patch {meta['previous_patch']} à 50 %" if meta["previous_patch"] else ""
+        print(f"Stats prêtes : patch {meta['patch']}{prev}, {int(meta['matches'])} parties.")
+        return
+
+    if args.command == "export":
+        from .export import export_json
+        meta = export_json(stats_path, Champions.load(champs_path), Params.load(data_dir / "params.json"),
+                           Path(args.out))
+        print(f"Stats exportées dans {args.out} (patch {meta.get('patch')}, {meta.get('matches')} parties).")
+        if args.upload:
+            from .upload import upload_stats
+            load_dotenv()
+            size = upload_stats(Path(args.out), os.getenv("SPEC_API_URL", ""), os.getenv("SPEC_ADMIN_TOKEN", ""))
+            print(f"Stats envoyées au serveur Spec ({size // 1024} Ko).")
+        return
+
+    if args.command == "calibrate":
+        run_calibration(db_path, data_dir, args.force)
+        return
+
+    champions = Champions.load(champs_path)
+    try:
+        role = parse_role(args.role)
+        pool = names(champions, args.pool)
+        allies, enemies, bans = (names(champions, x) for x in (args.allies, args.enemies, args.bans))
+    except ValueError as exc:
+        sys.exit(str(exc))
+    stats = Stats.load(stats_path)
+
+    params = Params.load(data_dir / "params.json")
+    best, discovery = recommend(stats, role, pool, allies, enemies, bans, params=params)
+    patch = stats.meta.get("patch", "?")
+    print(f"\nTu joues {ROLE_LABELS[role]} · patch {patch} · {stats.meta.get('matches', '?')} parties Master+\n")
+    if best:
+        print("Recommandés dans ton pool :")
+        for i, res in enumerate(best, 1):
+            print_result(str(i), res, champions)
+    else:
+        print("Aucun champion de ton pool n'est disponible pour ce rôle (autofill ?).")
+    if discovery:
+        print("\nDécouverte :")
+        print_result("—", discovery, champions)
+    print()
+
+
+if __name__ == "__main__":
+    main()

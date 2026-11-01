@@ -1,0 +1,64 @@
+# Construit Spec pour Windows et publie une version (brouillon) avec les fichiers de mise à jour.
+# Lancement : onglet Actions du dépôt → « Version Windows » → Run workflow.
+# Secrets requis : TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD.
+# Variable requise : SPEC_API_URL (adresse du serveur Cloudflare, pas un secret).
+name: Version Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+
+      - name: Dépendances de l'appli
+        working-directory: app
+        run: npm ci
+
+      - name: Vérifier la configuration
+        shell: bash
+        run: |
+          test -n "${{ vars.SPEC_API_URL }}" || { echo "Variable SPEC_API_URL manquante (Settings → Secrets and variables → Actions → Variables)"; exit 1; }
+          test -n "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" || { echo "Secret TAURI_SIGNING_PRIVATE_KEY manquant"; exit 1; }
+
+      - name: Construire et publier
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_SPEC_API_URL: ${{ vars.SPEC_API_URL }}
+        with:
+          projectPath: app
+          tagName: v__VERSION__
+          releaseName: Spec __VERSION__
+          releaseBody: |
+            Installation sous Windows : télécharge le fichier `Spec_…_x64-setup.exe` ci-dessous et lance-le.
+            Si Windows affiche « Windows a protégé votre ordinateur », clique sur « Informations complémentaires » puis « Exécuter quand même ».
+            Les versions suivantes s'installent depuis l'appli.
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          args: --bundles nsis

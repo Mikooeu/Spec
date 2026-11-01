@@ -1,0 +1,27 @@
+# Serveur Spec sur Cloudflare Workers (offre gratuite).
+# Les identifiants database_id et id sont remplis par `npm run setup`.
+name = "spec-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[triggers]
+crons = ["* * * * *"]   # synchro des stats perso, chaque minute
+
+[[d1_databases]]
+binding = "DB"
+database_name = "spec"
+database_id = "e3a3df94-7e46-4ca0-914e-26c4e5576996"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "STATS"
+id = "107c384885fa4d6b9bf5c3c957e85df0"
+
+[vars]
+RIOT_REGION = "europe"
+SEASON_START = "2026-01-08"   # début de l'année classée 2026
+MAX_PLAYERS = "20"
+RIOT_BUDGET_PER_RUN = "14"    # appels Riot par minute (le collecteur garde 65 / 2 min)
+
+# Secrets (jamais dans ce fichier) : RIOT_API_KEY, ADMIN_TOKEN, INVITE_CODE
