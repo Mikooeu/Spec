@@ -101,7 +101,7 @@ export async function register(client: string, riotId: string, invite: string): 
     const code = ((await r.json().catch(() => ({}))) as { error?: string }).error;
     if (code === "bad_invite") return "Code d’invitation incorrect.";
     if (code === "full") return "Le serveur est complet : demande à la personne qui gère Spec de faire de la place.";
-    if (code === "already_linked") return "Ce compte est déjà inscrit depuis un autre appareil. Demande à la personne qui gère Spec de le délier.";
+    if (code === "already_linked") return "Ce compte est déjà activé sur un autre PC. Demande à la personne qui gère Spec d’autoriser ce PC, puis réessaie dans les 15 minutes.";
     if (code === "unknown_riot_id") return "Riot ne trouve pas ce compte. Relance le client LoL puis réessaie.";
     if (code === "bad_riot_id") return "Riot ID non reconnu : relance le client LoL puis réessaie.";
     if (code === "riot_unavailable") return "Riot ne répond pas pour l’instant. Réessaie dans une minute.";
@@ -111,8 +111,10 @@ export async function register(client: string, riotId: string, invite: string): 
   }
 }
 
-/** Champions les plus joués par rôle cette saison (au moins `min` parties), pour préremplir le pool. */
-export function topChampions(p: Personal, role: number, limit = 6, min = 3): number[] {
+/** Champions les plus joués par rôle cette saison (au moins `min` parties dans ce rôle), pour préremplir le pool. */
+export const PREFILL_MIN_GAMES = 25;
+
+export function topChampions(p: Personal, role: number, limit = 6, min = PREFILL_MIN_GAMES): number[] {
   return p.champions
     .filter(([, r, g]) => r === role && g >= min)
     .sort((a, b) => b[2] - a[2])

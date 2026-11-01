@@ -9,7 +9,8 @@ import { ProfileScreen, type Pools } from "./components/ProfileScreen";
 import { type Stats } from "./lib/score";
 import { loadStats, register, usePersonal } from "./lib/api";
 import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
-import { preselect, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
+import { importRunes, preselect, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
+import { RuneImportContext } from "./components/Runes";
 import { applyCompact, setOnTop } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { useUpdate, type UpdateState } from "./lib/updater";
@@ -79,19 +80,25 @@ export default function App() {
     [stats],
   );
 
+  const runeImporter = live ? importRunes : null;
+
   if (compact && stats) {
     const current = live ?? draft;
     return (
+      <RuneImportContext.Provider value={runeImporter}>
       <CompactScreen stats={stats} draft={current} pool={current ? pools[current.role] : []} live={!!live}
                      onTop={onTop} clientOn={clientOn} clientText={clientText}
                      onRole={(r) => (live ? setRoleOverride(r) : draft && setDraft({ ...draft, role: r }))}
                      onToggleTop={toggleTop} onExpand={() => setCompact(false)}
-                     onDemo={() => setDraft(demoDraft(stats))} onEndDemo={() => setDraft(null)}
+                     onDemo={clientOn ? undefined : () => setDraft(demoDraft(stats))} onEndDemo={() => setDraft(null)}
+                     onDemoPick={(c) => draft && setDraft({ ...draft, myChamp: c, myLocked: false })}
                      onPreselect={live ? doPreselect : undefined} perso={perso} />
+      </RuneImportContext.Provider>
     );
   }
 
   return (
+    <RuneImportContext.Provider value={runeImporter}>
     <div className="window">
       <aside className="sidebar">
         <div className="brand">
@@ -141,7 +148,9 @@ export default function App() {
                 <div><span>Client LoL</span><span className="muted"><span className={clientOn ? "dot" : "dot dot--off"} />{clientText}</span></div>
                 <div><span>Stats Master+</span><span className="muted"><span className="dot" />Patch {patchLabel(stats.meta.patch)}</span></div>
               </div>
-              <button className="btn btn--primary" onClick={() => setDraft(demoDraft(stats))}>Simuler une draft</button>
+              {!clientOn && (
+                <button className="btn btn--primary" onClick={() => setDraft(demoDraft(stats))}>Simuler une draft</button>
+              )}
             </div>
           </div>
         )}
@@ -151,6 +160,7 @@ export default function App() {
         )}
       </main>
     </div>
+    </RuneImportContext.Provider>
   );
 }
 

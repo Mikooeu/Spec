@@ -41,6 +41,19 @@ CREATE TABLE IF NOT EXISTS participants (
     win BOOLEAN
 );
 CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR);
+-- page de runes de chaque participant (collectée depuis la 0.1.1)
+CREATE TABLE IF NOT EXISTS runes (
+    match_id VARCHAR,
+    team_id INTEGER,
+    champion_id INTEGER,
+    team_position VARCHAR,
+    keystone INTEGER,
+    primary_style INTEGER,
+    p1 INTEGER, p2 INTEGER, p3 INTEGER,          -- runes mineures de l'arbre principal
+    sub_style INTEGER,
+    s1 INTEGER, s2 INTEGER,                      -- runes de l'arbre secondaire
+    sh1 INTEGER, sh2 INTEGER, sh3 INTEGER        -- fragments : attaque, flexible, défense
+);
 """
 
 LOCK_RETRY_SECONDS = 60
@@ -169,6 +182,10 @@ class Store:
                      match["game_creation"], match["game_duration"], match["is_remake"]])
                 con.execute("DELETE FROM participants WHERE match_id = ?", [match["match_id"]])
                 con.executemany("INSERT INTO participants VALUES (?, ?, ?, ?, ?)", participants)
+                con.execute("DELETE FROM runes WHERE match_id = ?", [match["match_id"]])
+                if match.get("runes"):
+                    con.executemany("INSERT INTO runes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                    match["runes"])
                 con.execute("DELETE FROM match_queue WHERE match_id = ?", [match["match_id"]])
                 con.execute("COMMIT")
             except Exception:

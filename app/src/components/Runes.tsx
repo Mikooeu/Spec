@@ -1,0 +1,130 @@
+import { createContext, useContext, useEffect, useState } from "react";
+import { runePageFor, type RunePage as Page, type Stats } from "../lib/score";
+import { champName } from "../lib/ui";
+
+// Noms, descriptions et icônes officiels des runes (Data Dragon, en français).
+interface RuneInfo { name: string; icon: string; desc: string }
+type RuneData = Map<number, RuneInfo>;
+
+const CDN = "https://ddragon.leagueoflegends.com/cdn";
+
+/** Import dans le client : fourni en direct, absent en démo. Renvoie un message d'erreur, ou null. */
+export const RuneImportContext = createContext<((page: Page) => Promise<string | null>) | null>(null);
+const SHARDS: Record<number, [string, string]> = {
+  5008: ["Force adaptative", "StatModsAdaptiveForceIcon"],
+  5005: ["Vitesse d’attaque", "StatModsAttackSpeedIcon"],
+  5007: ["Accélération de compétence", "StatModsCDRScalingIcon"],
+  5010: ["Vitesse de déplacement", "StatModsMovementSpeedIcon"],
+  5001: ["PV croissants avec le niveau", "StatModsHealthPlusIcon"],
+  5011: ["PV", "StatModsHealthScalingIcon"],
+  5013: ["Ténacité et résistance aux ralentissements", "StatModsTenacityIcon"],
+  5002: ["Armure", "StatModsArmorIcon"],
+  5003: ["Résistance magique", "StatModsMagicResIcon"],
+};
+
+/** Texte brut d'une description Data Dragon (balises retirées sans jamais les interpréter). */
+function plain(html: string): string {
+  return new DOMParser().parseFromString(html, "text/html").body.textContent?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+const cache = new Map<string, Promise<RuneData>>();
+
+function loadRunes(version: string): Promise<RuneData> {
+  if (!cache.has(version)) {
+    cache.set(version, fetch(`${CDN}/${version}/data/fr_FR/runesReforged.json`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((trees: { id: number; name: string; icon: string; slots: { runes: { id: number; name: string; icon: string; shortDesc: string }[] }[] }[]) => {
+        const map: RuneData = new Map();
+        for (const t of trees) {
+          map.set(t.id, { name: t.name, icon: `${CDN}/img/${t.icon}`, desc: "" });
+          for (const slot of t.slots) for (const r of slot.runes) {
+            map.set(r.id, { name: r.name, icon: `${CDN}/img/${r.icon}`, desc: plain(r.shortDesc) });
+          }
+        }
+        for (const [id, [name, file]] of Object.entries(SHARDS)) {
+          map.set(Number(id), { name, icon: `${CDN}/img/perk-images/StatMods/${file}.png`, desc: "Fragment de statistiques" });
+        }
+        return map;
+      })
+      .catch((e) => { cache.delete(version); throw e; }));
+  }
+  return cache.get(version)!;
+}
+
+function useRuneData(version: string): RuneData | null {
+  const [data, setData] = useState<RuneData | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadRunes(version).then((d) => alive && setData(d)).catch(() => alive && setData(new Map()));
+    return () => { alive = false; };
+  }, [version]);
+  return data;
+}
+
+function Rune({ data, id, size }: { data: RuneData | null; id: number; size: "key" | "minor" | "shard" }) {
+  const info = data?.get(id);
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className={`rune rune--${size}`} tabIndex={0} aria-label={info?.name ?? `Rune ${id}`}>
+      {info && !failed
+        ? <img src={info.icon} alt="" draggable={false} onError={() => setFailed(true)} />
+        : <span className="rune__fallback" aria-hidden>{info?.name.slice(0, 1) ?? "?"}</span>}
+      {info && (
+        <span className="rune__tip" role="tooltip">
+          <strong>{info.name}</strong>
+          {info.desc && <span>{info.desc}</span>}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Page de runes conseillée, en petites icônes ; la description apparaît au survol. */
+export function RunePage({ stats, champ, role, laner }: { stats: Stats; champ: number; role: number; laner?: number | null }) {
+  const data = useRuneData(stats.ddragon);
+  const found = runePageFor(stats, champ, role, laner);
+  if (!found) {
+    return stats.runes.size === 0
+      ? <p className="runes__empty">Runes conseillées : collecte des pages en cours.</p>
+      : <p className="runes__empty">Pas encore assez de parties pour conseiller des runes.</p>;
+  }
+  const { page, vs } = found;
+  return <RunePageView stats={stats} page={page} vs={vs} data={data} />;
+}
+
+function RunePageView({ stats, page, vs, data }: { stats: Stats; page: Page; vs: number | null; data: RuneData | null }) {
+  const importer = useContext(RuneImportContext);
+  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    if (!importer) {
+      setStatus({ ok: true, text: "Démo : en partie, ces runes remplacent la page sélectionnée dans ta draft." });
+      return;
+    }
+    setBusy(true);
+    const error = await importer(page);
+    setBusy(false);
+    setStatus(error ? { ok: false, text: error } : { ok: true, text: "Runes importées dans ta page sélectionnée." });
+  };
+  const wr = page.games ? `${((page.wins / page.games) * 100).toFixed(1).replace(".", ",")} %` : "";
+  return (
+    <div className="runes">
+      <span className="runes__label">
+        Runes conseillées{vs != null ? ` face à ${champName(stats, vs)}` : ""}
+        <span className="muted"> · {wr} sur {Math.round(page.games)} parties</span>
+      </span>
+      <div className="runes__row">
+        <Rune data={data} id={page.keystone} size="key" />
+        {page.primary.map((r) => <Rune key={`p${r}`} data={data} id={r} size="minor" />)}
+        <span className="runes__sep" />
+        {page.sub.map((r) => <Rune key={`s${r}`} data={data} id={r} size="minor" />)}
+        <span className="runes__sep" />
+        {page.shards.map((r, i) => <Rune key={`f${i}`} data={data} id={r} size="shard" />)}
+        <button className="btn btn--secondary btn--tiny runes__import" onClick={run} disabled={busy}>
+          {busy ? "Import…" : "Importer dans le client"}
+        </button>
+      </div>
+      {status && <p className={`runes__status${status.ok ? "" : " tone-bad"}`} role="status">{status.text}</p>}
+    </div>
+  );
+}

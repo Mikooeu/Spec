@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import {
-  LOW_DATA_GAMES, ROLE_LABELS, ROLE_SHORT, likelyRole, recommend, roleDistribution, topForRole,
-  type Result, type Stats,
+  LOW_DATA_GAMES, ROLE_LABELS, ROLE_SHORT, banSuggestions, explain, likelyRole, recommend, roleDistribution,
+  scoreChampion, topForRole, type Result, type Stats,
 } from "../lib/score";
+import { RunePage } from "./Runes";
 import { champName, int, patchLabel, pct, pts, wrTone } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import type { PersonalState } from "../lib/api";
@@ -14,6 +15,9 @@ export interface Draft {
   enemies: (number | null)[];      // 5 emplacements, dans l'ordre des picks
   bans: number[];
   allyLocked?: boolean[];          // en direct : true = lock, false = survol
+  myChamp?: number | null;         // ton champion, survolé ou verrouillé
+  myLocked?: boolean;
+  banPhase?: boolean;              // il te reste un ban à faire
 }
 
 interface Props {
@@ -50,7 +54,8 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
     setPicking(null);
   };
 
-  const preselect = makePreselect(stats, onPreselect, setNotice);
+  const preselect = makePreselect(stats, onPreselect, setNotice,
+    live ? undefined : (champ) => onChange({ ...draft, myChamp: champ, myLocked: false }));
 
   return (
     <div className="content">
@@ -67,6 +72,10 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
                       onClick={() => { onChange({ ...draft, role: i }); setOpenChamp(null); }}>{label}</button>
             ))}
           </div>
+          {!live && (
+            <button className={`btn btn--secondary${draft.banPhase ? " is-on" : ""}`} aria-pressed={!!draft.banPhase}
+                    onClick={() => onChange({ ...draft, banPhase: !draft.banPhase })}>Phase de bans</button>
+          )}
           {!live && onEnd && <button className="btn btn--secondary" onClick={onEnd}>Terminer la démo</button>}
           {onCompact && <button className="btn btn--secondary" onClick={onCompact}>Mode compact</button>}
         </div>
@@ -77,10 +86,12 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
           <TeamCard title="Ton équipe">
             {draft.allies.map((c, i) => {
               const me = i === draft.role;
+              const mine = me ? draft.myChamp ?? null : null;
               return (
-                <SlotRow key={i} stats={stats} label={ROLE_SHORT[i]} champ={me ? null : c}
-                         name={me ? "À toi de choisir" : c == null ? "En attente" : champName(stats, c)}
-                         detail={me ? "Ton tour" : c == null ? (live ? "Pas encore choisi" : "Clique pour ajouter un pick")
+                <SlotRow key={i} stats={stats} label={ROLE_SHORT[i]} champ={me ? mine : c}
+                         name={me ? (mine != null ? champName(stats, mine) : "À toi de choisir") : c == null ? "En attente" : champName(stats, c)}
+                         detail={me ? (mine == null ? "Ton tour" : draft.myLocked ? "Lock · toi" : "Survole · toi")
+                                 : c == null ? (live ? "Pas encore choisi" : "Clique pour ajouter un pick")
                                  : draft.allyLocked && !draft.allyLocked[i] ? "Survole" : "Lock"}
                          tone={me ? "me" : c == null ? "empty" : "default"}
                          onClick={me || live ? undefined : () => setPicking({ side: "ally", index: i })} />
@@ -108,16 +119,19 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
               {int(Number(stats.meta.matches ?? 0))} parties Master+ · patch {patchLabel(stats.meta.patch)}
             </span>
           </div>
+          {draft.banPhase && <BanPanel stats={stats} draft={draft} />}
+          {draft.myChamp != null && <MyPick stats={stats} draft={draft} />}
           {autofill && (
             <p className="hint">Ton pool est vide pour ce rôle : voici les meilleurs choix de cette draft.</p>
           )}
           {rows.map(({ res, kind }, i) => (
             <div key={res.champ}>
-              {kind === "discovery" && !autofill && <p className="divider-label">Envie de tester ?</p>}
+              {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">Envie de tester ?</p>}
               <RecoRow stats={stats} res={res} rank={kind === "pool" ? String(i + 1) : "—"}
                        discovery={kind === "discovery"} open={openChamp === res.champ}
                        onToggle={() => setOpenChamp(openChamp === res.champ ? null : res.champ)}
-                       onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)} />
+                       onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
+                       role={draft.role} />
             </div>
           ))}
           {rows.length === 0 && (
@@ -177,10 +191,10 @@ function SlotRow({ stats, label, champ, name, detail, tone, onClick }: SlotRowPr
 
 interface RecoRowProps {
   stats: Stats; res: Result; rank: string; discovery: boolean; open: boolean;
-  onToggle: () => void; onPreselect: () => void; compact?: boolean; perso?: PersoCell;
+  onToggle: () => void; onPreselect: () => void; compact?: boolean; perso?: PersoCell; role: number;
 }
 
-export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso }: RecoRowProps) {
+export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role }: RecoRowProps) {
   const laner = res.details[0];
   return (
     <div className={`reco${open ? " is-open" : ""}`}>
@@ -218,6 +232,7 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
           <Factor label="Contre le reste de l’équipe" value={res.counters} />
           <Factor label="Avec tes alliés" value={res.synergies} />
           </div>
+          <RunePage stats={stats} champ={res.champ} role={role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
           <button className="btn btn--primary" onClick={onPreselect}>Présélectionner dans le client</button>
         </div>
       )}
@@ -285,7 +300,7 @@ export function useRecos(stats: Stats, draft: Draft, pool: number[]) {
     const rows: RecoItem[] = autofill
       ? topForRole(stats, draft.role, allies, enemies, draft.bans, 4).map((res) => ({ res, kind: "discovery" as const }))
       : [...r.pool.map((res) => ({ res, kind: "pool" as const })),
-         ...(r.discovery ? [{ res: r.discovery, kind: "discovery" as const }] : [])];
+         ...r.discoveries.map((res) => ({ res, kind: "discovery" as const }))];
     return { allies, enemies, autofill, rows };
   }, [stats, draft, pool]);
 }
@@ -295,6 +310,7 @@ export function makePreselect(
   stats: Stats,
   onPreselect: ((champ: number) => Promise<string | null>) | undefined,
   setNotice: React.Dispatch<React.SetStateAction<string | null>>,
+  onDemoPick?: (champ: number) => void,
 ) {
   const flash = (msg: string) => {
     setNotice(msg);
@@ -302,7 +318,8 @@ export function makePreselect(
   };
   return async (champ: number) => {
     if (!onPreselect) {
-      flash(`${champName(stats, champ)} sera présélectionné quand Spec sera connecté à une vraie sélection.`);
+      onDemoPick?.(champ);
+      flash(`Démo : ${champName(stats, champ)} est survolé comme dans le client.`);
       return;
     }
     const error = await onPreselect(champ);
@@ -342,4 +359,60 @@ function matchupTile(stats: Stats, perso: PersonalState | undefined, champ: numb
   const [g, w] = perso.data.matchups.get(`${champ}:${role}:${enemy}`) ?? [0, 0];
   if (g === 0) return { value: "—", detail: `Jamais affronté ${champName(stats, enemy)} avec ce champion cette saison` };
   return { value: `${w} V – ${g - w} D`, detail: `${pct(w / g)} sur ${games(g)} cette saison` };
+}
+
+/** Ton champion survolé ou verrouillé : son score dans la draft, pourquoi, et ses runes. */
+export function MyPick({ stats, draft, compact = false }: { stats: Stats; draft: Draft; compact?: boolean }) {
+  const champ = draft.myChamp!;
+  const allies = draft.allies.filter((c, i): c is number => c != null && i !== draft.role);
+  const enemies = draft.enemies.filter((c): c is number => c != null);
+  const res = scoreChampion(stats, champ, draft.role, allies, enemies);
+  const laner = res.details[0];
+  return (
+    <div className={`card mypick${compact ? " mypick--compact" : ""}`} aria-live="polite">
+      <div className="mypick__head">
+        <ChampionIcon stats={stats} champ={champ} size={compact ? 2.125 : 2.5} />
+        <div className="grow">
+          <p className="overline">{draft.myLocked ? "Ton pick" : "Ta présélection"}</p>
+          <p className="mypick__name">{champName(stats, champ)}</p>
+        </div>
+        <span className="reco__stat">
+          <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}</span>
+          <span className="reco__label">Dans cette draft</span>
+        </span>
+      </div>
+      <p className="mypick__why">{explain(stats, res, draft.role, allies)}</p>
+      <RunePage stats={stats} champ={champ} role={draft.role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
+    </div>
+  );
+}
+
+/** Phase de bans : 3 champions à bannir. */
+export function BanPanel({ stats, draft, compact = false }: { stats: Stats; draft: Draft; compact?: boolean }) {
+  const taken = [...draft.allies, ...draft.enemies].filter((c): c is number => c != null).concat(draft.bans);
+  const list = banSuggestions(stats, draft.role, draft.myChamp ?? null, taken);
+  if (!list.length) return null;
+  const against = list[0].against;
+  return (
+    <div className={`card bans${compact ? " bans--compact" : ""}`}>
+      <p className="bans__title">Bans conseillés</p>
+      <p className="muted small">
+        {against ? `Ceux qui battent le plus ${champName(stats, draft.myChamp ?? null)} en ${ROLE_LABELS[draft.role]}`
+                 : `Pas de présélection : les meilleurs winrates en ${ROLE_LABELS[draft.role]}`}
+      </p>
+      <div className="bans__list">
+        {list.map((b) => (
+          <div key={b.champ} className="bans__item">
+            <ChampionIcon stats={stats} champ={b.champ} size={compact ? 1.75 : 2} />
+            <span className="bans__text">
+              <span className="bans__name">{champName(stats, b.champ)}</span>
+              <span className="muted small">
+                {against ? `Tu gagnes ${pct(b.winrate)} contre lui` : `${pct(b.winrate)} de winrate`} · {int(b.games)} parties
+              </span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }

@@ -38,7 +38,26 @@ def parse_match(data: dict, platform: str) -> tuple[dict, list[tuple]] | None:
     }
     rows = [(match_id, int(p["teamId"]), int(p["championId"]),
              p.get("teamPosition") or "", bool(p["win"])) for p in players]
+    match["runes"] = [r for r in (rune_row(match_id, p) for p in players) if r]
     return match, rows
+
+
+def rune_row(match_id: str, p: dict) -> tuple | None:
+    """Page de runes d'un participant, ou None si elle est incomplète."""
+    try:
+        perks = p["perks"]
+        primary, sub = perks["styles"][0], perks["styles"][1]
+        prim = [int(s["perk"]) for s in primary["selections"]]
+        second = sorted(int(s["perk"]) for s in sub["selections"])
+        stat = perks["statPerks"]
+        if len(prim) != 4 or len(second) != 2:
+            return None
+        return (match_id, int(p["teamId"]), int(p["championId"]), p.get("teamPosition") or "",
+                prim[0], int(primary["style"]), prim[1], prim[2], prim[3],
+                int(sub["style"]), second[0], second[1],
+                int(stat["offense"]), int(stat["flex"]), int(stat["defense"]))
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
 
 
 class Collector:

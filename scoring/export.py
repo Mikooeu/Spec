@@ -38,6 +38,11 @@ def export_json(stats_path: Path, champions: Champions, params: Params, out_path
             "vs": rows("SELECT champ, role, opp, games, wins FROM vs", True),
             "ally": rows("SELECT champ, role, ally, games, wins FROM ally", True),
         }
+        has_runes = con.execute(
+            "SELECT count(*) FROM duckdb_tables() WHERE table_name = 'runes'").fetchone()[0] > 0
+        runes = json.loads(con.execute("SELECT value FROM runes").fetchone()[0]) if has_runes else {}
+        payload["runes"] = [[c, role_index[r], e] for c, r, e in runes.get("pages", [])]
+        payload["runeVs"] = [[c, role_index[r], o, k, g, w] for c, r, o, k, g, w in runes.get("vs", [])]
     finally:
         con.close()
     out_path = Path(out_path)

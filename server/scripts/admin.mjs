@@ -1,6 +1,7 @@
 // Administration du serveur Spec, depuis le dossier server :
 //   npm run admin -- list                     joueurs inscrits (sans pseudo) et avancement de la synchro
-//   npm run admin -- unlink "Nom#TAG"         délie un compte de son appareil (ses stats restent)
+//   npm run admin -- unlink "Nom#TAG"         délie un compte de tous ses appareils (ses stats restent)
+//   npm run admin -- add-device "Nom#TAG"     autorise un PC de plus pour ce compte (15 min, une fois)
 // Lit SPEC_API_URL et SPEC_ADMIN_TOKEN dans le .env du dossier Spec. Le jeton n'est jamais affiché.
 
 import { existsSync, readFileSync } from "node:fs";
@@ -34,6 +35,11 @@ if (cmd === "list") {
   if (!r.ok) { console.error(`Refusé (HTTP ${r.status}${body.error ? `, ${body.error}` : ""}).`); process.exit(1); }
   console.log(body.unlinked ? `${arg} est délié : son propriétaire peut s'inscrire à nouveau depuis Spec.`
                             : `${arg} n'était lié à aucun appareil.`);
+} else if (cmd === "add-device" && arg) {
+  const r = await fetch(`${url}/admin/allow-device`, { method: "POST", headers, body: JSON.stringify({ riotId: arg }) });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) { console.error(`Refusé (HTTP ${r.status}${body.error ? `, ${body.error}` : ""}).`); process.exit(1); }
+  console.log(`${arg} peut activer Spec sur un autre PC pendant ${body.minutes} minutes (avec le code d'invitation).`);
 } else {
-  console.log('Usage : npm run admin -- list  |  npm run admin -- unlink "Nom#TAG"');
+  console.log('Usage : npm run admin -- list  |  unlink "Nom#TAG"  |  add-device "Nom#TAG"');
 }

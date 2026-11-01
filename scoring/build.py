@@ -9,9 +9,13 @@ import os
 import time
 from pathlib import Path
 
+import json
+
 import duckdb
 
 from collector.db import connect_with_retry
+
+from .runes import compute_runes
 
 log = logging.getLogger(__name__)
 
@@ -75,7 +79,26 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
             WHERE NOT m.is_remake AND pa.team_position <> '' AND m.patch IN (?, ?)
         """ + (f" AND NOT ({HOLDOUT_SQL})" if holdout else ""),
             [current, weight_prev, current, previous or current])
+        # pages de runes (collectées depuis la 0.1.1 ; la table peut ne pas encore exister)
+        has_runes = con.execute(
+            "SELECT count(*) FROM duckdb_tables() WHERE database_name = 'src' AND table_name = 'runes'"
+        ).fetchone()[0] > 0
+        rune_rows, laner_rows = [], []
+        if has_runes:
+            con.execute("""
+                CREATE TEMP TABLE rr AS
+                SELECT a.match_id, a.team_id, a.champ, a.role, a.win, a.w, ru.keystone, ru.primary_style,
+                       ru.p1, ru.p2, ru.p3, ru.sub_style, ru.s1, ru.s2, ru.sh1, ru.sh2, ru.sh3
+                FROM p a JOIN src.runes ru
+                  ON ru.match_id = a.match_id AND ru.team_id = a.team_id AND ru.champion_id = a.champ""")
+            rune_rows = con.execute("""SELECT champ, role, keystone, primary_style, p1, p2, p3,
+                                              sub_style, s1, s2, sh1, sh2, sh3, win, w FROM rr""").fetchall()
+            laner_rows = con.execute("""
+                SELECT a.champ, a.role, b.champ, a.keystone, a.win, a.w
+                FROM rr a JOIN p b ON a.match_id = b.match_id AND a.team_id <> b.team_id AND a.role = b.role
+            """).fetchall()
         con.execute("DETACH src")
+        runes = compute_runes(rune_rows, laner_rows)
 
         con.execute(f"ATTACH '{tmp.as_posix()}' AS out")
         con.execute("""CREATE TABLE out.base AS
@@ -97,6 +120,9 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
         meta = {"patch": current, "previous_patch": previous or "",
                 "previous_weight": str(weight_prev), "matches": str(matches),
                 "built_at": str(int(time.time()))}
+        meta["rune_pages"] = str(len(runes["pages"]))
+        con.execute("CREATE TABLE out.runes (value VARCHAR)")
+        con.execute("INSERT INTO out.runes VALUES (?)", [json.dumps(runes)])
         con.execute("CREATE TABLE out.meta (key VARCHAR, value VARCHAR)")
         con.executemany("INSERT INTO out.meta VALUES (?, ?)", list(meta.items()))
         con.execute("DETACH out")

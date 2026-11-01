@@ -9,7 +9,7 @@ import { syncRun } from "../src/sync.ts";
 // --- D1 et KV en mémoire, avec la même interface que Cloudflare -------------------------------
 function fakeD1() {
   const db = new DatabaseSync(":memory:");
-  for (const f of ["0001_init.sql", "0002_client_id.sql"]) {
+  for (const f of ["0001_init.sql", "0002_client_id.sql", "0003_devices.sql"]) {
     db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url).pathname, "utf8"));
   }
   class Stmt {
@@ -282,4 +282,40 @@ test("chemins : « / » finaux retirés en temps linéaire, chemins trop longs r
   const e = env();
   assert.equal((await call(e, "GET", "/v1/health//")).status, 200);
   assert.equal((await call(e, "GET", "/" + "/".repeat(5000) + "x")).status, 414);
+});
+
+test("un deuxième PC pour le même compte : refusé, sauf fenêtre ouverte par l'admin (usage unique)", async () => {
+  const e = env();
+  const C4 = "7a7a7a7a-1111-5222-9333-444455556666";
+  assert.equal((await reg(e, C1, "MIKO#KCORP")).status, 201);
+  assert.equal((await reg(e, C3, "MIKO#KCORP")).status, 409);
+  const allow = (auth?: string) => call(e, "POST", "/admin/allow-device", { riotId: "MIKO#KCORP" },
+    auth ? { Authorization: auth } : {});
+  assert.equal((await allow()).status, 401);
+  assert.equal((await allow("Bearer " + ADMIN)).status, 200);
+  assert.equal((await reg(e, C3, "MIKO#KCORP")).status, 201);     // le 2e PC est accepté
+  assert.equal((await call(e, "GET", "/v1/players/" + C1)).status, 200);
+  assert.equal((await call(e, "GET", "/v1/players/" + C3)).status, 200);
+  assert.equal((await reg(e, C4, "MIKO#KCORP")).status, 409);     // fenêtre consommée
+  // fenêtre expirée : refusée
+  await allow("Bearer " + ADMIN);
+  const late = await handle(new Request(BASE + "/v1/players", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ client: C4, riotId: "MIKO#KCORP", invite: "K7Q2-M9XD" }),
+  }), e, 1_800_000_000_000 + 16 * 60_000, accountFetch);
+  assert.equal(late.status, 409);
+  // délier retire tous les appareils
+  await call(e, "POST", "/admin/unlink", { riotId: "MIKO#KCORP" }, { Authorization: "Bearer " + ADMIN });
+  assert.equal((await call(e, "GET", "/v1/players/" + C1)).status, 404);
+  assert.equal((await call(e, "GET", "/v1/players/" + C3)).status, 404);
+});
+
+test("migration : les liens existants deviennent des appareils", async () => {
+  const db = new DatabaseSync(":memory:");
+  const sql = (f: string) => readFileSync(new URL(`../migrations/${f}`, import.meta.url).pathname, "utf8");
+  db.exec(sql("0001_init.sql"));
+  db.exec(sql("0002_client_id.sql"));
+  db.prepare("INSERT INTO players (puuid, created_at, last_seen_at, client_hash) VALUES (?, 1, 1, ?)").run(P1, "h1");
+  db.exec(sql("0003_devices.sql"));
+  assert.deepEqual({ ...db.prepare("SELECT client_hash, puuid FROM devices").get() as object }, { client_hash: "h1", puuid: P1 });
 });

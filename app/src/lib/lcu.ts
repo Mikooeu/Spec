@@ -11,7 +11,7 @@ export const IN_APP = typeof window !== "undefined" && "__TAURI_INTERNALS__" in 
 export interface Account { name: string; region: string | null; puuid: string | null }
 
 interface Member { cellId: number; championId: number; championPickIntent?: number; assignedPosition?: string }
-interface Action { id: number; actorCellId: number; championId: number; completed: boolean; type: string }
+interface Action { id: number; actorCellId: number; championId: number; completed: boolean; isInProgress?: boolean; type: string }
 export interface Session {
   localPlayerCellId: number;
   myTeam: Member[];
@@ -34,6 +34,9 @@ export interface LiveDraft {
   allyLocked: boolean[];
   enemies: (number | null)[];
   bans: number[];
+  myChamp: number | null;           // ton champion : survolé ou verrouillé
+  myLocked: boolean;
+  banPhase: boolean;                // il te reste un ban à faire
 }
 
 const POSITIONS: Record<string, number> = { top: 0, jungle: 1, middle: 2, bottom: 3, utility: 4 };
@@ -82,7 +85,13 @@ export function sessionToDraft(s: Session, chosenRole: number | null): LiveDraft
   }
   bans.delete(0);
 
-  return { role, assigned: assignedRole != null && chosenRole == null, allies, allyLocked, enemies: enemies.slice(0, 5), bans: [...bans] };
+  const myLocked = (me?.championId ?? 0) > 0;
+  const myChamp = myLocked ? me!.championId : (me?.championPickIntent ?? 0) > 0 ? me!.championPickIntent! : null;
+  const banPhase = (s.actions ?? []).flat()
+    .some((a) => a.actorCellId === s.localPlayerCellId && a.type === "ban" && !a.completed);
+
+  return { role, assigned: assignedRole != null && chosenRole == null, allies, allyLocked,
+           enemies: enemies.slice(0, 5), bans: [...bans], myChamp, myLocked, banPhase };
 }
 
 /** Action de pick du joueur encore ouverte, ou null. */
@@ -153,4 +162,20 @@ export function useLolClient(): ClientState {
   }, []);
 
   return state;
+}
+
+/** Importe une page de runes dans la page sélectionnée de la draft. Message d'erreur, ou null si c'est fait. */
+export async function importRunes(page: { primaryStyle: number; subStyle: number; keystone: number;
+  primary: number[]; sub: number[]; shards: number[] }): Promise<string | null> {
+  const perks = [page.keystone, ...page.primary, ...page.sub, ...page.shards];
+  try {
+    await invoke("lcu_set_rune_page", { primaryStyle: page.primaryStyle, subStyle: page.subStyle, perks });
+    return null;
+  } catch (e) {
+    if (e === "no_editable_page") {
+      return "Sélectionne une de tes pages de runes dans la draft (pas une page de Riot), puis réessaie.";
+    }
+    if (e === "not_running") return "Le client LoL ne répond pas.";
+    return "Le client n’a pas accepté les runes. Réessaie dans un instant.";
+  }
 }

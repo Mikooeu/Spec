@@ -24,6 +24,7 @@ export interface Env {
 
 const MAX_STATS_BYTES = 24 * 1024 * 1024;
 const MAX_PATH = 512;
+const DEVICE_WINDOW_MS = 15 * 60 * 1000;
 
 /** Retire les « / » finaux en temps linéaire (une regex /\/+$/ peut devenir quadratique). */
 export function trimSlashes(p: string): string {
@@ -120,7 +121,7 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       const client = typeof body.client === "string" ? body.client : "";
       if (!CLIENT_RE.test(client)) return error(400, "bad_client");
       const clientHash = await sha256Hex(client);
-      const known = await env.DB.prepare(`SELECT 1 FROM players WHERE client_hash = ?1`).bind(clientHash).first();
+      const known = await env.DB.prepare(`SELECT 1 FROM devices WHERE client_hash = ?1`).bind(clientHash).first();
       if (known) return json({ ok: true, registered: true });
       if (typeof body.invite !== "string" || !(await safeEqual(body.invite.trim().toUpperCase(), env.INVITE_CODE ?? ""))) {
         return error(403, "bad_invite");
@@ -133,20 +134,28 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       const puuid = acc.data.puuid;
       if (!PUUID_RE.test(puuid)) return error(502, "bad_riot_response");
 
-      // Un compte déjà lié à un autre appareil n'est jamais réattribué : seul l'admin peut le délier.
-      const existing = await env.DB.prepare(`SELECT client_hash FROM players WHERE puuid = ?1`)
-        .bind(puuid).first<{ client_hash: string | null }>();
+      // Un compte déjà lié n'accepte un nouvel appareil que si l'admin a ouvert une fenêtre (15 min, usage unique).
+      const existing = await env.DB.prepare(
+        `SELECT device_window_until AS until, (SELECT COUNT(*) FROM devices d WHERE d.puuid = p.puuid) AS devices
+         FROM players p WHERE puuid = ?1`,
+      ).bind(puuid).first<{ until: number | null; devices: number }>();
       if (existing) {
-        if (existing.client_hash && existing.client_hash !== clientHash) return error(409, "already_linked");
-        await env.DB.prepare(`UPDATE players SET client_hash = ?2 WHERE puuid = ?1 AND client_hash IS NULL`)
-          .bind(puuid, clientHash).run();
+        if (existing.devices > 0 && !(existing.until && existing.until > now)) return error(409, "already_linked");
+        await env.DB.batch([
+          env.DB.prepare(`INSERT OR IGNORE INTO devices (client_hash, puuid, created_at) VALUES (?1, ?2, ?3)`)
+            .bind(clientHash, puuid, now),
+          env.DB.prepare(`UPDATE players SET device_window_until = NULL WHERE puuid = ?1`).bind(puuid),
+        ]);
         return json({ ok: true, registered: true }, 201);
       }
       const count = await env.DB.prepare(`SELECT COUNT(*) AS n FROM players`).first<number>("n");
       if ((count ?? 0) >= Number(env.MAX_PLAYERS || 20)) return error(409, "full");
-      await env.DB.prepare(
-        `INSERT OR IGNORE INTO players (puuid, client_hash, created_at, last_seen_at) VALUES (?1, ?2, ?3, ?3)`,
-      ).bind(puuid, clientHash, now).run();
+      await env.DB.batch([
+        env.DB.prepare(`INSERT OR IGNORE INTO players (puuid, created_at, last_seen_at) VALUES (?1, ?2, ?2)`)
+          .bind(puuid, now),
+        env.DB.prepare(`INSERT OR IGNORE INTO devices (client_hash, puuid, created_at) VALUES (?1, ?2, ?3)`)
+          .bind(clientHash, puuid, now),
+      ]);
       return json({ ok: true, registered: true }, 201);
     }
 
@@ -156,7 +165,8 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       const client = decodeURIComponent(m[1]);
       if (!CLIENT_RE.test(client)) return error(400, "bad_client");
       const player = await env.DB.prepare(
-        `SELECT puuid, ids_cursor, ids_refreshed_at, last_seen_at FROM players WHERE client_hash = ?1`,
+        `SELECT p.puuid, p.ids_cursor, p.ids_refreshed_at, p.last_seen_at
+         FROM devices d JOIN players p ON p.puuid = d.puuid WHERE d.client_hash = ?1`,
       ).bind(await sha256Hex(client)).first<{ puuid: string; ids_cursor: number | null; ids_refreshed_at: number | null; last_seen_at: number }>();
       if (!player) return error(404, "not_registered");
       const puuid = player.puuid;
@@ -206,8 +216,23 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       if (!rid) return error(400, "bad_riot_id");
       const acc = await new Riot(env.RIOT_API_KEY, env.RIOT_REGION || "europe", 1, fetcher).account(rid[1], rid[2]);
       if (!acc.ok) return acc.status === 404 ? error(404, "unknown_riot_id") : error(503, "riot_unavailable");
-      const res = await env.DB.prepare(`UPDATE players SET client_hash = NULL WHERE puuid = ?1`).bind(acc.data.puuid).run();
+      const res = await env.DB.prepare(`DELETE FROM devices WHERE puuid = ?1`).bind(acc.data.puuid).run();
       return json({ ok: true, unlinked: (res.meta?.changes ?? 0) > 0 });
+    }
+
+    // Autoriser un appareil de plus pour un compte (un autre PC du même joueur) : 15 min, usage unique.
+    if (method === "POST" && path === "/admin/allow-device") {
+      if (!(await isAdmin(req, env))) return error(401, "unauthorized");
+      let body: { riotId?: unknown };
+      try { body = await req.json(); } catch { return error(400, "bad_json"); }
+      const rid = typeof body.riotId === "string" ? RIOT_ID_RE.exec(body.riotId.trim()) : null;
+      if (!rid) return error(400, "bad_riot_id");
+      const acc = await new Riot(env.RIOT_API_KEY, env.RIOT_REGION || "europe", 1, fetcher).account(rid[1], rid[2]);
+      if (!acc.ok) return acc.status === 404 ? error(404, "unknown_riot_id") : error(503, "riot_unavailable");
+      const res = await env.DB.prepare(`UPDATE players SET device_window_until = ?2 WHERE puuid = ?1`)
+        .bind(acc.data.puuid, now + DEVICE_WINDOW_MS).run();
+      if ((res.meta?.changes ?? 0) === 0) return error(404, "not_registered");
+      return json({ ok: true, minutes: DEVICE_WINDOW_MS / 60_000 });
     }
 
     const d = /^\/admin\/players\/([^/]+)$/.exec(path);
@@ -217,6 +242,7 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       await env.DB.batch([
         env.DB.prepare(`DELETE FROM pending WHERE puuid = ?1`).bind(puuid),
         env.DB.prepare(`DELETE FROM player_matches WHERE puuid = ?1`).bind(puuid),
+        env.DB.prepare(`DELETE FROM devices WHERE puuid = ?1`).bind(puuid),
         env.DB.prepare(`DELETE FROM players WHERE puuid = ?1`).bind(puuid),
       ]);
       return json({ ok: true });

@@ -3,8 +3,9 @@
 //! Sécurité :
 //! - le client n'écoute que sur 127.0.0.1 ; on n'appelle jamais d'autre hôte ;
 //! - seuls quelques chemins en lecture sont autorisés (liste blanche exacte) ;
-//! - la seule écriture possible est la présélection (hover) d'un champion :
-//!   on n'envoie jamais `completed`, donc Spec ne peut pas verrouiller un pick.
+//! - deux écritures seulement : la présélection (hover) d'un champion, sans jamais envoyer
+//!   `completed` (Spec ne verrouille pas un pick), et l'import de runes dans la page sélectionnée
+//!   dans la draft (ou une page « Spec » si celle-ci n'est pas modifiable) ; aucune autre page n'est touchée.
 
 use std::process::Command;
 use std::sync::Mutex;
@@ -185,6 +186,50 @@ impl Lcu {
         }
     }
 
+    async fn raw(&self, method: reqwest::Method, path: &str, body: Option<&Value>) -> Result<reqwest::Response, String> {
+        let resp = self
+            .send(|c| {
+                let req = self.client.request(method.clone(), format!("https://127.0.0.1:{}{}", c.port, path));
+                match body { Some(b) => req.json(b), None => req }
+            })
+            .await?;
+        if resp.status().is_success() { Ok(resp) } else { Err(format!("http_{}", resp.status().as_u16())) }
+    }
+
+    /// Écrase la page de runes sélectionnée dans la draft (son nom est gardé). Si elle n'est pas
+    /// modifiable (page de Riot), crée une page « Spec » active s'il reste une place.
+    pub async fn set_rune_page(&self, primary_style: u32, sub_style: u32, perks: &[u32]) -> Result<(), String> {
+        rune_page_body(RUNE_PAGE_NAME, primary_style, sub_style, perks)?; // validation avant tout appel
+        let current: Value = match self.raw(reqwest::Method::GET, "/lol-perks/v1/currentpage", None).await {
+            Ok(r) => r.json().await.map_err(|_| "bad_json".to_string())?,
+            Err(e) if e == "http_404" => Value::Null,
+            Err(e) => return Err(e),
+        };
+        if let Some((id, name)) = editable_current(&current) {
+            let mut body = rune_page_body(&name, primary_style, sub_style, perks)?;
+            body["id"] = json!(id);
+            let path = format!("/lol-perks/v1/pages/{id}");
+            if self.raw(reqwest::Method::PUT, &path, Some(&body)).await.is_ok() {
+                return Ok(());
+            }
+            // repli : certaines versions du client refusent PUT, on recrée la même page
+            self.raw(reqwest::Method::DELETE, &path, None).await?;
+            body.as_object_mut().map(|o| o.remove("id"));
+            self.raw(reqwest::Method::POST, "/lol-perks/v1/pages", Some(&body)).await?;
+            return Ok(());
+        }
+        let pages: Value = self.raw(reqwest::Method::GET, "/lol-perks/v1/pages", None).await?
+            .json().await.map_err(|_| "bad_json".to_string())?;
+        let inventory: Value = self.raw(reqwest::Method::GET, "/lol-perks/v1/inventory", None).await?
+            .json().await.map_err(|_| "bad_json".to_string())?;
+        if !has_free_slot(&pages, &inventory) {
+            return Err("no_editable_page".into());
+        }
+        let body = rune_page_body(RUNE_PAGE_NAME, primary_style, sub_style, perks)?;
+        self.raw(reqwest::Method::POST, "/lol-perks/v1/pages", Some(&body)).await?;
+        Ok(())
+    }
+
     /// Survole un champion pour l'action de pick donnée. Ne verrouille jamais.
     pub async fn preselect(&self, action_id: u64, champion_id: u32) -> Result<(), String> {
         if champion_id == 0 || champion_id > 9999 {
@@ -207,6 +252,41 @@ impl Lcu {
             Err(format!("http_{}", resp.status().as_u16()))
         }
     }
+}
+
+pub const RUNE_PAGE_NAME: &str = "Spec";
+
+/// Corps d'une page de runes : 4 runes de l'arbre principal (rune clé d'abord), 2 du secondaire,
+/// 3 fragments. Les identifiants sont vérifiés pour qu'aucune autre donnée ne parte au client.
+pub fn rune_page_body(name: &str, primary_style: u32, sub_style: u32, perks: &[u32]) -> Result<Value, String> {
+    let style_ok = |s: u32| (8000..=8499).contains(&s);
+    let perk_ok = |p: u32| (5000..=9999).contains(&p);
+    if !style_ok(primary_style) || !style_ok(sub_style) || primary_style == sub_style
+        || perks.len() != 9 || !perks.iter().all(|&p| perk_ok(p)) {
+        return Err("bad_page".into());
+    }
+    let name: String = name.chars().filter(|c| !c.is_control()).take(40).collect();
+    Ok(json!({
+        "name": if name.trim().is_empty() { RUNE_PAGE_NAME.to_string() } else { name },
+        "primaryStyleId": primary_style,
+        "subStyleId": sub_style,
+        "selectedPerkIds": perks,
+        "current": true,
+    }))
+}
+
+/// Page sélectionnée dans la draft, si c'est une page du joueur qu'on peut écraser : (id, nom).
+pub fn editable_current(current: &Value) -> Option<(u64, String)> {
+    let editable = current["isEditable"] == true && current["isDeletable"] == true;
+    let id = current["id"].as_u64()?;
+    editable.then(|| (id, current["name"].as_str().unwrap_or(RUNE_PAGE_NAME).to_string()))
+}
+
+/// Reste-t-il une place pour une page personnalisée ?
+pub fn has_free_slot(pages: &Value, inventory: &Value) -> bool {
+    let owned = inventory["ownedPageCount"].as_u64().unwrap_or(0);
+    let custom = pages.as_array().map_or(0, |a| a.iter().filter(|p| p["isDeletable"] == true).count() as u64);
+    custom < owned
 }
 
 /// Corps de la requête de présélection : uniquement `championId`, jamais `completed`.
@@ -258,10 +338,38 @@ mod tests {
         assert!(body.get("completed").is_none());
     }
 
+    #[test]
+    fn rune_page_is_validated_and_named_spec() {
+        let perks = [8112, 8139, 8138, 8135, 8210, 8233, 5008, 5008, 5011];
+        let body = rune_page_body("Ma page mid", 8100, 8200, &perks).unwrap();
+        assert_eq!(body["name"], "Ma page mid");
+        assert_eq!(rune_page_body("  ", 8100, 8200, &perks).unwrap()["name"], "Spec");
+        assert_eq!(body["selectedPerkIds"], json!(perks));
+        assert_eq!(body["current"], true);
+        assert!(rune_page_body("x", 8100, 8100, &perks).is_err());          // même arbre deux fois
+        assert!(rune_page_body("x", 8100, 8200, &perks[..8]).is_err());     // page incomplète
+        assert!(rune_page_body("x", 1, 8200, &perks).is_err());
+        assert!(rune_page_body("x", 8100, 8200, &[0, 8139, 8138, 8135, 8210, 8233, 5008, 5008, 5011]).is_err());
+    }
+
+    #[test]
+    fn only_the_selected_player_page_is_overwritten() {
+        let mine = json!({"id": 7, "name": "Mid Ahri", "isEditable": true, "isDeletable": true});
+        assert_eq!(editable_current(&mine), Some((7, "Mid Ahri".to_string())));
+        // page recommandée par Riot ou page de base : jamais écrasée
+        assert_eq!(editable_current(&json!({"id": 50, "name": "Domination", "isEditable": false, "isDeletable": false})), None);
+        assert_eq!(editable_current(&Value::Null), None);
+        let pages = json!([{"isDeletable": true}, {"isDeletable": true}, {"isDeletable": false}]);
+        assert!(has_free_slot(&json!([{"isDeletable": true}]), &json!({"ownedPageCount": 2})));
+        assert!(!has_free_slot(&pages, &json!({"ownedPageCount": 2})));
+        assert!(!has_free_slot(&json!([]), &json!({})));
+    }
+
     #[tokio::test]
     async fn rejects_forbidden_path_before_any_call() {
         let lcu = Lcu::new();
         assert_eq!(lcu.get("/lol-login/v1/session").await, Err("forbidden_path".into()));
         assert_eq!(lcu.preselect(1, 0).await, Err("bad_champion".into()));
+        assert_eq!(lcu.set_rune_page(8100, 8100, &[]).await, Err("bad_page".into()));
     }
 }

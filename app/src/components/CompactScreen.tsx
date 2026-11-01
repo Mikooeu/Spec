@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ROLE_LABELS, ROLE_SHORT, type Stats } from "../lib/score";
 import { champName } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
-import { RecoRow, makePreselect, persoCell, useRecos, type Draft } from "./DraftScreen";
+import { BanPanel, MyPick, RecoRow, makePreselect, persoCell, useRecos, type Draft } from "./DraftScreen";
 import type { PersonalState } from "../lib/api";
 
 interface Props {
@@ -16,10 +16,11 @@ interface Props {
   onRole: (role: number) => void;
   onToggleTop: () => void;
   onExpand: () => void;
-  onDemo: () => void;
+  onDemo?: () => void;
   onEndDemo: () => void;
   onPreselect?: (champ: number) => Promise<string | null>;
   perso?: PersonalState;
+  onDemoPick?: (champ: number) => void;
 }
 
 /** Petite fenêtre à garder à côté du client LoL pendant la sélection des champions. */
@@ -56,16 +57,17 @@ function CompactWaiting({ clientText, clientOn, onDemo }: Props) {
       <h2>En attente de la draft</h2>
       <p className="muted small">Tes recommandations s’affichent dès la sélection des champions.</p>
       <p className="compact__client"><span className={clientOn ? "dot" : "dot dot--off"} />{clientText}</p>
-      <button className="btn btn--secondary" onClick={onDemo}>Simuler une draft</button>
+      {onDemo && <button className="btn btn--secondary" onClick={onDemo}>Simuler une draft</button>}
     </div>
   );
 }
 
-function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect, perso }: Props & { draft: Draft }) {
+function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect, perso, onDemoPick }: Props & { draft: Draft }) {
   const [open, setOpen] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { autofill, rows } = useRecos(stats, draft, pool);
-  const preselect = makePreselect(stats, onPreselect, setNotice);
+  const preselect = makePreselect(stats, onPreselect, setNotice,
+    live ? undefined : (champ) => onDemoPick?.(champ));
 
   return (
     <div className="compact__body">
@@ -78,19 +80,24 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
       </div>
 
       <div className="mini-teams">
-        <MiniTeam stats={stats} label="Alliés" champs={draft.allies} me={draft.role} locked={draft.allyLocked} />
+        <MiniTeam stats={stats} label="Alliés" champs={draft.allies} me={draft.role} locked={draft.allyLocked}
+                  mine={draft.myChamp ?? null} />
         <MiniTeam stats={stats} label="Adversaires" champs={draft.enemies} />
       </div>
+
+      {draft.banPhase && <BanPanel stats={stats} draft={draft} compact />}
+      {draft.myChamp != null && <MyPick stats={stats} draft={draft} compact />}
 
       <div className="compact__recos">
         <p className="compact__section">{autofill ? `Autofill en ${ROLE_LABELS[draft.role]}` : "Recommandés pour toi"}</p>
         {rows.map(({ res, kind }, i) => (
           <div key={res.champ}>
-            {kind === "discovery" && !autofill && <p className="divider-label">Envie de tester ?</p>}
+            {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">Envie de tester ?</p>}
             <RecoRow stats={stats} res={res} rank={kind === "pool" ? String(i + 1) : "—"} compact
                      discovery={kind === "discovery"} open={open === res.champ}
                      onToggle={() => setOpen(open === res.champ ? null : res.champ)}
-                     onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)} />
+                     onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
+                     role={draft.role} />
           </div>
         ))}
         {rows.length === 0 && <p className="hint">Pas encore assez de parties pour ce rôle.</p>}
@@ -102,8 +109,8 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
   );
 }
 
-function MiniTeam({ stats, label, champs, me, locked }: {
-  stats: Stats; label: string; champs: (number | null)[]; me?: number; locked?: boolean[];
+function MiniTeam({ stats, label, champs, me, locked, mine = null }: {
+  stats: Stats; label: string; champs: (number | null)[]; me?: number; locked?: boolean[]; mine?: number | null;
 }) {
   return (
     <div className="mini-team">
@@ -112,10 +119,10 @@ function MiniTeam({ stats, label, champs, me, locked }: {
         {champs.map((c, i) => {
           const isMe = i === me;
           const hover = locked != null && c != null && !locked[i];
-          const title = isMe ? "Toi" : c == null ? "Pas encore choisi" : `${champName(stats, c)}${hover ? " (survol)" : ""}`;
+          const title = isMe ? (mine != null ? `Toi · ${champName(stats, mine)}` : "Toi") : c == null ? "Pas encore choisi" : `${champName(stats, c)}${hover ? " (survol)" : ""}`;
           return (
             <span key={i} className={`mini-slot${isMe ? " is-me" : ""}${hover ? " is-hover" : ""}`} title={title}>
-              <ChampionIcon stats={stats} champ={isMe ? null : c} size={1.875} tone={isMe ? "accent" : "default"} />
+              <ChampionIcon stats={stats} champ={isMe ? mine : c} size={1.875} tone={isMe ? "accent" : "default"} />
             </span>
           );
         })}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ROLE_LABELS, gamesIn, type Stats } from "../lib/score";
 import { champName, int, normalize } from "../lib/ui";
-import { topChampions, type PersonalState } from "../lib/api";
+import { PREFILL_MIN_GAMES, topChampions, type PersonalState } from "../lib/api";
 import type { Account } from "../lib/lcu";
 import { ChampionIcon } from "./ChampionIcon";
 
@@ -156,10 +156,10 @@ function persoText(perso: PersonalState): string {
 }
 
 function prefillText(perso: PersonalState, found: number, missing: number, role: string): string {
-  if (perso.kind !== "ready") return `Avec tes stats perso, pars de tes champions les plus joués en ${role} cette saison.`;
+  if (perso.kind !== "ready") return `Avec tes stats perso, ajoute tes champions joués ${PREFILL_MIN_GAMES} fois ou plus en ${role} cette saison.`;
   if (found === 0) return perso.data.syncing
     ? `Synchro en cours : tes champions ${role} apparaîtront ici.`
-    : `Pas assez de parties en ${role} cette saison (3 minimum par champion).`;
+    : `Aucun champion avec ${PREFILL_MIN_GAMES} parties ou plus en ${role} cette saison.`;
   if (missing === 0) return `Tes champions les plus joués en ${role} sont déjà dans ton pool.`;
-  return `Ajoute tes ${missing} champion${missing > 1 ? "s" : ""} les plus joué${missing > 1 ? "s" : ""} en ${role} cette saison.`;
+  return `Ajoute tes ${missing} champion${missing > 1 ? "s" : ""} avec ${PREFILL_MIN_GAMES} parties ou plus en ${role} cette saison.`;
 }

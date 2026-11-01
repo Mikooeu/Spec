@@ -128,3 +128,38 @@ def test_auth_error_is_explicit():
                         sleep=lambda s: None)
     with pytest.raises(RiotAuthError):
         client.ladder("master")
+
+
+def _with_runes(match, keystone=8112, swap=False):
+    for p in match["info"]["participants"]:
+        p["perks"] = {
+            "statPerks": {"offense": 5008, "flex": 5008, "defense": 5011},
+            "styles": [
+                {"description": "primaryStyle", "style": 8100,
+                 "selections": [{"perk": keystone}, {"perk": 8139}, {"perk": 8138}, {"perk": 8135}]},
+                {"description": "subStyle", "style": 8200,
+                 "selections": [{"perk": 8233}, {"perk": 8210}] if swap else [{"perk": 8210}, {"perk": 8233}]},
+            ]}
+    return match
+
+
+def test_parse_match_keeps_rune_pages_without_identity():
+    match, _ = parse_match(_with_runes(make_match()), "euw1")
+    assert len(match["runes"]) == 10
+    assert match["runes"][0] == ("EUW1_1", 100, 100, "TOP", 8112, 8100, 8139, 8138, 8135,
+                                 8200, 8210, 8233, 5008, 5008, 5011)
+    # l'ordre des runes secondaires ne crée pas deux pages différentes
+    swapped, _ = parse_match(_with_runes(make_match(), swap=True), "euw1")
+    assert swapped["runes"][0] == match["runes"][0]
+    assert all("secret" not in str(r) for r in match["runes"])
+    # page absente ou incomplète : ignorée sans erreur
+    assert parse_match(make_match(), "euw1")[0]["runes"] == []
+
+
+def test_save_match_stores_runes(tmp_path):
+    store = Store(tmp_path / "db.duckdb")
+    match, rows = parse_match(_with_runes(make_match()), "euw1")
+    store.save_match(match, rows)
+    store.save_match(match, rows)
+    with store._connect() as con:
+        assert con.execute("SELECT count(*) FROM runes").fetchone()[0] == 10

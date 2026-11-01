@@ -47,6 +47,8 @@ python -m scoring build
 
 Le patch le plus récent est utilisé. Tant qu'il a moins de 20 000 parties, le patch précédent est ajouté à 50 %.
 
+Depuis la 0.1.1, le collecteur enregistre aussi la page de runes de chaque joueur (relance-le pour en profiter). `build` en tire la meilleure page par champion et par rôle, choix après choix (rune clé, runes mineures, arbre secondaire, fragments), et une autre rune clé face à un vis-à-vis quand elle y fait nettement mieux sur assez de parties.
+
 ## 3. Obtenir un classement
 
 ```bash
@@ -178,7 +180,8 @@ Commandes utiles (dans `server/`) : `npm run logs` (journal en direct), `npm tes
 
 Administration (dans `server/`) :
 - `npm run admin -- list` : joueurs inscrits (sans pseudo) et avancement de la synchro.
-- `npm run admin -- unlink "Nom#TAG"` : délie un compte de son appareil, ses stats restent. À utiliser si quelqu'un s'est inscrit à la place d'un ami, ou si un ami change d'ordinateur. Un compte déjà lié n'est jamais réattribué automatiquement.
+- `npm run admin -- add-device "Nom#TAG"` : autorise un PC de plus pour ce compte pendant 15 minutes, une seule fois. Le joueur entre ensuite le code d'invitation sur son nouveau PC.
+- `npm run admin -- unlink "Nom#TAG"` : délie un compte de tous ses PC, ses stats restent. À utiliser si quelqu'un s'est inscrit à la place d'un ami. Un compte déjà lié n'accepte jamais un nouveau PC sans `add-device`.
 
 ## 8. Version Windows et mises à jour
 

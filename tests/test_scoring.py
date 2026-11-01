@@ -149,3 +149,53 @@ def test_upload_sends_token_and_rejects_bad_config(tmp_path):
         upload_stats(f, "http://insecure.example", token)
     with pytest.raises(SystemExit):
         upload_stats(f, "https://spec.example.workers.dev", "short")
+
+
+def test_runes_pick_the_better_keystone_and_matchup_override():
+    from scoring.runes import compute_runes
+    rng = random.Random(3)
+    rows, laner = [], []
+    # Ahri mid : Électrocution (8112) gagne 55 %, Premier coup (8369) 48 % ; mais face à Syndra,
+    # Premier coup gagne 70 % et Électrocution 40 %.
+    for i in range(4000):
+        key = 8112 if i % 2 else 8369
+        opp = 134 if i % 4 < 2 else 61
+        p = (0.40 if key == 8112 else 0.70) if opp == 134 else (0.70 if key == 8112 else 0.26)
+        win = int(rng.random() < p)
+        pstyle = 8100 if key == 8112 else 8300
+        minor = 8139 if rng.random() < 0.8 else 8143
+        rows.append((103, "MIDDLE", key, pstyle, minor, 8138, 8135, 8200, 8210, 8233, 5008, 5008, 5011, win, 1.0))
+        laner.append((103, "MIDDLE", opp, key, win, 1.0))
+    out = compute_runes(rows, laner)
+    [[champ, role, pages]] = out["pages"]
+    assert (champ, role) == (103, "MIDDLE")
+    assert [p[0] for p in pages] == [8112, 8369]          # meilleure rune clé d'abord
+    assert pages[0][3] == 8100 and pages[0][5] == 8200
+    assert pages[0][7] == [5008, 5008, 5011]
+    assert out["vs"] and out["vs"][0][:4] == [103, "MIDDLE", 134, 8369]
+    assert not any(v[2] == 61 for v in out["vs"])          # face à Orianna, la page par défaut reste
+
+
+def test_runes_need_enough_games():
+    from scoring.runes import compute_runes
+    rows = [(1, "TOP", 8010, 8000, 1, 2, 3, 8400, 4, 5, 5008, 5008, 5011, 1, 1.0)] * 10
+    assert compute_runes(rows, []) == {"pages": [], "vs": []}
+
+
+def test_export_includes_runes(tmp_path, champions):
+    from scoring.export import export_json
+    from scoring.score import Params
+    db = tmp_path / "draft.duckdb"
+    store = synthetic_db(db, n_matches=400)
+    with store._connect() as con:
+        con.execute("""INSERT INTO runes
+            SELECT match_id, team_id, champion_id, team_position, 8112, 8100, 8139, 8138, 8135,
+                   8200, 8210, 8233, 5008, 5008, 5011 FROM participants""")
+    build_stats(db, tmp_path / "stats.duckdb")
+    out = tmp_path / "stats.json"
+    export_json(tmp_path / "stats.duckdb", champions, Params(), out)
+    import json as _json
+    data = _json.loads(out.read_text())
+    ahri = [r for r in data["runes"] if r[0] == 1 and r[1] == 2]
+    assert ahri and ahri[0][2][0][0] == 8112
+    assert "runeVs" in data
