@@ -36,7 +36,18 @@ conf.bundle.targets = ["nsis", "app", "dmg"];
 conf.bundle.createUpdaterArtifacts = true;
 conf.bundle.publisher = "Spec";
 conf.bundle.shortDescription = "Recommandations de pick pendant la sélection des champions";
-conf.bundle.windows = { ...(conf.bundle.windows ?? {}), nsis: { installMode: "currentUser" } };
+conf.bundle.windows = {
+  ...(conf.bundle.windows ?? {}),
+  nsis: {
+    installMode: "currentUser",
+    // habillage aux couleurs de Spec
+    installerIcon: "icons/icon.ico",
+    headerImage: "installer/header.bmp",
+    sidebarImage: "installer/sidebar.bmp",
+    languages: ["French"],
+    displayLanguageSelector: false,
+  },
+};
 conf.plugins ??= {};
 conf.plugins.updater = {
   pubkey,

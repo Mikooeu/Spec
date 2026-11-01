@@ -7,9 +7,9 @@
 //!   `completed` (Spec ne verrouille pas un pick), et l'import de runes dans la page sélectionnée
 //!   dans la draft (ou une page « Spec » si celle-ci n'est pas modifiable) ; aucune autre page n'est touchée.
 
-use std::process::Command;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde_json::{json, Value};
 
@@ -46,76 +46,76 @@ pub fn parse_lockfile(content: &str) -> Option<Creds> {
     Some(Creds { port, token })
 }
 
-fn arg_value<'a>(cmdline: &'a str, key: &str) -> Option<&'a str> {
-    let start = cmdline.find(key)? + key.len();
-    let rest = &cmdline[start..];
-    let end = rest
-        .find(|c: char| c == '"' || c.is_whitespace())
-        .unwrap_or(rest.len());
-    let value = &rest[..end];
-    (!value.is_empty()).then_some(value)
+/// Chemin d'installation lu dans le fichier de réglages du jeu tenu par le client Riot
+/// (`product_install_full_path: "C:/Riot Games/League of Legends"`).
+pub fn parse_product_settings(text: &str) -> Option<String> {
+    text.lines().find_map(|l| {
+        let v = l.trim().strip_prefix("product_install_full_path:")?.trim().trim_matches(|c| c == '"' || c == '\'');
+        (!v.is_empty()).then(|| v.to_string())
+    })
 }
 
-/// Lit le port et le jeton dans la ligne de commande de LeagueClientUx.
-pub fn parse_cmdline(cmdline: &str) -> Option<Creds> {
-    let port: u16 = arg_value(cmdline, "--app-port=")?.parse().ok()?;
-    let token = arg_value(cmdline, "--remoting-auth-token=")?.to_string();
-    (port != 0).then_some(Creds { port, token })
+/// Dossiers de jeu listés par le client Riot dans RiotClientInstalls.json (clés de `associated_client`).
+pub fn parse_client_installs(json_text: &str) -> Vec<String> {
+    serde_json::from_str::<Value>(json_text).ok()
+        .and_then(|v| v["associated_client"].as_object().map(|o| o.keys().cloned().collect::<Vec<String>>()))
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|k: &String| k.contains("League of Legends"))
+        .collect()
 }
 
-fn lockfile_paths() -> &'static [&'static str] {
-    if cfg!(target_os = "windows") {
-        &[r"C:\Riot Games\League of Legends\lockfile"]
-    } else if cfg!(target_os = "macos") {
-        &["/Applications/League of Legends.app/Contents/LoL/lockfile"]
+/// Emplacement du lockfile pour un dossier d'installation.
+pub fn lockfile_in(dir: &str) -> PathBuf {
+    let dir = dir.trim_end_matches(['/', '\\']);
+    if dir.ends_with(".app") {
+        Path::new(dir).join("Contents").join("LoL").join("lockfile")
     } else {
-        &[]
+        Path::new(dir).join("lockfile")
     }
 }
 
+/// Fichiers où le client Riot note l'emplacement du jeu. Spec lit seulement ces fichiers :
+/// aucun programme n'est lancé et aucun autre processus n'est inspecté.
+fn riot_metadata_files() -> (PathBuf, PathBuf) {
+    let base = if cfg!(target_os = "windows") {
+        PathBuf::from(std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".into())).join("Riot Games")
+    } else {
+        PathBuf::from("/Users/Shared/Riot Games")
+    };
+    (
+        base.join("Metadata").join("league_of_legends.live").join("league_of_legends.live.product_settings.yaml"),
+        base.join("RiotClientInstalls.json"),
+    )
+}
+
+fn install_dirs() -> Vec<String> {
+    let mut dirs: Vec<String> = if cfg!(target_os = "windows") {
+        vec![r"C:\Riot Games\League of Legends".into()]
+    } else if cfg!(target_os = "macos") {
+        vec!["/Applications/League of Legends.app".into()]
+    } else {
+        vec![]
+    };
+    let (settings, installs) = riot_metadata_files();
+    if let Some(d) = std::fs::read_to_string(settings).ok().as_deref().and_then(parse_product_settings) {
+        dirs.insert(0, d);
+    }
+    if let Ok(text) = std::fs::read_to_string(installs) {
+        dirs.extend(parse_client_installs(&text));
+    }
+    dirs
+}
+
 fn from_lockfile() -> Option<Creds> {
-    lockfile_paths()
+    install_dirs()
         .iter()
-        .find_map(|p| std::fs::read_to_string(p).ok().and_then(|s| parse_lockfile(&s)))
+        .find_map(|d| std::fs::read_to_string(lockfile_in(d)).ok().and_then(|s| parse_lockfile(&s)))
 }
-
-/// Repli quand le jeu est installé ailleurs : on lit les arguments du processus.
-fn from_process() -> Option<Creds> {
-    let output = process_list_command().output().ok()?;
-    let text = String::from_utf8_lossy(&output.stdout);
-    text.lines()
-        .filter(|l| l.contains("LeagueClientUx"))
-        .find_map(parse_cmdline)
-}
-
-#[cfg(target_os = "windows")]
-fn process_list_command() -> Command {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let mut cmd = Command::new("powershell");
-    cmd.args([
-        "-NoProfile",
-        "-Command",
-        "Get-CimInstance Win32_Process -Filter \"name='LeagueClientUx.exe'\" | Select-Object -ExpandProperty CommandLine",
-    ])
-    .creation_flags(CREATE_NO_WINDOW);
-    cmd
-}
-
-#[cfg(not(target_os = "windows"))]
-fn process_list_command() -> Command {
-    let mut cmd = Command::new("ps");
-    cmd.args(["-A", "-o", "args="]);
-    cmd
-}
-
-/// Délai minimal entre deux recherches dans la liste des processus (coûteuses sur Windows).
-const PROCESS_SCAN_EVERY: Duration = Duration::from_secs(5);
 
 pub struct Lcu {
     client: reqwest::Client,
     creds: Mutex<Option<Creds>>,
-    last_scan: Mutex<Option<Instant>>,
 }
 
 impl Default for Lcu {
@@ -133,21 +133,14 @@ impl Lcu {
             .timeout(Duration::from_secs(3))
             .build()
             .expect("client HTTP");
-        Self { client, creds: Mutex::new(None), last_scan: Mutex::new(None) }
+        Self { client, creds: Mutex::new(None) }
     }
 
     fn creds(&self) -> Option<Creds> {
         if let Some(c) = self.creds.lock().unwrap().clone() {
             return Some(c);
         }
-        let found = from_lockfile().or_else(|| {
-            let mut last = self.last_scan.lock().unwrap();
-            if last.is_some_and(|t| t.elapsed() < PROCESS_SCAN_EVERY) {
-                return None;
-            }
-            *last = Some(Instant::now());
-            from_process()
-        });
+        let found = from_lockfile();
         *self.creds.lock().unwrap() = found.clone();
         found
     }
@@ -313,12 +306,17 @@ mod tests {
     }
 
     #[test]
-    fn cmdline_mac_and_windows() {
-        let mac = "/Applications/League of Legends.app/Contents/LoL/LeagueClient.app/Contents/LoL/LeagueClientUx --remoting-auth-token=XyZ123 --app-port=60123 --install-directory=/Applications";
-        assert_eq!(parse_cmdline(mac), Some(Creds { port: 60123, token: "XyZ123".into() }));
-        let win = r#""C:/Riot Games/League of Legends/LeagueClientUx.exe" "--remoting-auth-token=AbC" "--app-port=50001""#;
-        assert_eq!(parse_cmdline(win), Some(Creds { port: 50001, token: "AbC".into() }));
-        assert_eq!(parse_cmdline("LeagueClientUx --app-port=1"), None);
+    fn install_path_from_riot_metadata() {
+        let yaml = "auto_patching_enabled_by_player: true\nproduct_install_full_path: \"D:/Jeux/Riot Games/League of Legends\"\nproduct_install_root: \"D:/Jeux\"\n";
+        assert_eq!(parse_product_settings(yaml).as_deref(), Some("D:/Jeux/Riot Games/League of Legends"));
+        assert_eq!(parse_product_settings("rien: ici"), None);
+        let installs = r#"{"associated_client": {"D:/Jeux/Riot Games/League of Legends/": "D:/Jeux/Riot Client/RiotClientServices.exe",
+                             "D:/Jeux/Riot Games/VALORANT/live/": "x"}, "rc_default": "x"}"#;
+        assert_eq!(parse_client_installs(installs), vec!["D:/Jeux/Riot Games/League of Legends/".to_string()]);
+        assert!(parse_client_installs("pas du json").is_empty());
+        assert_eq!(lockfile_in("D:/Jeux/Riot Games/League of Legends/"), Path::new("D:/Jeux/Riot Games/League of Legends").join("lockfile"));
+        assert_eq!(lockfile_in("/Applications/League of Legends.app"),
+                   Path::new("/Applications/League of Legends.app/Contents/LoL/lockfile"));
     }
 
     #[test]
