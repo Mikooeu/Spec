@@ -104,7 +104,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
           <div className="item-ranks">
             {page.items.slice(0, ranks).map(([rankGames, list], k) => {
               const total = list.reduce((a, [, ig]) => a + ig, 0);
-              const avg = total ? list.reduce((a, [, ig, iw]) => a + iw, 0) / total : 0;
+              const avg = total ? list.reduce((a, [, , iw]) => a + iw, 0) / total : 0;
               return (
                 <div key={k} className="item-rank">
                   <span className="item-rank__label">Objet {k + 1}<span>moy. {pct(avg)}</span></span>
