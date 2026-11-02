@@ -55,17 +55,26 @@ export default function App() {
   const openChamp = (champ: number, role: number) => { setChampView({ champ, role, inGame: false }); setScreen("champion"); };
 
   // pick verrouillé pendant la draft : sa page champion s'ouvre au lancement de la partie
+  // (noté à chaque rendu : un effet séparé se ferait écraser par la remise à zéro du début de draft)
   const lastPick = useRef<{ champ: number; role: number } | null>(null);
+  const phase = client.status === "idle" ? client.phase : client.status;
   useEffect(() => {
     if (live?.myLocked && live.myChamp != null) lastPick.current = { champ: live.myChamp, role: live.role };
-  }, [live?.myLocked, live?.myChamp, live?.role]); // eslint-disable-line react-hooks/exhaustive-deps
-  const phase = client.status === "idle" ? client.phase : client.status;
+  });
   useEffect(() => {
     if (phase === "champselect") { setScreen("draft"); lastPick.current = null; return; }
     if ((phase === "InProgress" || phase === "GameStart") && lastPick.current) {
       setChampView({ ...lastPick.current, inGame: true });
       setScreen("champion");
       lastPick.current = null;
+      return;
+    }
+    // partie terminée : retour sur l'écran d'attente de la draft
+    if (["PreEndOfGame", "EndOfGame", "WaitingForStats", "Lobby", "None", "offline"].includes(phase)) {
+      setChampView((v) => {
+        if (v?.inGame) setScreen((sc) => (sc === "champion" ? "draft" : sc));
+        return v?.inGame ? { ...v, inGame: false } : v;
+      });
     }
   }, [phase]);
   const account = client.status === "idle" || client.status === "champselect" ? client.account : null;
