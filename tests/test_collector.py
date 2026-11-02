@@ -102,9 +102,12 @@ def fake_riot(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"entries": [{"puuid": "p2", "leaguePoints": 100}]})
     if path.endswith("/ids"):
         assert request.url.params["queue"] == "420"
-        return httpx.Response(200, json=["EUW1_1", "EUW1_2", "EUW1_404"])
+        return httpx.Response(200, json=["EUW1_1", "EUW1_2", "EUW1_3", "EUW1_404"])
     if path.endswith("EUW1_404"):
         return httpx.Response(404)
+    if path.endswith("/timeline"):
+        assert "EUW1_3" in path  # 1 partie sur 3 seulement
+        return httpx.Response(200, json=make_timeline())
     match_id = path.rsplit("/", 1)[-1]
     return httpx.Response(200, json=make_match(match_id))
 
@@ -117,7 +120,8 @@ def test_full_cycle_with_fake_api():
     col.step()
     s = store.summary()
     assert s["players"] == 2            # p1 + p2 (présent en GM et en Master, fusionné), "old" ignoré
-    assert s["matches"] == 2            # EUW1_1 et EUW1_2 ; la 404 est retirée
+    assert s["matches"] == 3            # EUW1_1 à 3 ; la 404 est retirée
+    assert s["detailed"] == 3 and s["timelines"] == 1
     assert s["queue"] == 0
     assert s["players_checked"] == s["players"]
 
@@ -163,3 +167,59 @@ def test_save_match_stores_runes(tmp_path):
     store.save_match(match, rows)
     with store._connect() as con:
         assert con.execute("SELECT count(*) FROM runes").fetchone()[0] == 10
+
+
+# ---------- bans, sorts, objets, déroulés (0.2) ----------
+
+def _with_details(match):
+    info = match["info"]
+    info["teams"] = [{"teamId": 100, "bans": [{"championId": 238}, {"championId": -1}]},
+                     {"teamId": 200, "bans": [{"championId": 157}, {"championId": 238}]}]
+    for i, p in enumerate(info["participants"]):
+        p.update({"participantId": i + 1, "summoner1Id": 14, "summoner2Id": 4,
+                  "item0": 3089, "item1": 3020, "item2": 0, "item6": 3340})
+    return match
+
+
+def make_timeline():
+    ev = [{"type": "ITEM_PURCHASED", "participantId": 1, "itemId": 1056, "timestamp": 14000},
+          {"type": "ITEM_PURCHASED", "participantId": 1, "itemId": 2003, "timestamp": 15000},
+          {"type": "ITEM_PURCHASED", "participantId": 1, "itemId": 1055, "timestamp": 16000},
+          {"type": "ITEM_UNDO", "participantId": 1, "beforeId": 1055, "afterId": 0, "timestamp": 17000},
+          {"type": "SKILL_LEVEL_UP", "participantId": 1, "skillSlot": 1, "levelUpType": "NORMAL"},
+          {"type": "SKILL_LEVEL_UP", "participantId": 1, "skillSlot": 3, "levelUpType": "NORMAL"},
+          {"type": "SKILL_LEVEL_UP", "participantId": 1, "skillSlot": 2, "levelUpType": "EVOLVE"},
+          {"type": "SKILL_LEVEL_UP", "participantId": 1, "skillSlot": 4, "levelUpType": "NORMAL"}]
+    return {"info": {"frames": [{"events": ev}]}}
+
+
+def test_parse_match_keeps_bans_spells_and_items():
+    from collector.collect import build_row
+    match, _ = parse_match(_with_details(make_match()), "euw1")
+    assert match["bans"] == [157, 238]      # sans doublon ni « pas de ban » (-1)
+    b = match["builds"][0]
+    assert b[5:8] == (4, 14, "3089,3020")   # sorts triés, bijou et cases vides exclus
+    assert b[8] is None and b[9] is None    # pas de déroulé
+    assert all("secret" not in str(r) and "Joueur" not in str(r) for r in match["builds"])
+
+
+def test_timeline_gives_skill_order_and_purchases_without_undone_items():
+    from collector.collect import attach_timeline, wants_timeline
+    data = _with_details(make_match("EUW1_3"))
+    match, _ = parse_match(data, "euw1")
+    attach_timeline(match, data["info"]["participants"], make_timeline())
+    assert match["has_timeline"] is True
+    assert match["builds"][0][8] == "QER"
+    assert match["builds"][0][9] == "1056@14,2003@15"
+    assert wants_timeline("EUW1_3") and not wants_timeline("EUW1_4")
+
+
+def test_save_match_stores_details(tmp_path):
+    store = Store(tmp_path / "db.duckdb")
+    match, rows = parse_match(_with_details(make_match()), "euw1")
+    store.save_match(match, rows)
+    store.save_match(match, rows)
+    with store._connect() as con:
+        assert con.execute("SELECT count(*) FROM bans").fetchone()[0] == 2
+        assert con.execute("SELECT count(*) FROM builds").fetchone()[0] == 10
+        assert con.execute("SELECT count(*) FROM match_ext").fetchone()[0] == 1

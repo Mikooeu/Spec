@@ -97,6 +97,20 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
                 SELECT a.champ, a.role, b.champ, a.keystone, a.win, a.w
                 FROM rr a JOIN p b ON a.match_id = b.match_id AND a.team_id <> b.team_id AND a.role = b.role
             """).fetchall()
+        # bans (collectés depuis la 0.2) : banrate = bans / parties avec le détail
+        has_bans = con.execute(
+            "SELECT count(*) FROM duckdb_tables() WHERE database_name = 'src' AND table_name = 'bans'"
+        ).fetchone()[0] > 0
+        ban_rows, ban_matches = [], 0.0
+        if has_bans:
+            weighted = """SELECT e.match_id, CASE WHEN m.patch = ? THEN 1.0 ELSE ? END AS w
+                          FROM src.match_ext e JOIN src.matches m USING (match_id)
+                          WHERE NOT m.is_remake AND m.patch IN (?, ?)""" + (
+                f" AND NOT ({HOLDOUT_SQL})" if holdout else "")
+            con.execute("CREATE TEMP TABLE bm AS " + weighted, [current, weight_prev, current, previous or current])
+            ban_matches = float(con.execute("SELECT coalesce(sum(w), 0) FROM bm").fetchone()[0])
+            ban_rows = con.execute("""SELECT b.champion_id, sum(bm.w) FROM src.bans b JOIN bm USING (match_id)
+                                      GROUP BY 1""").fetchall()
         con.execute("DETACH src")
         runes = compute_runes(rune_rows, laner_rows)
 
@@ -121,6 +135,10 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
                 "previous_weight": str(weight_prev), "matches": str(matches),
                 "built_at": str(int(time.time()))}
         meta["rune_pages"] = str(len(runes["pages"]))
+        meta["ban_matches"] = str(round(ban_matches, 1))
+        con.execute("CREATE TABLE out.bans (champ INTEGER, games DOUBLE)")
+        if ban_rows:
+            con.executemany("INSERT INTO out.bans VALUES (?, ?)", ban_rows)
         con.execute("CREATE TABLE out.runes (value VARCHAR)")
         con.execute("INSERT INTO out.runes VALUES (?)", [json.dumps(runes)])
         con.execute("CREATE TABLE out.meta (key VARCHAR, value VARCHAR)")

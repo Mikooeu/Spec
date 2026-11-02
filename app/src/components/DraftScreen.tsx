@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  LOW_DATA_GAMES, ROLE_LABELS, ROLE_SHORT, banSuggestions, explain, likelyRole, recommend, roleDistribution,
+  LOW_DATA_GAMES, ROLE_LABELS, ROLE_SHORT, banSuggestions, enemyRoles, explain, recommend, roleDistribution,
   scoreChampion, topForRole, type Result, type Stats,
 } from "../lib/score";
 import { RunePage } from "./Runes";
@@ -31,13 +31,14 @@ interface Props {
   live?: boolean;
   /** En direct : présélectionne dans le client, renvoie un message d'erreur ou null. */
   onPreselect?: (champ: number) => Promise<string | null>;
-  onCompact?: () => void;
+  /** En direct : survole le champion pour ton ban, renvoie un message d'erreur ou null. */
+  onBan?: (champ: number) => Promise<string | null>;
   perso?: PersonalState;
 }
 
 type Slot = { side: "ally" | "enemy"; index: number } | null;
 
-export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = false, onPreselect, onCompact, perso }: Props) {
+export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = false, onPreselect, onBan, perso }: Props) {
   const [picking, setPicking] = useState<Slot>(null);
   const [openChamp, setOpenChamp] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -46,6 +47,12 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
 
   const selected = rows.find((r) => r.res.champ === openChamp)?.res ?? null;
   const taken = new Set([...allies, ...enemies, ...draft.bans]);
+  // rôle affiché pour chaque adversaire : un seul par rôle, comme dans une vraie équipe
+  const enemyRole = useMemo(() => {
+    const { best } = enemyRoles(stats, enemies);
+    let j = 0;
+    return draft.enemies.map((c) => (c == null ? null : best[j++] ?? null));
+  }, [stats, draft.enemies]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setSlot = (slot: NonNullable<Slot>, champ: number | null) => {
     const next = { ...draft, allies: [...draft.allies], enemies: [...draft.enemies] };
@@ -56,6 +63,7 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
 
   const preselect = makePreselect(stats, onPreselect, setNotice,
     live ? undefined : (champ) => onChange({ ...draft, myChamp: champ, myLocked: false }));
+  const banSelect = makeBanSelect(stats, live ? onBan : undefined, setNotice);
 
   return (
     <div className="content">
@@ -77,7 +85,6 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
                     onClick={() => onChange({ ...draft, banPhase: !draft.banPhase })}>Phase de bans</button>
           )}
           {!live && onEnd && <button className="btn btn--secondary" onClick={onEnd}>Terminer la démo</button>}
-          {onCompact && <button className="btn btn--secondary" onClick={onCompact}>Mode compact</button>}
         </div>
       </header>
 
@@ -100,9 +107,9 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
           </TeamCard>
           <TeamCard title="Équipe adverse">
             {draft.enemies.map((c, i) => {
-              const lr = c == null ? null : likelyRole(stats, c);
+              const role = enemyRole[i];
               return (
-                <SlotRow key={i} stats={stats} label={lr ? ROLE_SHORT[lr.role] : "—"} champ={c}
+                <SlotRow key={i} stats={stats} label={role != null ? ROLE_SHORT[role] : "—"} champ={c}
                          name={c == null ? "En attente" : champName(stats, c)}
                          detail={c == null ? (live ? "Pas encore choisi" : "Clique pour ajouter un pick") : rolesText(stats, c)}
                          tone={c == null ? "empty" : "default"}
@@ -113,13 +120,21 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
         </section>
 
         <section className="recos" aria-label="Recommandations">
-          <div className="section-head">
-            <h2>{autofill ? `Autofill en ${ROLE_LABELS[draft.role]}` : "Recommandés pour toi"}</h2>
+          {draft.banPhase && (
+            <>
+              <div className="section-head">
+                <h2>Bans recommandés</h2>
+                <span className="muted small">Phase de bans · {ROLE_LABELS[draft.role]}</span>
+              </div>
+              <BanPanel stats={stats} draft={draft} titled={false} onSelect={banSelect} />
+            </>
+          )}
+          <div className={`section-head${draft.banPhase ? " section-head--spaced" : ""}`}>
+            <h2>{autofill ? `Picks recommandés en autofill ${ROLE_LABELS[draft.role]}` : "Picks recommandés pour toi"}</h2>
             <span className="muted small">
               {int(Number(stats.meta.matches ?? 0))} parties Master+ · patch {patchLabel(stats.meta.patch)}
             </span>
           </div>
-          {draft.banPhase && <BanPanel stats={stats} draft={draft} />}
           {draft.myChamp != null && <MyPick stats={stats} draft={draft} />}
           {autofill && (
             <p className="hint">Ton pool est vide pour ce rôle : voici les meilleurs choix de cette draft.</p>
@@ -327,6 +342,26 @@ export function makePreselect(
   };
 }
 
+/** Clic sur un ban conseillé : le survole dans le client (sans valider), avec un message. */
+export function makeBanSelect(
+  stats: Stats,
+  onBan: ((champ: number) => Promise<string | null>) | undefined,
+  setNotice: React.Dispatch<React.SetStateAction<string | null>>,
+) {
+  const flash = (msg: string) => {
+    setNotice(msg);
+    window.setTimeout(() => setNotice((m) => (m === msg ? null : m)), 3500);
+  };
+  return async (champ: number) => {
+    if (!onBan) {
+      flash(`Démo : en partie, ${champName(stats, champ)} serait survolé pour ton ban.`);
+      return;
+    }
+    const error = await onBan(champ);
+    flash(error ?? `${champName(stats, champ)} survolé pour ton ban. À toi de valider dans le client.`);
+  };
+}
+
 type Tone = "good" | "bad" | "neutral";
 export interface PersoCell { value: string; label: string; tone: Tone; short?: string }
 
@@ -388,29 +423,36 @@ export function MyPick({ stats, draft, compact = false }: { stats: Stats; draft:
 }
 
 /** Phase de bans : 3 champions à bannir. */
-export function BanPanel({ stats, draft, compact = false }: { stats: Stats; draft: Draft; compact?: boolean }) {
+export function BanPanel({ stats, draft, compact = false, titled = true, onSelect }:
+  { stats: Stats; draft: Draft; compact?: boolean; titled?: boolean; onSelect?: (champ: number) => void }) {
   const taken = [...draft.allies, ...draft.enemies].filter((c): c is number => c != null).concat(draft.bans);
   const list = banSuggestions(stats, draft.role, draft.myChamp ?? null, taken);
   if (!list.length) return null;
-  const against = list[0].against;
+  const counters = list.filter((b) => b.against).length;
+  const me = champName(stats, draft.myChamp ?? null);
+  const role = ROLE_LABELS[draft.role];
+  const intro = draft.myChamp == null ? `Pas de présélection : les meilleurs winrates en ${role}`
+    : counters === list.length ? `Les matchups que ${me} perd le plus en ${role}`
+    : counters > 0 ? `Les matchups que ${me} perd, puis les plus forts en ${role}`
+    : `${me} n’a pas de matchup nettement perdant : les meilleurs winrates en ${role}`;
   return (
     <div className={`card bans${compact ? " bans--compact" : ""}`}>
-      <p className="bans__title">Bans conseillés</p>
+      {titled && <p className="bans__title">Bans recommandés</p>}
       <p className="muted small">
-        {against ? `Ceux qui battent le plus ${champName(stats, draft.myChamp ?? null)} en ${ROLE_LABELS[draft.role]}`
-                 : `Pas de présélection : les meilleurs winrates en ${ROLE_LABELS[draft.role]}`}
+        {intro}
       </p>
       <div className="bans__list">
         {list.map((b) => (
-          <div key={b.champ} className="bans__item">
+          <button key={b.champ} className="bans__item" onClick={() => onSelect?.(b.champ)} disabled={!onSelect}
+                  title={`Survoler ${champName(stats, b.champ)} pour ton ban`}>
             <ChampionIcon stats={stats} champ={b.champ} size={compact ? 1.75 : 2} />
             <span className="bans__text">
               <span className="bans__name">{champName(stats, b.champ)}</span>
               <span className="muted small">
-                {against ? `Tu gagnes ${pct(b.winrate)} contre lui` : `${pct(b.winrate)} de winrate`} · {int(b.games)} parties
+                {b.against ? `Tu gagnes ${pct(b.winrate)} contre lui` : `${pct(b.winrate)} de winrate en ${role}`} · {int(b.games)} parties
               </span>
             </span>
-          </div>
+          </button>
         ))}
       </div>
     </div>

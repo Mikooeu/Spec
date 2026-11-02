@@ -303,3 +303,47 @@ h3 { font-size: 0.9375rem; font-weight: 600; }
 .runes__import { margin-left: auto; }
 .runes__status { font-size: 0.75rem; color: var(--good); }
 .compact .runes__import { margin-left: 0; }
+/* barre latérale 0.2 : bouton mode compact à côté du logo */
+.brand { padding-right: 0; }
+.brand__compact { margin-left: auto; background: var(--bg-surface-2); }
+.brand__compact:disabled { opacity: 0.45; }
+.page-intro { font-size: 0.875rem; margin-top: -0.5rem; }
+.section-head--spaced { margin-top: 0.75rem; }
+/* recherche avec bouton pour effacer */
+.search-wrap { position: relative; }
+.search-wrap .search { padding-right: 2.25rem; }
+.search__clear { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); display: inline-flex;
+                 color: var(--text-2); border-radius: 50%; }
+.search__clear:hover { color: var(--text); }
+/* profil */
+.tile-stat__value--champ { display: flex; align-items: center; gap: 0.5rem; }
+.tiles .tile-stat { background: var(--bg-surface); border: 1px solid var(--border); }
+.history-soon { padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.25rem; }
+/* tier list */
+.tier-controls { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.tier-sort { display: flex; align-items: center; gap: 0.625rem; }
+.tier-table { display: flex; flex-direction: column; gap: 0.375rem; }
+.tier-row { display: grid; grid-template-columns: 1.5rem 2rem minmax(8rem, 1fr) repeat(3, minmax(4.5rem, 7rem));
+            align-items: center; gap: 1rem; padding: 0.5rem 1.25rem 0.5rem 1rem; border-radius: 0.625rem;
+            background: var(--bg-surface); border: 1px solid var(--border); }
+.tier-row--head { background: none; border-color: transparent; padding-top: 0; padding-bottom: 0.25rem;
+                  font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+.tier-row--head .tier-row__num { padding: 0; font-size: inherit; font-weight: inherit; letter-spacing: inherit; color: inherit; }
+.tier-row--head .is-sorted { color: var(--accent); }
+.tier-row__rank { text-align: right; font-size: 0.8125rem; font-weight: 500; color: var(--text-3); }
+.tier-row__tier { justify-self: center; width: 2rem; text-align: center; font-size: 0.75rem; font-weight: 700;
+                  border-radius: 0.375rem; padding: 0.125rem 0; color: var(--accent); background: var(--accent-tint); }
+.tier-row--head .tier-row__tier { background: none; color: inherit; font-weight: inherit; }
+.tier--D { color: var(--bad); background: rgba(255, 69, 58, 0.14); }
+.tier-row__champ { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+.tier-row__name { font-size: 0.875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tier-row__num { text-align: right; font-size: 0.875rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.tier-row__wr { font-weight: 600; }
+.tier-row__wr.tone-neutral { color: var(--text); }
+@media (max-width: 52rem) {
+  .tier-row { gap: 0.625rem; padding-left: 0.625rem; padding-right: 0.75rem; grid-template-columns: 1.25rem 1.75rem minmax(6rem, 1fr) repeat(3, 4.25rem); }
+}
+/* bans conseillés cliquables : survol pour le ban */
+button.bans__item { text-align: left; border: 1px solid transparent; transition: border-color 0.12s, background 0.12s; }
+button.bans__item:hover:not(:disabled) { border-color: var(--bad); background: rgba(255, 69, 58, 0.1); }
+button.bans__item:disabled { cursor: default; }

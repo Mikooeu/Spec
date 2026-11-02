@@ -7,7 +7,7 @@ export const pts = (x: number) =>
 export const int = (x: number) => Math.round(x).toLocaleString("fr-FR");
 
 /** Couleur d'un winrate : vert au-dessus de 51,5 %, rouge sous 48,5 %. */
-export const wrTone = (x: number) => (x >= 0.515 ? "good" : x <= 0.485 ? "bad" : "neutral");
+export const wrTone = (x: number) => (x >= 0.515 ? "good" : x < 0.49 ? "bad" : "neutral");
 
 export const iconUrl = (stats: Stats, champ: number) => {
   const c = stats.champions.get(champ);

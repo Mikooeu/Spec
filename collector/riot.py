@@ -81,3 +81,6 @@ class RiotClient:
 
     def match(self, match_id: str) -> dict | None:
         return self._get(self.region_url, f"/lol/match/v5/matches/{match_id}")
+
+    def timeline(self, match_id: str) -> dict | None:
+        return self._get(self.region_url, f"/lol/match/v5/matches/{match_id}/timeline")

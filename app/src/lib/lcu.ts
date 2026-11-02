@@ -112,6 +112,20 @@ export async function preselect(s: Session, champ: number): Promise<string | nul
   }
 }
 
+/** Survole un champion pour ton ban (sans le valider). Renvoie un message d'erreur, ou null si c'est fait. */
+export async function preselectBan(s: Session, champ: number): Promise<string | null> {
+  const action = (s.actions ?? []).flat()
+    .find((a) => a.actorCellId === s.localPlayerCellId && a.type === "ban" && !a.completed);
+  if (!action) return "Ton ban est déjà fait ou la phase de bans est terminée.";
+  if (action.isInProgress === false) return "Ce n’est pas encore ton tour de bannir.";
+  try {
+    await invoke("lcu_preselect", { actionId: action.id, championId: champ });
+    return null;
+  } catch {
+    return "Le client n’a pas accepté ce ban. Réessaie dans un instant.";
+  }
+}
+
 async function readAccount(): Promise<Account | null> {
   try {
     const me = await lcuGet<{ gameName?: string; tagLine?: string; displayName?: string; puuid?: string }>("/lol-summoner/v1/current-summoner");
@@ -166,10 +180,11 @@ export function useLolClient(): ClientState {
 
 /** Importe une page de runes dans la page sélectionnée de la draft. Message d'erreur, ou null si c'est fait. */
 export async function importRunes(page: { primaryStyle: number; subStyle: number; keystone: number;
-  primary: number[]; sub: number[]; shards: number[] }): Promise<string | null> {
+  primary: number[]; sub: number[]; shards: number[] }, champion: string): Promise<string | null> {
   const perks = [page.keystone, ...page.primary, ...page.sub, ...page.shards];
   try {
-    await invoke("lcu_set_rune_page", { primaryStyle: page.primaryStyle, subStyle: page.subStyle, perks });
+    // la page est renommée « Spec : <champion> runes »
+    await invoke("lcu_set_rune_page", { champion, primaryStyle: page.primaryStyle, subStyle: page.subStyle, perks });
     return null;
   } catch (e) {
     if (e === "no_editable_page") {

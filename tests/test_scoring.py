@@ -199,3 +199,23 @@ def test_export_includes_runes(tmp_path, champions):
     ahri = [r for r in data["runes"] if r[0] == 1 and r[1] == 2]
     assert ahri and ahri[0][2][0][0] == 8112
     assert "runeVs" in data
+
+
+def test_export_includes_ban_counts(tmp_path, champions):
+    from scoring.export import export_json
+    from scoring.score import Params
+    db = tmp_path / "draft.duckdb"
+    store = synthetic_db(db, n_matches=400)
+    with store._connect() as con:
+        # la moitié des parties seulement a le détail (collectées après la 0.2)
+        con.execute("INSERT INTO match_ext SELECT match_id, false FROM matches WHERE hash(match_id) % 2 = 0")
+        con.execute("INSERT INTO bans SELECT match_id, 238 FROM match_ext")
+    meta = build_stats(db, tmp_path / "stats.duckdb")
+    out = tmp_path / "stats.json"
+    export_json(tmp_path / "stats.duckdb", champions, Params(), out)
+    import json as _json
+    data = _json.loads(out.read_text())
+    detailed = float(meta["ban_matches"])
+    assert 100 < detailed < 300
+    zed = dict((c, g) for c, g in data["bans"])[238]
+    assert zed == detailed            # banni dans 100 % des parties détaillées

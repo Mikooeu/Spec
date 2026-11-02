@@ -17,8 +17,8 @@ async fn lcu_preselect(state: tauri::State<'_, Lcu>, action_id: u64, champion_id
 
 /// Importe une page de runes dans la page sélectionnée de la draft (ou une page « Spec »).
 #[tauri::command]
-async fn lcu_set_rune_page(state: tauri::State<'_, Lcu>, primary_style: u32, sub_style: u32, perks: Vec<u32>) -> Result<(), String> {
-    state.set_rune_page(primary_style, sub_style, &perks).await
+async fn lcu_set_rune_page(state: tauri::State<'_, Lcu>, champion: String, primary_style: u32, sub_style: u32, perks: Vec<u32>) -> Result<(), String> {
+    state.set_rune_page(&champion, primary_style, sub_style, &perks).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

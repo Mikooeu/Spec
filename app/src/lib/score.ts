@@ -36,6 +36,9 @@ export interface Stats {
   roleGames: Map<number, number[]>; // champion -> parties par rôle
   runes: Map<string, RunePage[]>;   // `${champ}|${rôle}` -> pages, la meilleure d'abord
   runeVs: Map<string, number>;      // `${champ}|${rôle}|${vis-à-vis}` -> rune clé conseillée
+  bans: Map<number, number>;        // champion -> parties où il est banni (parties détaillées)
+  banMatches: number;               // parties détaillées (dénominateur du banrate), 0 si pas encore collecté
+  matchesWeighted: number;          // parties pondérées (dénominateur du pickrate)
 }
 
 /** Page de runes : rune clé, arbre principal et ses 3 runes, arbre secondaire et ses 2 runes, 3 fragments. */
@@ -58,6 +61,7 @@ interface RawStats {
   ally: [number, number, number, number, number][];
   runes?: [number, number, RawPage[]][];
   runeVs?: [number, number, number, number, number, number][];
+  bans?: [number, number][];
 }
 
 const k2 = (c: number, r: number) => `${c}|${r}`;
@@ -76,6 +80,9 @@ export function parseStats(raw: RawStats): Stats {
     roleGames: new Map(),
     runes: new Map(),
     runeVs: new Map(),
+    bans: new Map(raw.bans ?? []),
+    banMatches: Number(raw.meta.ban_matches ?? 0),
+    matchesWeighted: 0,
   };
   for (const [c, r, pages] of raw.runes ?? []) {
     stats.runes.set(k2(c, r), pages.map(([keystone, games, wins, primaryStyle, primary, subStyle, sub, shards]) =>
@@ -88,6 +95,8 @@ export function parseStats(raw: RawStats): Stats {
     dist[r] = g;
     stats.roleGames.set(c, dist);
   }
+  // 10 joueurs par partie : la somme des parties de chaque champion / 10 = parties (pondérées)
+  stats.matchesWeighted = raw.base.reduce((a, [, , g]) => a + g, 0) / 10;
   for (const [c, r, o, g, w] of raw.lane) stats.lane.set(k3(c, r, o), [g, w]);
   for (const [c, r, o, g, w] of raw.vs) stats.vs.set(k3(c, r, o), [g, w]);
   for (const [c, r, o, g, w] of raw.ally) stats.ally.set(k3(c, r, o), [g, w]);
@@ -128,6 +137,54 @@ export function likelyRole(stats: Stats, champ: number): { role: number; p: numb
   return { role, p: dist[role] / total };
 }
 
+/**
+ * Rôles de l'équipe adverse, pensés comme une vraie équipe : un seul joueur par rôle.
+ * On essaie toutes les répartitions possibles (5! = 120 au plus), chacune pondérée par la probabilité
+ * que chaque champion joue le rôle qu'elle lui donne. On en tire :
+ *  - best : la répartition la plus probable (rôle affiché à côté de chaque adversaire) ;
+ *  - marginal[i][r] : probabilité que l'adversaire i joue le rôle r (utilisée pour les vis-à-vis).
+ */
+const ROLE_FLOOR = 0.005; // un rôle jamais vu reste possible (picks hors méta, doublons en partie perso)
+const roleCaches = new WeakMap<Stats, Map<string, { best: number[]; marginal: number[][] }>>();
+
+export function enemyRoles(stats: Stats, enemies: number[]): { best: number[]; marginal: number[][] } {
+  const key = enemies.join(",");
+  let roleCache = roleCaches.get(stats);
+  if (!roleCache) { roleCache = new Map(); roleCaches.set(stats, roleCache); }
+  const hit = roleCache.get(key);
+  if (hit) return hit;
+  const probs = enemies.map((e) => {
+    const dist = stats.roleGames.get(e);
+    const total = dist ? dist.reduce((a, b) => a + b, 0) : 0;
+    return [0, 1, 2, 3, 4].map((r) => (total ? dist![r] / total : 0.2) + ROLE_FLOOR);
+  });
+  const n = Math.min(enemies.length, 5);
+  const marginal = enemies.map(() => [0, 0, 0, 0, 0]);
+  let best: number[] = [], bestW = -1, totalW = 0;
+  const used = [false, false, false, false, false];
+  const pick: number[] = [];
+  const walk = (i: number, w: number) => {
+    if (i === n) {
+      totalW += w;
+      pick.forEach((r, j) => { marginal[j][r] += w; });
+      if (w > bestW) { bestW = w; best = [...pick]; }
+      return;
+    }
+    for (let r = 0; r < 5; r++) {
+      if (used[r]) continue;
+      used[r] = true; pick.push(r);
+      walk(i + 1, w * probs[i][r]);
+      used[r] = false; pick.pop();
+    }
+  };
+  walk(0, 1);
+  for (const row of marginal) for (let r = 0; r < 5; r++) row[r] = totalW ? row[r] / totalW : 0;
+  const out = { best, marginal };
+  if (roleCache.size >= 500) roleCache.clear();
+  roleCache.set(key, out);
+  return out;
+}
+
 export interface LaneDetail {
   enemy: number;
   p: number;
@@ -155,10 +212,9 @@ export function scoreChampion(
   const [g, w] = stats.base.get(k2(champ, role)) ?? [0, 0];
   const base = smoothed(g, w, 0.5, params.k_base);
 
-  // probabilité que chaque ennemi soit le vis-à-vis, renormalisée pour ne pas dépasser 1
-  let probs = enemies.map((e) => roleProbability(stats, e, role));
-  const total = probs.reduce((a, b) => a + b, 0);
-  if (total > 1) probs = probs.map((p) => p / total);
+  // probabilité que chaque ennemi soit le vis-à-vis, en répartissant les rôles comme une vraie équipe
+  const { marginal } = enemyRoles(stats, enemies);
+  const probs = enemies.map((_, i) => marginal[i]?.[role] ?? 0);
 
   let lane = 0, counters = 0, synergies = 0;
   const details: LaneDetail[] = [];
@@ -237,8 +293,9 @@ export interface BanSuggestion { champ: number; winrate: number; games: number; 
 const BAN_MIN_LANE_GAMES = 30;
 
 /**
- * 3 bans conseillés. Avec un champion présélectionné : les vis-à-vis contre lesquels il gagne le moins
- * (winrate du champion contre eux). Sinon : les meilleurs winrates du rôle.
+ * 3 bans conseillés. Avec un champion présélectionné : ses vis-à-vis perdants (moins de 50 % pour lui,
+ * lissé vers son winrate de base, donc un petit échantillon ne compte pas), du pire au moins pire.
+ * S'il en manque, on complète avec les meilleurs winrates du rôle.
  */
 export function banSuggestions(stats: Stats, role: number, myChamp: number | null, taken: number[],
                                n = 3, params: Params = stats.params): BanSuggestion[] {
@@ -251,17 +308,23 @@ export function banSuggestions(stats: Stats, role: number, myChamp: number | nul
     for (const [key, [lg, lw]] of stats.lane) {
       const [cs, rs, os] = key.split("|");
       if (Number(cs) !== myChamp || Number(rs) !== role || lg < BAN_MIN_LANE_GAMES || skip.has(Number(os))) continue;
-      out.push({ champ: Number(os), winrate: smoothed(lg, lw, base, params.k_delta), games: lg, against: true });
+      const winrate = smoothed(lg, lw, base, params.k_delta);
+      if (winrate < 0.5) out.push({ champ: Number(os), winrate, games: lg, against: true });
     }
-    if (out.length) return out.sort((a, b) => a.winrate - b.winrate).slice(0, n);
+    out.sort((a, b) => a.winrate - b.winrate);
+    out.splice(n);
+    if (out.length === n) return out;
   }
+  const strongest: BanSuggestion[] = [];
+  const chosen = new Set(out.map((b) => b.champ));
   for (const [key, [g, w]] of stats.base) {
     const [cs, rs] = key.split("|");
     const c = Number(cs);
-    if (Number(rs) !== role || g < DISCOVERY_MIN_GAMES || skip.has(c)) continue;
-    out.push({ champ: c, winrate: smoothed(g, w, 0.5, params.k_base), games: g, against: false });
+    if (Number(rs) !== role || g < DISCOVERY_MIN_GAMES || skip.has(c) || chosen.has(c)) continue;
+    strongest.push({ champ: c, winrate: smoothed(g, w, 0.5, params.k_base), games: g, against: false });
   }
-  return out.sort((a, b) => b.winrate - a.winrate).slice(0, n);
+  strongest.sort((a, b) => b.winrate - a.winrate);
+  return [...out, ...strongest.slice(0, n - out.length)];
 }
 
 /** Phrase courte qui explique pourquoi un champion est (ou n'est pas) un bon choix dans cette draft. */
@@ -302,4 +365,28 @@ export function explain(stats: Stats, res: Result, role: number, allies: number[
   }
   if (good.length && bad.length) return `${verdict} : ${champ} ${join(good)}, mais ${join(bad)}.`;
   return `${verdict} : ${champ} ${join(good.length ? good : bad)}.`;
+}
+
+/** Tier list : champions d'un rôle joués dans plus de `minPick` des parties. */
+export interface TierRow { champ: number; winrate: number; pickrate: number; banrate: number | null; games: number; tier: string }
+export const TIER_MIN_PICKRATE = 0.05;
+
+export function tierLetter(winrate: number): string {
+  return winrate >= 0.52 ? "S" : winrate >= 0.51 ? "A" : winrate >= 0.5 ? "B" : winrate >= 0.49 ? "C" : "D";
+}
+
+export function tierList(stats: Stats, role: number, minPick = TIER_MIN_PICKRATE): TierRow[] {
+  const out: TierRow[] = [];
+  if (!stats.matchesWeighted) return out;
+  for (const [key, [g, w]] of stats.base) {
+    const [cs, rs] = key.split("|");
+    if (Number(rs) !== role || !g) continue;
+    const pickrate = g / stats.matchesWeighted;
+    if (pickrate < minPick) continue;
+    const c = Number(cs);
+    const smoothedWr = smoothed(g, w, 0.5, stats.params.k_base);
+    out.push({ champ: c, winrate: w / g, pickrate, games: g, tier: tierLetter(smoothedWr),
+               banrate: stats.banMatches > 0 ? (stats.bans.get(c) ?? 0) / stats.banMatches : null });
+  }
+  return out;
 }

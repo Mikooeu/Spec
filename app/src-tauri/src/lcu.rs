@@ -189,27 +189,29 @@ impl Lcu {
         if resp.status().is_success() { Ok(resp) } else { Err(format!("http_{}", resp.status().as_u16())) }
     }
 
-    /// Écrase la page de runes sélectionnée dans la draft (son nom est gardé). Si elle n'est pas
-    /// modifiable (page de Riot), crée une page « Spec » active s'il reste une place.
-    pub async fn set_rune_page(&self, primary_style: u32, sub_style: u32, perks: &[u32]) -> Result<(), String> {
+    /// Écrase la page de runes sélectionnée dans la draft et la renomme « Spec : Ahri runes ».
+    /// Si elle n'est pas modifiable (page de Riot), crée cette page s'il reste une place.
+    /// Si le client refuse le nom (trop long), on réessaie avec « Spec : Ahri ».
+    pub async fn set_rune_page(&self, champion: &str, primary_style: u32, sub_style: u32, perks: &[u32]) -> Result<(), String> {
         rune_page_body(RUNE_PAGE_NAME, primary_style, sub_style, perks)?; // validation avant tout appel
+        let names = page_names(champion);
         let current: Value = match self.raw(reqwest::Method::GET, "/lol-perks/v1/currentpage", None).await {
             Ok(r) => r.json().await.map_err(|_| "bad_json".to_string())?,
             Err(e) if e == "http_404" => Value::Null,
             Err(e) => return Err(e),
         };
-        if let Some((id, name)) = editable_current(&current) {
-            let mut body = rune_page_body(&name, primary_style, sub_style, perks)?;
-            body["id"] = json!(id);
+        if let Some((id, _old_name)) = editable_current(&current) {
             let path = format!("/lol-perks/v1/pages/{id}");
-            if self.raw(reqwest::Method::PUT, &path, Some(&body)).await.is_ok() {
-                return Ok(());
+            for name in &names {
+                let mut body = rune_page_body(name, primary_style, sub_style, perks)?;
+                body["id"] = json!(id);
+                if self.raw(reqwest::Method::PUT, &path, Some(&body)).await.is_ok() {
+                    return Ok(());
+                }
             }
-            // repli : certaines versions du client refusent PUT, on recrée la même page
+            // repli : certaines versions du client refusent PUT, on recrée la page au même endroit
             self.raw(reqwest::Method::DELETE, &path, None).await?;
-            body.as_object_mut().map(|o| o.remove("id"));
-            self.raw(reqwest::Method::POST, "/lol-perks/v1/pages", Some(&body)).await?;
-            return Ok(());
+            return self.post_page(&names, primary_style, sub_style, perks).await;
         }
         let pages: Value = self.raw(reqwest::Method::GET, "/lol-perks/v1/pages", None).await?
             .json().await.map_err(|_| "bad_json".to_string())?;
@@ -218,9 +220,20 @@ impl Lcu {
         if !has_free_slot(&pages, &inventory) {
             return Err("no_editable_page".into());
         }
-        let body = rune_page_body(RUNE_PAGE_NAME, primary_style, sub_style, perks)?;
-        self.raw(reqwest::Method::POST, "/lol-perks/v1/pages", Some(&body)).await?;
-        Ok(())
+        self.post_page(&names, primary_style, sub_style, perks).await
+    }
+
+    /// Crée la page active, avec le premier nom accepté par le client.
+    async fn post_page(&self, names: &[String], primary_style: u32, sub_style: u32, perks: &[u32]) -> Result<(), String> {
+        let mut last = "no_name".to_string();
+        for name in names {
+            let body = rune_page_body(name, primary_style, sub_style, perks)?;
+            match self.raw(reqwest::Method::POST, "/lol-perks/v1/pages", Some(&body)).await {
+                Ok(_) => return Ok(()),
+                Err(e) => last = e,
+            }
+        }
+        Err(last)
     }
 
     /// Survole un champion pour l'action de pick donnée. Ne verrouille jamais.
@@ -248,6 +261,21 @@ impl Lcu {
 }
 
 pub const RUNE_PAGE_NAME: &str = "Spec";
+
+/// Noms à essayer, du plus complet au plus court : « Spec : Ahri runes », « Spec : Ahri », « Spec ».
+/// Le nom du champion est nettoyé (lettres, espaces, apostrophes, « & » et « . » seulement).
+pub fn page_names(champion: &str) -> Vec<String> {
+    let clean: String = champion
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '\'' | '’' | '&' | '.'))
+        .take(20)
+        .collect();
+    let clean = clean.trim();
+    if clean.is_empty() {
+        return vec![RUNE_PAGE_NAME.to_string()];
+    }
+    vec![format!("{RUNE_PAGE_NAME} : {clean} runes"), format!("{RUNE_PAGE_NAME} : {clean}"), RUNE_PAGE_NAME.to_string()]
+}
 
 /// Corps d'une page de runes : 4 runes de l'arbre principal (rune clé d'abord), 2 du secondaire,
 /// 3 fragments. Les identifiants sont vérifiés pour qu'aucune autre donnée ne parte au client.
@@ -351,6 +379,15 @@ mod tests {
     }
 
     #[test]
+    fn rune_page_names_follow_spec_format() {
+        assert_eq!(page_names("Ahri"), vec!["Spec : Ahri runes", "Spec : Ahri", "Spec"]);
+        assert_eq!(page_names("Nunu & Willump")[0], "Spec : Nunu & Willump runes");
+        assert_eq!(page_names("Kai'Sa")[1], "Spec : Kai'Sa");
+        assert_eq!(page_names("<script>\n"), vec!["Spec : script runes", "Spec : script", "Spec"]);
+        assert_eq!(page_names("  "), vec!["Spec"]);
+    }
+
+    #[test]
     fn only_the_selected_player_page_is_overwritten() {
         let mine = json!({"id": 7, "name": "Mid Ahri", "isEditable": true, "isDeletable": true});
         assert_eq!(editable_current(&mine), Some((7, "Mid Ahri".to_string())));
@@ -368,6 +405,6 @@ mod tests {
         let lcu = Lcu::new();
         assert_eq!(lcu.get("/lol-login/v1/session").await, Err("forbidden_path".into()));
         assert_eq!(lcu.preselect(1, 0).await, Err("bad_champion".into()));
-        assert_eq!(lcu.set_rune_page(8100, 8100, &[]).await, Err("bad_page".into()));
+        assert_eq!(lcu.set_rune_page("Ahri", 8100, 8100, &[]).await, Err("bad_page".into()));
     }
 }

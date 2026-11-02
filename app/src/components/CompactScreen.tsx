@@ -3,7 +3,7 @@ import { ROLE_LABELS, ROLE_SHORT, type Stats } from "../lib/score";
 import { champName } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { Logo } from "./Logo";
-import { BanPanel, MyPick, RecoRow, makePreselect, persoCell, useRecos, type Draft } from "./DraftScreen";
+import { BanPanel, MyPick, RecoRow, makeBanSelect, makePreselect, persoCell, useRecos, type Draft } from "./DraftScreen";
 import type { PersonalState } from "../lib/api";
 
 interface Props {
@@ -20,6 +20,7 @@ interface Props {
   onDemo?: () => void;
   onEndDemo: () => void;
   onPreselect?: (champ: number) => Promise<string | null>;
+  onBan?: (champ: number) => Promise<string | null>;
   perso?: PersonalState;
   onDemoPick?: (champ: number) => void;
 }
@@ -63,7 +64,7 @@ function CompactWaiting({ clientText, clientOn, onDemo }: Props) {
   );
 }
 
-function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect, perso, onDemoPick }: Props & { draft: Draft }) {
+function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect, onBan, perso, onDemoPick }: Props & { draft: Draft }) {
   const [open, setOpen] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { autofill, rows } = useRecos(stats, draft, pool);
@@ -86,7 +87,7 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
         <MiniTeam stats={stats} label="Adversaires" champs={draft.enemies} />
       </div>
 
-      {draft.banPhase && <BanPanel stats={stats} draft={draft} compact />}
+      {draft.banPhase && <BanPanel stats={stats} draft={draft} compact onSelect={makeBanSelect(stats, live ? onBan : undefined, setNotice)} />}
       {draft.myChamp != null && <MyPick stats={stats} draft={draft} compact />}
 
       <div className="compact__recos">

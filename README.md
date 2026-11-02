@@ -37,6 +37,8 @@ cd ~/Documents/Spec && source venv/bin/activate
 python -m collector stats
 ```
 
+Depuis la 0.2, chaque partie enregistre aussi les bans, les sorts d'invocateur et les objets de fin de partie. Pour 1 partie sur 3, le collecteur télécharge en plus son déroulé (ordre des sorts et des achats) : un appel Riot de plus, d'où une collecte environ 25 % plus lente. Le banrate de la tier list et la page champion (0.3) s'appuient sur ces parties.
+
 ## 2. Construire les stats
 
 À relancer de temps en temps (par exemple une fois par jour) pour profiter des nouvelles parties. Le collecteur peut continuer à tourner.

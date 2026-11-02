@@ -9,7 +9,7 @@ type RuneData = Map<number, RuneInfo>;
 const CDN = "https://ddragon.leagueoflegends.com/cdn";
 
 /** Import dans le client : fourni en direct, absent en démo. Renvoie un message d'erreur, ou null. */
-export const RuneImportContext = createContext<((page: Page) => Promise<string | null>) | null>(null);
+export const RuneImportContext = createContext<((page: Page, champion: string) => Promise<string | null>) | null>(null);
 const SHARDS: Record<number, [string, string]> = {
   5008: ["Force adaptative", "StatModsAdaptiveForceIcon"],
   5005: ["Vitesse d’attaque", "StatModsAttackSpeedIcon"],
@@ -89,10 +89,11 @@ export function RunePage({ stats, champ, role, laner }: { stats: Stats; champ: n
       : <p className="runes__empty">Pas encore assez de parties pour conseiller des runes.</p>;
   }
   const { page, vs } = found;
-  return <RunePageView stats={stats} page={page} vs={vs} data={data} />;
+  return <RunePageView stats={stats} champ={champ} page={page} vs={vs} data={data} />;
 }
 
-function RunePageView({ stats, page, vs, data }: { stats: Stats; page: Page; vs: number | null; data: RuneData | null }) {
+function RunePageView({ stats, champ, page, vs, data }:
+  { stats: Stats; champ: number; page: Page; vs: number | null; data: RuneData | null }) {
   const importer = useContext(RuneImportContext);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -102,9 +103,10 @@ function RunePageView({ stats, page, vs, data }: { stats: Stats; page: Page; vs:
       return;
     }
     setBusy(true);
-    const error = await importer(page);
+    const name = champName(stats, champ);
+    const error = await importer(page, name);
     setBusy(false);
-    setStatus(error ? { ok: false, text: error } : { ok: true, text: "Runes importées dans ta page sélectionnée." });
+    setStatus(error ? { ok: false, text: error } : { ok: true, text: `Runes importées dans ta page « Spec : ${name} runes ».` });
   };
   const wr = page.games ? `${((page.wins / page.games) * 100).toFixed(1).replace(".", ",")} %` : "";
   return (

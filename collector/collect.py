@@ -13,6 +13,8 @@ QUEUE_TARGET = 300            # on cherche de nouvelles parties sous ce seuil
 PLAYERS_PER_DISCOVERY = 10
 MATCHES_PER_BATCH = 25
 OVERLAP_SECONDS = 3600        # recouvrement pour ne rater aucune partie entre deux passages
+TIMELINE_EVERY = 3            # un déroulé (ordre des sorts et des achats) pour 1 partie sur 3
+SKILL_KEYS = {1: "Q", 2: "W", 3: "E", 4: "R"}
 
 
 def parse_match(data: dict, platform: str) -> tuple[dict, list[tuple]] | None:
@@ -39,7 +41,64 @@ def parse_match(data: dict, platform: str) -> tuple[dict, list[tuple]] | None:
     rows = [(match_id, int(p["teamId"]), int(p["championId"]),
              p.get("teamPosition") or "", bool(p["win"])) for p in players]
     match["runes"] = [r for r in (rune_row(match_id, p) for p in players) if r]
+    match["bans"] = sorted({int(b["championId"]) for t in info.get("teams", [])
+                            for b in t.get("bans", []) if int(b.get("championId", -1)) > 0})
+    match["builds"] = [build_row(match_id, p) for p in players]
     return match, rows
+
+
+def build_row(match_id: str, p: dict, skills: str | None = None, purchases: str | None = None) -> tuple:
+    """Sorts d'invocateur et objets d'un participant (aucune donnée d'identité)."""
+    spells = sorted(int(p.get(k) or 0) for k in ("summoner1Id", "summoner2Id"))
+    items = ",".join(str(int(p.get(f"item{i}") or 0)) for i in range(6) if int(p.get(f"item{i}") or 0) > 0)
+    return (match_id, int(p["teamId"]), int(p["championId"]), p.get("teamPosition") or "",
+            bool(p["win"]), spells[0], spells[1], items, skills, purchases)
+
+
+def wants_timeline(match_id: str) -> bool:
+    """Choix stable d'1 partie sur 3, d'après son numéro."""
+    try:
+        return int(match_id.rsplit("_", 1)[-1]) % TIMELINE_EVERY == 0
+    except ValueError:
+        return False
+
+
+def parse_timeline(data: dict) -> dict[int, tuple[str, str]]:
+    """Ordre des sorts et achats (annulations retirées) par participantId."""
+    skills: dict[int, list[str]] = {}
+    buys: dict[int, list[tuple[int, int]]] = {}
+    for frame in (data.get("info") or {}).get("frames", []):
+        for e in frame.get("events", []):
+            pid = e.get("participantId")
+            kind = e.get("type")
+            if kind == "SKILL_LEVEL_UP" and e.get("levelUpType", "NORMAL") == "NORMAL":
+                key = SKILL_KEYS.get(e.get("skillSlot"))
+                if key and pid:
+                    skills.setdefault(pid, []).append(key)
+            elif kind == "ITEM_PURCHASED" and pid:
+                buys.setdefault(pid, []).append((int(e.get("itemId", 0)), int(e.get("timestamp", 0)) // 1000))
+            elif kind == "ITEM_UNDO" and pid:
+                undone = int(e.get("beforeId") or 0)
+                lst = buys.get(pid, [])
+                for i in range(len(lst) - 1, -1, -1):
+                    if lst[i][0] == undone:
+                        del lst[i]
+                        break
+    out = {}
+    for pid in set(skills) | set(buys):
+        out[pid] = ("".join(skills.get(pid, [])),
+                    ",".join(f"{item}@{sec}" for item, sec in buys.get(pid, []) if item > 0))
+    return out
+
+
+def attach_timeline(match: dict, players: list[dict], timeline: dict | None) -> None:
+    """Complète les lignes `builds` avec le déroulé, si on l'a."""
+    if not timeline:
+        return
+    per = parse_timeline(timeline)
+    match["has_timeline"] = True
+    match["builds"] = [build_row(match["match_id"], p, *per.get(int(p.get("participantId", i + 1)), (None, None)))
+                       for i, p in enumerate(players)]
 
 
 def rune_row(match_id: str, p: dict) -> tuple | None:
@@ -108,6 +167,8 @@ class Collector:
                 self.store.drop_from_queue(match_id)
                 skipped += 1
                 continue
+            if not parsed[0]["is_remake"] and wants_timeline(match_id):
+                attach_timeline(parsed[0], data["info"]["participants"], self.client.timeline(match_id))
             self.store.save_match(*parsed)
             saved += 1
         return saved, skipped

@@ -54,6 +54,28 @@ CREATE TABLE IF NOT EXISTS runes (
     s1 INTEGER, s2 INTEGER,                      -- runes de l'arbre secondaire
     sh1 INTEGER, sh2 INTEGER, sh3 INTEGER        -- fragments : attaque, flexible, défense
 );
+-- depuis la 0.2 : une ligne par partie collectée avec les infos ci-dessous
+CREATE TABLE IF NOT EXISTS match_ext (
+    match_id VARCHAR PRIMARY KEY,
+    has_timeline BOOLEAN       -- déroulé téléchargé (1 partie sur 3)
+);
+-- champions bannis (sans l'équipe qui les a bannis : inutile pour le banrate)
+CREATE TABLE IF NOT EXISTS bans (
+    match_id VARCHAR,
+    champion_id INTEGER
+);
+-- sorts d'invocateur, objets de fin de partie et, si déroulé, ordre des sorts et des achats
+CREATE TABLE IF NOT EXISTS builds (
+    match_id VARCHAR,
+    team_id INTEGER,
+    champion_id INTEGER,
+    team_position VARCHAR,
+    win BOOLEAN,
+    spell1 INTEGER, spell2 INTEGER,  -- triés : Flash/Ignite = Ignite/Flash
+    items VARCHAR,                   -- inventaire final « 3089,3020,… » (sans le bijou)
+    skills VARCHAR,                  -- ordre des sorts « QEWQQR… » (déroulé uniquement)
+    purchases VARCHAR                -- achats « 1056@14,2003@14,… » en secondes (déroulé uniquement)
+);
 """
 
 LOCK_RETRY_SECONDS = 60
@@ -186,6 +208,16 @@ class Store:
                 if match.get("runes"):
                     con.executemany("INSERT INTO runes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                     match["runes"])
+                if "bans" in match:
+                    mid = match["match_id"]
+                    for table in ("match_ext", "bans", "builds"):
+                        con.execute(f"DELETE FROM {table} WHERE match_id = ?", [mid])
+                    con.execute("INSERT INTO match_ext VALUES (?, ?)", [mid, bool(match.get("has_timeline"))])
+                    if match["bans"]:
+                        con.executemany("INSERT INTO bans VALUES (?, ?)", [(mid, c) for c in match["bans"]])
+                    if match.get("builds"):
+                        con.executemany("INSERT INTO builds VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                        match["builds"])
                 con.execute("DELETE FROM match_queue WHERE match_id = ?", [match["match_id"]])
                 con.execute("COMMIT")
             except Exception:
@@ -202,6 +234,8 @@ class Store:
                 "queue": q("SELECT count(*) FROM match_queue")[0][0],
                 "matches": q("SELECT count(*) FROM matches")[0][0],
                 "remakes": q("SELECT count(*) FROM matches WHERE is_remake")[0][0],
+                "detailed": q("SELECT count(*) FROM match_ext")[0][0],
+                "timelines": q("SELECT count(*) FROM match_ext WHERE has_timeline")[0][0],
                 "by_patch": q("""SELECT patch, count(*) FROM matches WHERE NOT is_remake
                                  GROUP BY patch ORDER BY patch DESC LIMIT 5"""),
             }

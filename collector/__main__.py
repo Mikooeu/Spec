@@ -24,6 +24,7 @@ def main() -> None:
             print(f"Joueurs Master+ : {s['players']} (dont {s['players_checked']} déjà parcourus)")
             print(f"Parties stockées : {s['matches']} (dont {s['remakes']} remakes ignorés au calcul)")
             print(f"File d'attente : {s['queue']}")
+            print(f"Avec bans, sorts et objets : {s['detailed']} (dont {s['timelines']} avec déroulé)")
             for patch, n in s["by_patch"]:
                 print(f"  patch {patch} : {n} parties")
             return

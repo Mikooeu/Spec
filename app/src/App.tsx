@@ -5,18 +5,21 @@ import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 import "./styles.css";
 import { DraftScreen, type Draft } from "./components/DraftScreen";
-import { ProfileScreen, type Pools } from "./components/ProfileScreen";
+import { ProfileScreen } from "./components/ProfileScreen";
+import { PoolScreen, type Pools } from "./components/PoolScreen";
+import { TierListScreen } from "./components/TierListScreen";
 import { type Stats } from "./lib/score";
 import { loadStats, register, usePersonal } from "./lib/api";
 import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
-import { importRunes, preselect, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
+import { importRunes, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
 import { RuneImportContext } from "./components/Runes";
 import { applyCompact, setOnTop } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { useUpdate, type UpdateState } from "./lib/updater";
 import { Logo } from "./components/Logo";
 
-type Screen = "draft" | "profile";
+type Screen = "draft" | "profile" | "tier" | "pool";
+const SCREENS: [Screen, string][] = [["draft", "Draft"], ["profile", "Profil"], ["tier", "Tier list"], ["pool", "Pool"]];
 
 /** Draft fictive de démonstration (remplacée plus tard par la lecture du client LoL). */
 function demoDraft(stats: Stats): Draft {
@@ -60,6 +63,7 @@ export default function App() {
   const toggleTop = () => { setOnTopPref(!onTop); setOnTop(!onTop); };
   const [clientOn, clientText] = clientStatus(client);
   const doPreselect = (champ: number) => preselect(session!, champ);
+  const doBan = (champ: number) => preselectBan(session!, champ);
 
   useEffect(() => {
     loadStats()
@@ -93,7 +97,7 @@ export default function App() {
                      onToggleTop={toggleTop} onExpand={() => setCompact(false)}
                      onDemo={clientOn ? undefined : () => setDraft(demoDraft(stats))} onEndDemo={() => setDraft(null)}
                      onDemoPick={(c) => draft && setDraft({ ...draft, myChamp: c, myLocked: false })}
-                     onPreselect={live ? doPreselect : undefined} perso={perso} />
+                     onPreselect={live ? doPreselect : undefined} onBan={live ? doBan : undefined} perso={perso} />
       </RuneImportContext.Provider>
     );
   }
@@ -105,14 +109,22 @@ export default function App() {
         <div className="brand">
           <Logo className="brand__mark" />
           <span className="brand__name">Spec</span>
+          <button className="icon-btn brand__compact" onClick={() => setCompact(true)} disabled={!stats}
+                  title="Mode compact" aria-label="Passer en mode compact">
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
+              <path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M9.5 6.5 14 2M6.5 9.5 2 14" fill="none" stroke="currentColor"
+                    strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
         <nav>
-          <button className={`nav${screen === "draft" ? " is-active" : ""}`} onClick={() => setScreen("draft")}>Draft</button>
-          <button className={`nav${screen === "profile" ? " is-active" : ""}`} onClick={() => setScreen("profile")}>Profil et pool</button>
+          {SCREENS.map(([key, label]) => (
+            <button key={key} className={`nav${screen === key ? " is-active" : ""}`} onClick={() => setScreen(key)}
+                    aria-current={screen === key ? "page" : undefined}>{label}</button>
+          ))}
         </nav>
         <span className="grow" />
         <UpdateCard state={update} onInstall={installUpdate} />
-        <button className="nav nav--compact" onClick={() => setCompact(true)} disabled={!stats}>Mode compact</button>
         {account && (
           <p className="sidebar__account" title="Compte connecté au client LoL">
             <span className="dot" />{account.name}{account.region ? ` · ${account.region}` : ""}
@@ -126,7 +138,7 @@ export default function App() {
         {error && <div className="content"><div className="empty-state"><h1>Impossible de démarrer</h1><p className="muted">{error}</p></div></div>}
         {!error && !stats && <div className="content"><div className="empty-state"><div className="spinner" /><p className="muted">Chargement des stats…</p></div></div>}
         {stats && screen === "profile" && (
-          <ProfileScreen stats={stats} pools={pools} onChange={setPools} account={me} clientOn={clientOn}
+          <ProfileScreen stats={stats} account={me} clientOn={clientOn}
                          perso={perso}
                          onRegister={async (code) => {
                            const err = me?.puuid ? await register(me.puuid, me.name, code) : "Lance le client LoL pour lier ton compte.";
@@ -134,10 +146,12 @@ export default function App() {
                            return err;
                          }} />
         )}
+        {stats && screen === "tier" && <TierListScreen stats={stats} />}
+        {stats && screen === "pool" && <PoolScreen stats={stats} pools={pools} onChange={setPools} perso={perso} />}
         {stats && screen === "draft" && live && (
           <DraftScreen stats={stats} draft={live} pool={pools[live.role]} wide={wide} live
-                       onChange={(d) => setRoleOverride(d.role)} onCompact={() => setCompact(true)}
-                       onPreselect={doPreselect} perso={perso} />
+                       onChange={(d) => setRoleOverride(d.role)}
+                       onPreselect={doPreselect} onBan={doBan} perso={perso} />
         )}
         {stats && screen === "draft" && !live && !draft && (
           <div className="content">
@@ -157,7 +171,7 @@ export default function App() {
         )}
         {stats && screen === "draft" && !live && draft && (
           <DraftScreen stats={stats} draft={draft} pool={pools[draft.role]} wide={wide}
-                       onChange={setDraft} onEnd={() => setDraft(null)} onCompact={() => setCompact(true)} perso={perso} />
+                       onChange={setDraft} onEnd={() => setDraft(null)} perso={perso} />
         )}
       </main>
     </div>
