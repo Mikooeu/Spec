@@ -105,8 +105,10 @@ def main() -> None:
 
     if args.command == "build":
         from .build import build_stats
-        Champions.load(champs_path, refresh=True)
-        meta = build_stats(db_path, stats_path, args.patch)
+        from .items import Items
+        champions = Champions.load(champs_path, refresh=True)
+        items = Items.load(data_dir / "items.json", champions.version)
+        meta = build_stats(db_path, stats_path, args.patch, items=items)
         prev = f" + patch {meta['previous_patch']} à 50 %" if meta["previous_patch"] else ""
         print(f"Stats prêtes : patch {meta['patch']}{prev}, {int(meta['matches'])} parties.")
         return

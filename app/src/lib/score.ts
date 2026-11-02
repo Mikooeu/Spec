@@ -39,7 +39,21 @@ export interface Stats {
   bans: Map<number, number>;        // champion -> parties où il est banni (parties détaillées)
   banMatches: number;               // parties détaillées (dénominateur du banrate), 0 si pas encore collecté
   matchesWeighted: number;          // parties pondérées (dénominateur du pickrate)
+  champPages: Map<string, ChampPage>; // `${champ}|${rôle}` -> sorts, objets, ordre des sorts
 }
+
+type GW = [games: number, wins: number];
+/** Page champion (voir scoring/builds.py). g : parties détaillées, tg : parties avec déroulé. */
+export interface ChampPage {
+  g: number; tg: number;
+  spells: [number, number, number, number][];          // sort 1, sort 2, parties, victoires
+  boots: [number, number, number][];                   // objet, parties, victoires
+  start: [string, number, number][];                   // « 1056,2003,2003 », parties, victoires
+  skills: [string, string, number, number] | null;     // ordre, priorité, parties, victoires
+  items: [number, [number, number, number][]][];       // par rang : parties à ce rang, [objet, parties, victoires]
+  builds: [number[], number, number][];                // enchaînement, parties, victoires
+}
+export type { GW };
 
 /** Page de runes : rune clé, arbre principal et ses 3 runes, arbre secondaire et ses 2 runes, 3 fragments. */
 export interface RunePage {
@@ -62,6 +76,7 @@ interface RawStats {
   runes?: [number, number, RawPage[]][];
   runeVs?: [number, number, number, number, number, number][];
   bans?: [number, number][];
+  champ?: [number, number, ChampPage][];
 }
 
 const k2 = (c: number, r: number) => `${c}|${r}`;
@@ -83,6 +98,7 @@ export function parseStats(raw: RawStats): Stats {
     bans: new Map(raw.bans ?? []),
     banMatches: Number(raw.meta.ban_matches ?? 0),
     matchesWeighted: 0,
+    champPages: new Map((raw.champ ?? []).map(([c, r, e]) => [k2(c, r), e])),
   };
   for (const [c, r, pages] of raw.runes ?? []) {
     stats.runes.set(k2(c, r), pages.map(([keystone, games, wins, primaryStyle, primary, subStyle, sub, shards]) =>

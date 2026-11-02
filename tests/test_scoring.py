@@ -219,3 +219,50 @@ def test_export_includes_ban_counts(tmp_path, champions):
     assert 100 < detailed < 300
     zed = dict((c, g) for c, g in data["bans"])[238]
     assert zed == detailed            # banni dans 100 % des parties détaillées
+
+
+def test_champion_builds_from_details():
+    from scoring.builds import compute_builds, legendary_order, skill_priority, starting_items
+    from scoring.items import Items
+    items = Items({"items": {
+        "1001": {"gold": 300, "purchasable": True, "tags": ["Boots"], "into": ["3020"], "rift": True},
+        "3020": {"gold": 1100, "purchasable": True, "tags": ["Boots"], "into": [], "rift": True},
+        "3089": {"gold": 3600, "purchasable": True, "tags": [], "into": [], "rift": True},
+        "6655": {"gold": 2900, "purchasable": True, "tags": [], "into": [], "rift": True},
+        "3135": {"gold": 2800, "purchasable": True, "tags": [], "into": [], "rift": True},
+        "1056": {"gold": 400, "purchasable": True, "tags": [], "into": [], "rift": True},
+        "2003": {"gold": 50, "purchasable": True, "tags": ["Consumable"], "into": [], "rift": True},
+        "1058": {"gold": 1200, "purchasable": True, "tags": [], "into": ["3089"], "rift": True},
+    }})
+    assert items.boots == {3020} and items.legendary == {3089, 6655, 3135}
+    buys = "1056@14,2003@15,2003@15,1058@600,6655@700,3020@800,3089@1300,6655@1400,3135@1900"
+    assert legendary_order(buys, items) == [6655, 3089, 3135]
+    assert starting_items(buys) == "1056,2003,2003"
+    assert skill_priority("QEWQQRQWQWRWWEE") == "R > Q > W > E"
+    rows = [(103, "MIDDLE", 1, 1.0, 4, 14, "6655,3020,3089", "QEWQQRQWQWRWWEE", buys)] * 6 + \
+           [(103, "MIDDLE", 0, 1.0, 4, 12, "6655,3020", None, None)] * 4
+    [[champ, role, e]] = compute_builds(rows, items)
+    assert (champ, role, e["g"], e["tg"]) == (103, "MIDDLE", 10.0, 6.0)
+    assert e["spells"][0] == [4, 14, 6.0, 6.0]
+    assert e["boots"] == [[3020, 10.0, 6.0]]
+    assert e["start"] == [["1056,2003,2003", 6.0, 6.0]]
+    assert e["skills"][:2] == ["QEWQQRQWQWRWWEE", "R > Q > W > E"]
+    assert e["items"][0] == [6.0, [[6655, 6.0, 6.0]]]
+    assert e["builds"] == []   # 3 objets finis seulement, il en faut 5 pour un build complet
+
+
+def test_export_includes_champion_pages(tmp_path, champions):
+    from scoring.export import export_json
+    from scoring.score import Params
+    db = tmp_path / "draft.duckdb"
+    store = synthetic_db(db, n_matches=300)
+    with store._connect() as con:
+        con.execute("""INSERT INTO builds SELECT match_id, team_id, champion_id, team_position, win, 4, 14,
+                       '3020', NULL, NULL FROM participants""")
+    build_stats(db, tmp_path / "stats.duckdb")
+    out = tmp_path / "stats.json"
+    export_json(tmp_path / "stats.duckdb", champions, Params(), out)
+    import json as _json
+    data = _json.loads(out.read_text())
+    ahri = [e for c, r, e in data["champ"] if c == 1 and r == 2]
+    assert ahri and ahri[0]["spells"][0][:2] == [4, 14]

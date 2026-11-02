@@ -15,6 +15,8 @@ import duckdb
 
 from collector.db import connect_with_retry
 
+from .builds import compute_builds
+from .items import Items
 from .runes import compute_runes
 
 log = logging.getLogger(__name__)
@@ -43,7 +45,7 @@ HOLDOUT_SQL = "hash(m.match_id) % 10 = 0"   # 10 % des parties, toujours les mê
 
 
 def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
-                holdout: bool = False) -> dict:
+                holdout: bool = False, items: Items | None = None) -> dict:
     """holdout=True : exclut les 10 % de parties réservées au calibrage."""
     db_path, out_path = Path(db_path), Path(out_path)
     tmp = out_path.with_suffix(".building.duckdb")
@@ -111,8 +113,18 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
             ban_matches = float(con.execute("SELECT coalesce(sum(w), 0) FROM bm").fetchone()[0])
             ban_rows = con.execute("""SELECT b.champion_id, sum(bm.w) FROM src.bans b JOIN bm USING (match_id)
                                       GROUP BY 1""").fetchall()
+        # page champion : sorts, objets, ordre des sorts (collectés depuis la 0.2)
+        has_builds = con.execute(
+            "SELECT count(*) FROM duckdb_tables() WHERE database_name = 'src' AND table_name = 'builds'"
+        ).fetchone()[0] > 0
+        build_rows = con.execute("""
+            SELECT a.champ, a.role, a.win, a.w, b.spell1, b.spell2, b.items, b.skills, b.purchases
+            FROM p a JOIN src.builds b
+              ON b.match_id = a.match_id AND b.team_id = a.team_id AND b.champion_id = a.champ""").fetchall() \
+            if has_builds else []
         con.execute("DETACH src")
         runes = compute_runes(rune_rows, laner_rows)
+        champ_pages = compute_builds(build_rows, items or Items(None))
 
         con.execute(f"ATTACH '{tmp.as_posix()}' AS out")
         con.execute("""CREATE TABLE out.base AS
@@ -136,6 +148,8 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
                 "built_at": str(int(time.time()))}
         meta["rune_pages"] = str(len(runes["pages"]))
         meta["ban_matches"] = str(round(ban_matches, 1))
+        con.execute("CREATE TABLE out.champ (value VARCHAR)")
+        con.execute("INSERT INTO out.champ VALUES (?)", [json.dumps(champ_pages)])
         con.execute("CREATE TABLE out.bans (champ INTEGER, games DOUBLE)")
         if ban_rows:
             con.executemany("INSERT INTO out.bans VALUES (?, ?)", ban_rows)

@@ -347,3 +347,101 @@ h3 { font-size: 0.9375rem; font-weight: 600; }
 button.bans__item { text-align: left; border: 1px solid transparent; transition: border-color 0.12s, background 0.12s; }
 button.bans__item:hover:not(:disabled) { border-color: var(--bad); background: rgba(255, 69, 58, 0.1); }
 button.bans__item:disabled { cursor: default; }
+/* page champion */
+.link-back { align-self: flex-start; font-size: 0.8125rem; font-weight: 500; color: var(--text-3); }
+.link-back:hover { color: var(--text); }
+.champ__head { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.champ__head h1 { margin-top: 0.125rem; }
+.champ__stats { display: flex; gap: 1.75rem; }
+.champ__stat { font-size: 1.125rem; font-weight: 700; }
+.stat-col { display: flex; flex-direction: column; align-items: flex-end; gap: 0.125rem; }
+.stat-col--left { align-items: flex-start; }
+.stat-col__value { font-size: 0.875rem; font-weight: 600; }
+.stat-col__label { font-size: 0.75rem; color: var(--text-3); white-space: nowrap; }
+.champ__row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.champ__card { padding: 1.125rem 1.25rem 1.25rem; display: flex; flex-direction: column; gap: 0.875rem; min-width: 0; }
+.champ__card h2 { font-size: 0.9375rem; }
+@media (max-width: 60rem) { .champ__row { grid-template-columns: 1fr; } }
+.skills { display: flex; flex-direction: column; gap: 0.375rem; }
+.skills__row { display: flex; align-items: center; gap: 0.25rem; }
+.skills__key { width: 1.25rem; font-size: 0.8125rem; font-weight: 600; color: var(--text-2); }
+.skills__cell { flex: 1; height: 2rem; border-radius: 0.375rem; background: var(--bg-surface-2); display: grid; place-items: center;
+                font-size: 0.75rem; font-weight: 600; }
+.skills__cell.is-on { background: var(--accent-tint); color: var(--accent); }
+.skills__cell.is-ult { background: var(--accent); color: #fff; }
+.rtree { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.rtree__col { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.rtree__title { font-size: 0.75rem; font-weight: 600; color: var(--text-2); }
+.rtree__row { display: flex; align-items: center; gap: 0.625rem; font-size: 0.8125rem; color: var(--text-2); }
+.rtree__row--key strong { color: var(--text); font-weight: 600; }
+.rtree .rune__tip { left: 0; transform: none; }
+.combos { display: flex; flex-wrap: wrap; gap: 0.625rem; }
+.combo { display: inline-flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem 0.5rem 0.5rem;
+         border-radius: 0.625rem; background: var(--bg-surface-2); }
+.combo__icons { display: flex; gap: 0.25rem; }
+.combo__icon { position: relative; display: inline-flex; }
+.combo__count { position: absolute; right: -0.25rem; bottom: -0.25rem; font-size: 0.625rem; font-weight: 700;
+                padding: 0 0.1875rem; border-radius: 0.25rem; background: var(--bg-window); }
+.item-ic { position: relative; display: inline-flex; flex: none; border-radius: 0.5rem; background: var(--bg-surface-2);
+           border: 1px solid var(--border); overflow: visible; }
+.item-ic img { width: 100%; height: 100%; border-radius: 0.5rem; display: block; }
+.item-ic--md { width: 2.25rem; height: 2.25rem; }
+.item-ic--sm { width: 1.75rem; height: 1.75rem; }
+.item-ic:hover .rune__tip, .item-ic:focus-visible .rune__tip { opacity: 1; visibility: visible; }
+.cells { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.cell { display: flex; flex-direction: column; align-items: center; gap: 0.375rem; padding: 0.375rem 0.5rem; min-width: 4.5rem; }
+.cell.is-rare { opacity: 0.55; }
+.cell__wr { font-size: 0.875rem; font-weight: 600; }
+.cell__wr.tone-neutral { color: var(--text); }
+.cell__pr { font-size: 0.75rem; color: var(--text-3); }
+.item-ranks { display: flex; flex-direction: column; }
+.item-rank { display: grid; grid-template-columns: 6rem repeat(6, minmax(0, 1fr)); align-items: center; padding: 0.375rem 0; }
+.item-rank + .item-rank { border-top: 1px solid var(--border); }
+.item-rank__label { display: flex; flex-direction: column; gap: 0.125rem; font-size: 0.75rem; font-weight: 600;
+                    color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.item-rank__label span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.builds { display: flex; flex-direction: column; gap: 0.625rem; }
+.build { display: flex; align-items: center; gap: 0.875rem; }
+.build__items { display: flex; align-items: center; }
+.build__step { display: inline-flex; align-items: center; }
+.build__arrow { color: var(--text-3); margin: 0 0.375rem; }
+/* tier list cliquable */
+.tier-row--link { cursor: pointer; text-align: left; width: 100%; font: inherit; color: inherit; }
+.tier-row--link:hover { border-color: var(--separator); }
+/* profil : rang et historique */
+.account__rank { font-size: 0.8125rem; font-weight: 500; margin-top: 0.125rem; }
+.history { display: flex; flex-direction: column; gap: 0.625rem; }
+.history__filters { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.game { display: flex; align-items: center; gap: 0.875rem; padding: 0.625rem 1.25rem 0.625rem 0.75rem; border-radius: 0.75rem;
+        background: var(--bg-surface); border: 1px solid var(--border); }
+.game__bar { width: 0.25rem; align-self: stretch; border-radius: 0.125rem; background: var(--text-3); }
+.game--win .game__bar { background: var(--good); }
+.game--loss .game__bar { background: var(--bad); }
+.game__id { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; }
+.game__name { font-size: 0.875rem; font-weight: 600; }
+.game__sep { width: 1px; height: 2rem; background: var(--separator); }
+.game__lp { width: 7.5rem; }
+.game__lp-value { font-size: 0.9375rem; font-weight: 700; color: var(--text-3); }
+.game__lp-value.tone-good { color: var(--good); }
+.game__lp-value.tone-bad { color: var(--bad); }
+/* page champion : runes sur une ligne, puis départ | sorts | bottes */
+.rtree { flex-wrap: nowrap; gap: 2rem; }
+.rtree__col { flex: 1 1 0; }
+.champ__row--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.combos--stack { flex-direction: column; align-items: stretch; }
+.combos--stack .combo { justify-content: space-between; }
+@media (max-width: 60rem) { .champ__row--3 { grid-template-columns: 1fr; } .rtree { flex-wrap: wrap; } }
+/* runes sur une ligne */
+.rtree { align-items: flex-start; gap: 0; }
+.rtree__col { flex-basis: 0; min-width: 0; padding: 0 1rem; }
+.rtree__col:first-child { padding-left: 0; }
+.rtree__col + .rtree__col { border-left: 1px solid var(--border); }
+.rtree__runes { display: flex; gap: 0.5rem; }
+.rtree__rune { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 0.375rem;
+               text-align: center; font-size: 0.75rem; line-height: 1.25; color: var(--text-2); }
+.rtree__rune .rune--minor { width: 2rem; height: 2rem; }
+.rtree__rune--key strong { color: var(--text); font-weight: 600; }
+.rtree__title { display: block; margin-bottom: 0.625rem; }
+.rtree .rune__tip { left: 50%; transform: translateX(-50%); }
+.rtree__col:first-child .rtree__rune:first-child .rune__tip { left: 0; transform: none; }
+.rtree__col:last-child .rtree__rune:last-child .rune__tip { left: auto; right: 0; transform: none; }

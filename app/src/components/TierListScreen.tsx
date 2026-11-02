@@ -7,8 +7,8 @@ type SortKey = "winrate" | "pickrate" | "banrate";
 const SORTS: [SortKey, string][] = [["winrate", "Winrate"], ["pickrate", "Pickrate"], ["banrate", "Banrate"]];
 
 /** Tier list solo/duo Master+ par rôle, triable par winrate, pickrate ou banrate. */
-export function TierListScreen({ stats }: { stats: Stats }) {
-  const [role, setRole] = useState(0);
+export function TierListScreen({ stats, role, onRole, onOpen }:
+  { stats: Stats; role: number; onRole: (role: number) => void; onOpen: (champ: number, role: number) => void }) {
   const [sort, setSort] = useState<SortKey>("winrate");
   const [asc, setAsc] = useState(false); // décroissant par défaut
   // même colonne : on inverse l'ordre ; autre colonne : on repart en décroissant
@@ -37,7 +37,7 @@ export function TierListScreen({ stats }: { stats: Stats }) {
         <div className="segmented" role="tablist" aria-label="Rôle">
           {ROLE_LABELS.map((label, i) => (
             <button key={label} role="tab" aria-selected={role === i} className={role === i ? "is-active" : ""}
-                    onClick={() => setRole(i)}>
+                    onClick={() => onRole(i)}>
               {label} <span className="count">{lists[i].length}</span>
             </button>
           ))}
@@ -74,7 +74,8 @@ export function TierListScreen({ stats }: { stats: Stats }) {
           ))}
         </div>
         {rows.map((r, i) => (
-          <div key={r.champ} className="tier-row" role="row">
+          <button key={r.champ} className="tier-row tier-row--link" role="row" onClick={() => onOpen(r.champ, role)}
+                  title={`Ouvrir la page de ${champName(stats, r.champ)}`}>
             <span className="tier-row__rank">{i + 1}</span>
             <span className={`tier-row__tier tier--${r.tier}`}>{r.tier}</span>
             <span className="tier-row__champ">
@@ -84,7 +85,7 @@ export function TierListScreen({ stats }: { stats: Stats }) {
             <span className={`tier-row__num tier-row__wr tone-${wrTone(r.winrate)}`}>{pct(r.winrate)}</span>
             <span className="tier-row__num">{pct(r.pickrate)}</span>
             <span className="tier-row__num">{r.banrate == null ? "—" : pct(r.banrate)}</span>
-          </div>
+          </button>
         ))}
         {rows.length === 0 && (
           <p className="hint">Pas encore assez de parties en {ROLE_LABELS[role]}. Laisse tourner le collecteur.</p>

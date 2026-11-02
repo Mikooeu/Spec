@@ -130,3 +130,33 @@ function RunePageView({ stats, champ, page, vs, data }:
     </div>
   );
 }
+
+/** Page de runes en arbres (page champion) : arbre principal, arbre secondaire, fragments, avec les noms. */
+export function RuneTree({ stats, champ, role }: { stats: Stats; champ: number; role: number }) {
+  const data = useRuneData(stats.ddragon);
+  const found = runePageFor(stats, champ, role, null);
+  if (!found) return <p className="runes__empty">Pas encore assez de parties pour conseiller des runes.</p>;
+  const { page } = found;
+  const name = (id: number) => data?.get(id)?.name ?? "";
+  // une seule ligne : chaque arbre est un groupe de runes côte à côte, nom sous l'icône
+  const col = (title: string, ids: number[], keystone?: number) => (
+    <div className="rtree__col" style={{ flexGrow: ids.length + (keystone != null ? 1 : 0) }}>
+      <span className="rtree__title">{title}</span>
+      <div className="rtree__runes">
+        {keystone != null && (
+          <span className="rtree__rune rtree__rune--key"><Rune data={data} id={keystone} size="key" /><strong>{name(keystone)}</strong></span>
+        )}
+        {ids.map((id, i) => (
+          <span key={`${id}-${i}`} className="rtree__rune"><Rune data={data} id={id} size="minor" />{name(id)}</span>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <div className="rtree">
+      {col(name(page.primaryStyle) || "Arbre principal", page.primary, page.keystone)}
+      {col(name(page.subStyle) || "Arbre secondaire", page.sub)}
+      {col("Fragments", page.shards)}
+    </div>
+  );
+}

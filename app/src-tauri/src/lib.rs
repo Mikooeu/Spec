@@ -15,6 +15,12 @@ async fn lcu_preselect(state: tauri::State<'_, Lcu>, action_id: u64, champion_id
     state.preselect(action_id, champion_id).await
 }
 
+/// Dernières parties du joueur connecté (historique du profil).
+#[tauri::command]
+async fn lcu_match_history(state: tauri::State<'_, Lcu>, count: u32) -> Result<Value, String> {
+    state.match_history(count).await
+}
+
 /// Importe une page de runes dans la page sélectionnée de la draft (ou une page « Spec »).
 #[tauri::command]
 async fn lcu_set_rune_page(state: tauri::State<'_, Lcu>, champion: String, primary_style: u32, sub_style: u32, perks: Vec<u32>) -> Result<(), String> {
@@ -33,7 +39,7 @@ pub fn run() {
             Ok(())
         })
         .manage(Lcu::new())
-        .invoke_handler(tauri::generate_handler![lcu_get, lcu_preselect, lcu_set_rune_page])
+        .invoke_handler(tauri::generate_handler![lcu_get, lcu_preselect, lcu_set_rune_page, lcu_match_history])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

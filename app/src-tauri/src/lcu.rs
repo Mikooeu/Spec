@@ -25,7 +25,15 @@ pub const READ_PATHS: &[&str] = &[
     "/lol-summoner/v1/current-summoner",
     "/riotclient/region-locale",
     "/lol-champ-select/v1/session",
+    "/lol-ranked/v1/current-ranked-stats",   // rang et LP (profil, suivi des LP)
+    "/lol-game-queues/v1/queues",            // noms des files (Solo/Duo, Flex, 5c5)
 ];
+
+/// Historique de parties du joueur connecté, au plus 50 parties (chemin construit ici, jamais par l'appli).
+pub fn match_history_path(count: u32) -> String {
+    let end = count.clamp(1, 50);
+    format!("/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex={end}")
+}
 
 pub fn is_allowed(path: &str) -> bool {
     READ_PATHS.contains(&path)
@@ -175,6 +183,18 @@ impl Lcu {
         match resp.status().as_u16() {
             200..=299 => resp.json().await.map_err(|_| "bad_json".into()),
             404 => Err("not_found".into()),
+            code => Err(format!("http_{code}")),
+        }
+    }
+
+    /// Dernières parties du joueur connecté.
+    pub async fn match_history(&self, count: u32) -> Result<Value, String> {
+        let path = match_history_path(count);
+        let resp = self
+            .send(|c| self.client.get(format!("https://127.0.0.1:{}{}", c.port, path)))
+            .await?;
+        match resp.status().as_u16() {
+            200..=299 => resp.json().await.map_err(|_| "bad_json".into()),
             code => Err(format!("http_{code}")),
         }
     }
@@ -376,6 +396,15 @@ mod tests {
         assert!(rune_page_body("x", 8100, 8200, &perks[..8]).is_err());     // page incomplète
         assert!(rune_page_body("x", 1, 8200, &perks).is_err());
         assert!(rune_page_body("x", 8100, 8200, &[0, 8139, 8138, 8135, 8210, 8233, 5008, 5008, 5011]).is_err());
+    }
+
+    #[test]
+    fn match_history_path_is_bounded() {
+        assert!(match_history_path(20).ends_with("begIndex=0&endIndex=20"));
+        assert!(match_history_path(5000).ends_with("endIndex=50"));
+        assert!(match_history_path(0).ends_with("endIndex=1"));
+        assert!(!is_allowed(&match_history_path(20)));   // pas lisible via lcu_get
+        assert!(is_allowed("/lol-ranked/v1/current-ranked-stats"));
     }
 
     #[test]

@@ -6,7 +6,7 @@ export const pts = (x: number) =>
   `${x >= 0 ? "+" : "−"}${Math.abs(x * 100).toFixed(1).replace(".", ",")} pt`;
 export const int = (x: number) => Math.round(x).toLocaleString("fr-FR");
 
-/** Couleur d'un winrate : vert au-dessus de 51,5 %, rouge sous 48,5 %. */
+/** Couleur d'un winrate : vert dès 51,5 %, rouge sous 49 %. */
 export const wrTone = (x: number) => (x >= 0.515 ? "good" : x < 0.49 ? "bad" : "neutral");
 
 export const iconUrl = (stats: Stats, champ: number) => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
@@ -8,6 +8,8 @@ import { DraftScreen, type Draft } from "./components/DraftScreen";
 import { ProfileScreen } from "./components/ProfileScreen";
 import { PoolScreen, type Pools } from "./components/PoolScreen";
 import { TierListScreen } from "./components/TierListScreen";
+import { ChampionScreen } from "./components/ChampionScreen";
+import { useLpTracking } from "./lib/history";
 import { type Stats } from "./lib/score";
 import { loadStats, register, usePersonal } from "./lib/api";
 import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
@@ -18,7 +20,8 @@ import { CompactScreen } from "./components/CompactScreen";
 import { useUpdate, type UpdateState } from "./lib/updater";
 import { Logo } from "./components/Logo";
 
-type Screen = "draft" | "profile" | "tier" | "pool";
+type Screen = "draft" | "profile" | "tier" | "pool" | "champion";
+interface ChampView { champ: number; role: number; inGame: boolean }
 const SCREENS: [Screen, string][] = [["draft", "Draft"], ["profile", "Profil"], ["tier", "Tier list"], ["pool", "Pool"]];
 
 /** Draft fictive de démonstration (remplacée plus tard par la lecture du client LoL). */
@@ -46,6 +49,25 @@ export default function App() {
   const session = client.status === "champselect" ? client.session : null;
   useEffect(() => { if (!session) setRoleOverride(null); }, [session == null]); // eslint-disable-line react-hooks/exhaustive-deps
   const live = session ? sessionToDraft(session, roleOverride) : null;
+  const [tierRole, setTierRole] = useState(0);
+  const [champView, setChampView] = useState<ChampView | null>(null);
+  const lpVersion = useLpTracking(client);
+  const openChamp = (champ: number, role: number) => { setChampView({ champ, role, inGame: false }); setScreen("champion"); };
+
+  // pick verrouillé pendant la draft : sa page champion s'ouvre au lancement de la partie
+  const lastPick = useRef<{ champ: number; role: number } | null>(null);
+  useEffect(() => {
+    if (live?.myLocked && live.myChamp != null) lastPick.current = { champ: live.myChamp, role: live.role };
+  }, [live?.myLocked, live?.myChamp, live?.role]); // eslint-disable-line react-hooks/exhaustive-deps
+  const phase = client.status === "idle" ? client.phase : client.status;
+  useEffect(() => {
+    if (phase === "champselect") { setScreen("draft"); lastPick.current = null; return; }
+    if ((phase === "InProgress" || phase === "GameStart") && lastPick.current) {
+      setChampView({ ...lastPick.current, inGame: true });
+      setScreen("champion");
+      lastPick.current = null;
+    }
+  }, [phase]);
   const account = client.status === "idle" || client.status === "champselect" ? client.account : null;
   // dernier compte vu dans le client : les stats perso restent visibles client fermé
   const [savedAccount, setSavedAccount] = usePersistent<Account | null>("spec.account", null);
@@ -119,8 +141,8 @@ export default function App() {
         </div>
         <nav>
           {SCREENS.map(([key, label]) => (
-            <button key={key} className={`nav${screen === key ? " is-active" : ""}`} onClick={() => setScreen(key)}
-                    aria-current={screen === key ? "page" : undefined}>{label}</button>
+            <button key={key} className={`nav${screen === key || (key === "tier" && screen === "champion") ? " is-active" : ""}`}
+                    onClick={() => setScreen(key)} aria-current={screen === key ? "page" : undefined}>{label}</button>
           ))}
         </nav>
         <span className="grow" />
@@ -138,7 +160,7 @@ export default function App() {
         {error && <div className="content"><div className="empty-state"><h1>Impossible de démarrer</h1><p className="muted">{error}</p></div></div>}
         {!error && !stats && <div className="content"><div className="empty-state"><div className="spinner" /><p className="muted">Chargement des stats…</p></div></div>}
         {stats && screen === "profile" && (
-          <ProfileScreen stats={stats} account={me} clientOn={clientOn}
+          <ProfileScreen stats={stats} account={me} clientOn={clientOn} lpVersion={lpVersion}
                          perso={perso}
                          onRegister={async (code) => {
                            const err = me?.puuid ? await register(me.puuid, me.name, code) : "Lance le client LoL pour lier ton compte.";
@@ -146,7 +168,12 @@ export default function App() {
                            return err;
                          }} />
         )}
-        {stats && screen === "tier" && <TierListScreen stats={stats} />}
+        {stats && screen === "tier" && <TierListScreen stats={stats} role={tierRole} onRole={setTierRole} onOpen={openChamp} />}
+        {stats && screen === "champion" && champView && (
+          <ChampionScreen stats={stats} champ={champView.champ} role={champView.role} inGame={champView.inGame}
+                          onRole={(role) => setChampView({ ...champView, role })}
+                          onBack={() => setScreen(champView.inGame ? "draft" : "tier")} />
+        )}
         {stats && screen === "pool" && <PoolScreen stats={stats} pools={pools} onChange={setPools} perso={perso} />}
         {stats && screen === "draft" && live && (
           <DraftScreen stats={stats} draft={live} pool={pools[live.role]} wide={wide} live
