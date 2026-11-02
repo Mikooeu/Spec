@@ -1143,7 +1143,13 @@ Function SpecInstShow
   IntOp $6 $3 - $5
   IntOp $6 $6 / 2
   IntOp $1 $1 + $6
-  System::Call 'user32::SetWindowPos(p $HWNDPARENT, p 0, i r0, i r1, i r4, i r5, i 4)'
+  ; barre de titre sombre (Windows 10 2004+ et 11), couleur du fond sur Windows 11
+  System::Call 'dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 20, *i 1, i 4)i.r6'
+  ${If} $6 <> 0
+    System::Call 'dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 19, *i 1, i 4)' ; Windows 10 1809-1909
+  ${EndIf}
+  System::Call 'dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 35, *i 0x00100B0B, i 4)' ; légende #0B0B10
+  System::Call 'user32::SetWindowPos(p $HWNDPARENT, p 0, i r0, i r1, i r4, i r5, i 0x24)' ; SWP_NOZORDER | SWP_FRAMECHANGED
 
   ; la page occupe toute la fenêtre, fond sombre
   FindWindow $SpecInner "#32770" "" $HWNDPARENT
@@ -1239,6 +1245,9 @@ Function SpecFinish
   !insertmacro SpecPx $1 16
   System::Call 'user32::SetWindowPos(p $SpecStatus, p 0, i 0, i 0, i r0, i r1, i 0x6)' ; SWP_NOMOVE | SWP_NOZORDER
   SendMessage $SpecStatus ${WM_SETTEXT} 0 "STR:Raccourci ajouté au Bureau et au menu Démarrer"
+  ; barre pleine d'un bout à l'autre (sans le liseré gris de fin)
+  GetDlgItem $0 $SpecInner 1004
+  SendMessage $0 0x2001 0 0x00F6823B ; PBM_SETBKCOLOR = couleur de la barre
   Sleep 900
   Pop $1
   Pop $0

@@ -40,7 +40,11 @@ if (existsSync(cliPkg)) {
 
 const conf = JSON.parse(readFileSync(CONF, "utf8"));
 if (version) conf.version = version;
+// exécutable « Spec.exe » (au lieu de « app.exe ») avec le nom du produit dans ses propriétés
+conf.productName = "Spec";
+conf.mainBinaryName = "Spec";
 conf.bundle ??= {};
+conf.bundle.copyright = "© 2026 Spec";
 conf.bundle.active = true;
 conf.bundle.targets = ["nsis", "app", "dmg"];
 conf.bundle.createUpdaterArtifacts = true;
