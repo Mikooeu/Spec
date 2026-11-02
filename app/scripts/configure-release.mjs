@@ -28,6 +28,16 @@ if (!repo) fail("Dépôt GitHub introuvable : publie d'abord le dossier Spec ave
 if (!existsSync(PUBKEY)) fail(`Clé de signature introuvable (${PUBKEY}) : lance d'abord npx tauri signer generate -w ~/.tauri/spec.key`);
 const pubkey = readFileSync(PUBKEY, "utf8").trim();
 
+// le modèle d'installateur est calqué sur tauri-cli 2.12.4 : une version plus ancienne peut échouer
+const cliPkg = join("node_modules", "@tauri-apps", "cli", "package.json");
+if (existsSync(cliPkg)) {
+  const cli = JSON.parse(readFileSync(cliPkg, "utf8")).version;
+  const [a, b, c] = cli.split(".").map(Number);
+  if (a < 2 || (a === 2 && (b < 12 || (b === 12 && c < 4)))) {
+    fail(`tauri-cli ${cli} trop ancien pour l'installateur Spec : lance npm install -D @tauri-apps/cli@2.12.4`);
+  }
+}
+
 const conf = JSON.parse(readFileSync(CONF, "utf8"));
 if (version) conf.version = version;
 conf.bundle ??= {};
@@ -44,6 +54,8 @@ conf.bundle.windows = {
     installerIcon: "icons/icon.ico",
     headerImage: "installer/header.bmp",
     sidebarImage: "installer/sidebar.bmp",
+    // fenêtre d'installation unique aux couleurs de Spec (voir installer/installer.nsi)
+    template: "installer/installer.nsi",
     languages: ["French"],
     displayLanguageSelector: false,
   },
