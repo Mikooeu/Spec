@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ROLE_LABELS, ROLE_SHORT, type Stats } from "../lib/score";
 import { champName } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
+import { Logo } from "./Logo";
 import { BanPanel, MyPick, RecoRow, makePreselect, persoCell, useRecos, type Draft } from "./DraftScreen";
 import type { PersonalState } from "../lib/api";
 
@@ -29,7 +30,7 @@ export function CompactScreen(props: Props) {
   return (
     <div className="compact">
       <header className="compact__bar">
-        <span className="brand__mark brand__mark--small" aria-hidden>S</span>
+        <Logo className="brand__mark brand__mark--small" />
         <span className="compact__title">
           {draft ? `Tu joues ${ROLE_LABELS[draft.role]}` : "Spec"}
         </span>

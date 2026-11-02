@@ -14,6 +14,7 @@ import { RuneImportContext } from "./components/Runes";
 import { applyCompact, setOnTop } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { useUpdate, type UpdateState } from "./lib/updater";
+import { Logo } from "./components/Logo";
 
 type Screen = "draft" | "profile";
 
@@ -102,7 +103,7 @@ export default function App() {
     <div className="window">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand__mark" aria-hidden>S</span>
+          <Logo className="brand__mark" />
           <span className="brand__name">Spec</span>
         </div>
         <nav>
