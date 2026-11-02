@@ -28,11 +28,19 @@ export function ProfileScreen({ stats, account, clientOn, perso, onRegister, lpV
   useEffect(() => {
     if (!clientOn) return;
     let alive = true;
-    loadHistory(50).then((g) => { if (alive) { setGames(g); setHistoryError(false); } })
+    // poste probable d'après les parties Master+ quand le client ne le donne pas
+    const guess = (champ: number, notJungle: boolean) => {
+      const dist = stats.roleGames.get(champ);
+      if (!dist) return null;
+      let best: number | null = null;
+      dist.forEach((g, r) => { if ((!notJungle || r !== 1) && g > 0 && (best == null || g > dist[best])) best = r; });
+      return best;
+    };
+    loadHistory(50, guess).then((g) => { if (alive) { setGames(g); setHistoryError(false); } })
       .catch(() => alive && setHistoryError(true));
     readRanked().then((r) => alive && setRank(rankText(r?.queueMap?.RANKED_SOLO_5x5)));
     return () => { alive = false; };
-  }, [clientOn, lpVersion]);
+  }, [clientOn, lpVersion, stats]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -52,7 +60,7 @@ export function ProfileScreen({ stats, account, clientOn, perso, onRegister, lpV
       </header>
 
       <div className="card account">
-        <span className="icon icon--empty" style={{ width: "3rem", height: "3rem" }} aria-hidden />
+        <ProfileIcon version={stats.ddragon} icon={account?.icon ?? null} />
         <div className="grow">
           <p className="account__name">{account ? `${account.name}${account.region ? ` · ${account.region}` : ""}` : "Aucun compte lié"}</p>
           {rank && <p className="account__rank">Classé Solo/Duo · {rank}</p>}
@@ -231,5 +239,17 @@ function GameRow({ stats, game: g }: { stats: Stats; game: Game }) {
         <span className="stat-col__label">{result === "remake" ? "Remake" : g.win ? "Victoire" : "Défaite"} · {min} min</span>
       </span>
     </div>
+  );
+}
+
+/** Icône d'invocateur (Data Dragon), cercle vide si inconnue. */
+function ProfileIcon({ version, icon }: { version: string; icon: number | null }) {
+  const [failed, setFailed] = useState(false);
+  if (icon == null || failed) return <span className="icon icon--empty" style={{ width: "3rem", height: "3rem" }} aria-hidden />;
+  return (
+    <span className="icon icon--image account__icon" style={{ width: "3rem", height: "3rem" }}>
+      <img src={`https://ddragon.leagueoflegends.com/cdn/${version}/img/profileicon/${icon}.png`} alt="Icône d’invocateur"
+           draggable={false} onError={() => setFailed(true)} />
+    </span>
   );
 }

@@ -81,8 +81,8 @@ export default function App() {
   // dernier compte vu dans le client : les stats perso restent visibles client fermé
   const [savedAccount, setSavedAccount] = usePersistent<Account | null>("spec.account", null);
   useEffect(() => {
-    if (account?.puuid && account.puuid !== savedAccount?.puuid) setSavedAccount(account);
-  }, [account?.puuid]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (account?.puuid && (account.puuid !== savedAccount?.puuid || account.icon !== savedAccount?.icon)) setSavedAccount(account);
+  }, [account?.puuid, account?.icon]); // eslint-disable-line react-hooks/exhaustive-deps
   const me = account?.puuid ? account : savedAccount;
   const [perso, refreshPerso] = usePersonal(me?.puuid ?? null);
   const [update, installUpdate] = useUpdate();

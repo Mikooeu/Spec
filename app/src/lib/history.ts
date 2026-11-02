@@ -77,12 +77,20 @@ function kindOf(queueId: number, info: QueueInfo | undefined): QueueKind {
 
 const POSITIONS: Record<string, number> = { TOP: 0, JUNGLE: 1, MIDDLE: 2, MID: 2, BOTTOM: 3, UTILITY: 4, SUPPORT: 4 };
 
-function roleOf(p: { teamPosition?: string; individualPosition?: string; timeline?: { lane?: string; role?: string } }): number | null {
+const SMITE = 11;
+
+/**
+ * Poste joué. L'historique résumé du client ne donne pas de poste fiable (son champ « lane » vaut
+ * souvent JUNGLE pour tout le monde), donc : le poste officiel s'il est présent, sinon Châtiment = jungle,
+ * sinon le poste le plus joué de ce champion en Master+ (hors jungle, puisqu'il n'avait pas Châtiment).
+ */
+function roleOf(p: { teamPosition?: string; individualPosition?: string; spell1Id?: number; spell2Id?: number; championId: number },
+                guess?: (champ: number, notJungle: boolean) => number | null): number | null {
   const pos = p.teamPosition || p.individualPosition;
   if (pos && pos in POSITIONS) return POSITIONS[pos];
-  const lane = p.timeline?.lane, role = p.timeline?.role;
-  if (lane === "BOTTOM" || lane === "BOT") return role === "DUO_SUPPORT" ? 4 : 3;
-  return lane && lane in POSITIONS ? POSITIONS[lane] : null;
+  const smite = p.spell1Id === SMITE || p.spell2Id === SMITE;
+  if (smite) return 1;
+  return guess ? guess(p.championId, true) : null;
 }
 
 function readLp(): Record<string, number> {
@@ -90,10 +98,12 @@ function readLp(): Record<string, number> {
 }
 
 /** Dernières parties sur la Faille, de la plus récente à la plus ancienne. */
-export async function loadHistory(count = 50): Promise<Game[]> {
+export async function loadHistory(count = 50,
+  guess?: (champ: number, notJungle: boolean) => number | null): Promise<Game[]> {
   type RawGame = {
     gameId: number; queueId: number; gameCreation: number; gameDuration: number; mapId?: number;
     participants: { championId: number; teamPosition?: string; individualPosition?: string;
+      spell1Id?: number; spell2Id?: number;
       timeline?: { lane?: string; role?: string };
       stats: { win: boolean; kills: number; deaths: number; assists: number; totalMinionsKilled?: number;
                neutralMinionsKilled?: number; gameEndedInEarlySurrender?: boolean } }[];
@@ -110,7 +120,7 @@ export async function loadHistory(count = 50): Promise<Game[]> {
     out.push({
       id: g.gameId, queue: kindOf(g.queueId, q), queueName: q?.shortName || q?.description || "Partie",
       queueType: q?.type ?? QUEUE_TYPE[kindOf(g.queueId, q)],
-      champ: p.championId, role: roleOf(p), win: !!s.win,
+      champ: p.championId, role: roleOf(p, guess), win: !!s.win,
       remake: duration < 300 || !!s.gameEndedInEarlySurrender,
       kills: s.kills, deaths: s.deaths, assists: s.assists,
       cs: (s.totalMinionsKilled ?? 0) + (s.neutralMinionsKilled ?? 0),

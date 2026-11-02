@@ -445,3 +445,4 @@ button.bans__item:disabled { cursor: default; }
 .rtree .rune__tip { left: 50%; transform: translateX(-50%); }
 .rtree__col:first-child .rtree__rune:first-child .rune__tip { left: 0; transform: none; }
 .rtree__col:last-child .rtree__rune:last-child .rune__tip { left: auto; right: 0; transform: none; }
+.account__icon img { transform: none; }

@@ -8,7 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 export const IN_APP = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 /** `puuid` = identifiant du joueur dans le client LoL (différent du PUUID de l'API Riot). */
-export interface Account { name: string; region: string | null; puuid: string | null }
+export interface Account { name: string; region: string | null; puuid: string | null; icon?: number | null }
 
 interface Member { cellId: number; championId: number; championPickIntent?: number; assignedPosition?: string }
 interface Action { id: number; actorCellId: number; championId: number; completed: boolean; isInProgress?: boolean; type: string }
@@ -128,11 +128,11 @@ export async function preselectBan(s: Session, champ: number): Promise<string | 
 
 async function readAccount(): Promise<Account | null> {
   try {
-    const me = await lcuGet<{ gameName?: string; tagLine?: string; displayName?: string; puuid?: string }>("/lol-summoner/v1/current-summoner");
+    const me = await lcuGet<{ gameName?: string; tagLine?: string; displayName?: string; puuid?: string; profileIconId?: number }>("/lol-summoner/v1/current-summoner");
     const name = me.gameName ? `${me.gameName}#${me.tagLine ?? ""}` : me.displayName ?? "";
     let region: string | null = null;
     try { region = (await lcuGet<{ region?: string }>("/riotclient/region-locale")).region ?? null; } catch { /* facultatif */ }
-    return name ? { name, region, puuid: me.puuid ?? null } : null;
+    return name ? { name, region, puuid: me.puuid ?? null, icon: me.profileIconId ?? null } : null;
   } catch {
     return null;
   }
