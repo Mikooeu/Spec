@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
-# Spec : réessaie de créer la VM Oracle Always Free (Ampere A1) jusqu'à ce qu'une place se libère.
+# Spec : réessaie de créer une VM Oracle Always Free jusqu'à ce qu'une place se libère.
 #
-# Lancement (depuis le dossier Spec) :   caffeinate -i ./infra/oracle-retry.sh
+# Lancement (depuis le dossier Spec) :
+#   caffeinate -i ./infra/oracle-retry.sh            VM Ampere A1 (2 OCPU, 12 Go), souvent sans place
+#   TYPE=micro ./infra/oracle-retry.sh               petite VM AMD (1 Go), presque toujours disponible
 # Arrêt : Ctrl+C. Le script ne contient aucun secret : il lit ~/.oci/config.
 #
 # Réglages facultatifs (variables d'environnement) :
-#   WAIT=60  OCPUS=2  MEMORY=12  BOOT_GB=50  VCN_NAME=draft-coach-vcn  SSH_KEY=~/.ssh/spec_oracle
+#   TYPE=a1|micro  WAIT=60  OCPUS=2  MEMORY=12  BOOT_GB=50  VCN_NAME=draft-coach-vcn  SSH_KEY=~/.ssh/spec_oracle
 
 set -u
 
 if [ -z "${OCI:-}" ]; then
   if [ -x "$HOME/.oci-cli/bin/oci" ]; then OCI="$HOME/.oci-cli/bin/oci"; else OCI="oci"; fi
 fi
-NAME="spec-collector"
-SHAPE="VM.Standard.A1.Flex"
+TYPE="${TYPE:-a1}"
+if [ "$TYPE" = "micro" ]; then
+  NAME="spec-micro"
+  SHAPE="VM.Standard.E2.1.Micro"     # 1/8 OCPU AMD, 1 Go : gratuit, 2 au plus par compte
+else
+  NAME="spec-collector"
+  SHAPE="VM.Standard.A1.Flex"
+fi
 VCN_NAME="${VCN_NAME:-draft-coach-vcn}"
 OCPUS="${OCPUS:-2}"
 MEMORY="${MEMORY:-12}"
@@ -55,7 +63,7 @@ SUBNET_ID=$("$OCI" network subnet list --compartment-id "$TENANCY" --vcn-id "$VC
 IMAGE_ID=$("$OCI" compute image list --compartment-id "$TENANCY" --operating-system "Canonical Ubuntu" \
   --operating-system-version "24.04" --shape "$SHAPE" --sort-by TIMECREATED --sort-order DESC \
   --query 'data[0].id' --raw-output 2>/dev/null | first_ocid)
-[ -n "$IMAGE_ID" ] || die "image Ubuntu 24.04 ARM introuvable."
+[ -n "$IMAGE_ID" ] || die "image Ubuntu 24.04 introuvable pour $SHAPE."
 
 if [ ! -f "$SSH_KEY.pub" ]; then
   say "Création d'une clé SSH dans $SSH_KEY (elle reste sur ton Mac)."
@@ -63,7 +71,13 @@ if [ ! -f "$SSH_KEY.pub" ]; then
   ssh-keygen -q -t rsa -b 4096 -N "" -C "spec-oracle" -f "$SSH_KEY" || die "impossible de créer la clé SSH."
 fi
 
-say "Prêt : $OCPUS OCPU, $MEMORY Go, Ubuntu 24.04, essai toutes les ${WAIT} s. Ctrl+C pour arrêter."
+if [ "$SHAPE" = "VM.Standard.A1.Flex" ]; then
+  SHAPE_ARGS=(--shape-config "{\"ocpus\": $OCPUS, \"memoryInGBs\": $MEMORY}")
+  say "Prêt : Ampere A1, $OCPUS OCPU, $MEMORY Go, Ubuntu 24.04, essai toutes les ${WAIT} s. Ctrl+C pour arrêter."
+else
+  SHAPE_ARGS=()
+  say "Prêt : petite VM AMD (1 Go), Ubuntu 24.04, essai toutes les ${WAIT} s. Ctrl+C pour arrêter."
+fi
 
 try=0
 while :; do
@@ -72,7 +86,7 @@ while :; do
     ad_short=${AD##*-}
     OUT=$("$OCI" compute instance launch \
       --availability-domain "$AD" --compartment-id "$TENANCY" --display-name "$NAME" \
-      --shape "$SHAPE" --shape-config "{\"ocpus\": $OCPUS, \"memoryInGBs\": $MEMORY}" \
+      --shape "$SHAPE" ${SHAPE_ARGS[@]+"${SHAPE_ARGS[@]}"} \
       --image-id "$IMAGE_ID" --subnet-id "$SUBNET_ID" --assign-public-ip true \
       --boot-volume-size-in-gbs "$BOOT_GB" --ssh-authorized-keys-file "$SSH_KEY.pub" 2>&1)
     CODE=$?
@@ -87,6 +101,7 @@ while :; do
         --query 'data[0]."public-ip"' --raw-output 2>/dev/null | tr -d '"[:space:]')
       say "VM prête. Adresse IP publique : ${IP:-à lire dans la console Oracle}"
       say "Connexion : ssh -i $SSH_KEY ubuntu@${IP:-<IP>}"
+      say "Ensuite : ./infra/deploy.sh ${IP:-<IP>}  (installe Spec sur la VM)"
       notify "VM Oracle prête : ${IP:-voir la console}"
       exit 0
     fi
@@ -97,7 +112,7 @@ while :; do
       *TooManyRequests*|*'"status": 429'*)
         say "Essai $try : Oracle demande de ralentir, pause de 5 min."; sleep 300 ;;
       *LimitExceeded*|*QuotaExceeded*)
-        die "limite gratuite atteinte : une autre instance A1 utilise peut-être déjà les ressources.
+        die "limite gratuite atteinte : une autre instance de ce type utilise peut-être déjà les ressources.
 $OUT" ;;
       *NotAuthenticated*|*NotAuthorized*|*"401"*)
         die "Oracle refuse la connexion. Vérifie ~/.oci/config et la clé d'API." ;;

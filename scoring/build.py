@@ -6,6 +6,7 @@ et écrit data/stats.duckdb d'un bloc (fichier temporaire puis remplacement).
 
 import logging
 import os
+import re
 import time
 from pathlib import Path
 
@@ -52,6 +53,14 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
     tmp.unlink(missing_ok=True)
 
     con = duckdb.connect(":memory:")
+    # petite VM (1 Go) : mémoire plafonnée, le surplus passe sur le disque
+    limit = os.getenv("DUCKDB_MEMORY_LIMIT", "").strip()
+    if re.fullmatch(r"\d+(MB|GB)", limit):
+        (db_path.parent / "tmp").mkdir(parents=True, exist_ok=True)
+        con.execute(f"SET memory_limit = '{limit}'")
+        con.execute(f"SET temp_directory = '{(db_path.parent / 'tmp').as_posix()}'")
+        con.execute("SET preserve_insertion_order = false")
+        con.execute("SET threads = 1")
     # attache la base du collecteur en lecture seule, en attendant son tour si besoin
     deadline = time.monotonic() + 60
     while True:

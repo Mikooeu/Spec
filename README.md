@@ -152,6 +152,20 @@ caffeinate -i ./infra/oracle-retry.sh
 
 Il essaie toutes les 60 s et passe d'une zone à l'autre. Quand une place se libère, il crée la VM (Ubuntu 24.04, réseau `draft-coach-vcn`), envoie une notification avec l'adresse IP et s'arrête. Il refuse de créer une deuxième VM. La clé SSH de connexion est créée dans `~/.ssh/spec_oracle`.
 
+Si les VM Ampere restent introuvables, la petite VM AMD gratuite (1 Go) est presque toujours disponible :
+
+```bash
+TYPE=micro ./infra/oracle-retry.sh
+```
+
+Puis installe Spec dessus (collecteur 24 h/24 et stats envoyées toutes les 6 h), après avoir arrêté le collecteur du Mac :
+
+```bash
+./infra/deploy.sh <adresse IP de la VM>
+```
+
+Le script copie `.env` et la base de parties du Mac la première fois, puis lance deux services : `spec-collector` (redémarre tout seul) et `spec-stats.timer`. Sur 1 Go, le calcul des stats est plafonné à 500 Mo de mémoire et s'appuie sur 2 Go de swap : il est plus lent, mais tourne.
+
 ## 7. Serveur Cloudflare (gratuit)
 
 Il sert les stats Master+ à l'appli et calcule les stats perso de la saison (winrate par champion, bilan par vis-à-vis) pour chaque ami inscrit. La clé Riot y est stockée comme secret : elle n'est jamais dans l'appli.
