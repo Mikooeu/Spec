@@ -26,7 +26,7 @@ REPO=$(printf '%s' "$REMOTE" | sed -E 's#^(git@github.com:|https://github.com/)#
 SSH=(ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "ubuntu@$IP")
 say() { printf '\n▸ %s\n' "$*"; }
 
-say "Installation sur la VM ($IP), dépôt github.com/$REPO…"
+say "Installation sur la VM ($IP), dépôt github.com/${REPO}…"
 "${SSH[@]}" "REPO='$REPO' bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
