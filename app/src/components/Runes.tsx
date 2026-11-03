@@ -1,15 +1,23 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { runePageFor, type RunePage as Page, type Stats } from "../lib/score";
-import { champName } from "../lib/ui";
+import { orderSpells, runePageFor, spellsFor, type RunePage as Page, type Stats } from "../lib/score";
+import { champName, usePersistent } from "../lib/ui";
+import { loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
 
 // Noms, descriptions et icônes officiels des runes (Data Dragon, en français).
 interface RuneInfo { name: string; icon: string; desc: string }
-type RuneData = Map<number, RuneInfo>;
+export type RuneData = Map<number, RuneInfo>;
 
 const CDN = "https://ddragon.leagueoflegends.com/cdn";
 
 /** Import dans le client : fourni en direct, absent en démo. Renvoie un message d'erreur, ou null. */
 export const RuneImportContext = createContext<((page: Page, champion: string) => Promise<string | null>) | null>(null);
+/** Import des sorts d'invocateur (D puis F) : fourni en direct pendant la draft, absent sinon. */
+export const SpellImportContext = createContext<((spell1: number, spell2: number) => Promise<string | null>) | null>(null);
+
+/** Touche de Flash choisie par le joueur (F par défaut), gardée d'une partie à l'autre. */
+export function useFlashKey(): ["D" | "F", (k: "D" | "F") => void] {
+  return usePersistent<"D" | "F">("spec.flashKey", "F");
+}
 const SHARDS: Record<number, [string, string]> = {
   5008: ["Force adaptative", "StatModsAdaptiveForceIcon"],
   5005: ["Vitesse d’attaque", "StatModsAttackSpeedIcon"],
@@ -51,7 +59,7 @@ function loadRunes(version: string): Promise<RuneData> {
   return cache.get(version)!;
 }
 
-function useRuneData(version: string): RuneData | null {
+export function useRuneData(version: string): RuneData | null {
   const [data, setData] = useState<RuneData | null>(null);
   useEffect(() => {
     let alive = true;
@@ -61,7 +69,7 @@ function useRuneData(version: string): RuneData | null {
   return data;
 }
 
-function Rune({ data, id, size }: { data: RuneData | null; id: number; size: "key" | "minor" | "shard" }) {
+export function Rune({ data, id, size }: { data: RuneData | null; id: number; size: "key" | "minor" | "shard" }) {
   const info = data?.get(id);
   const [failed, setFailed] = useState(false);
   return (
@@ -89,24 +97,33 @@ export function RunePage({ stats, champ, role, laner }: { stats: Stats; champ: n
       : <p className="runes__empty">Pas encore assez de parties pour conseiller des runes.</p>;
   }
   const { page, vs } = found;
-  return <RunePageView stats={stats} champ={champ} page={page} vs={vs} data={data} />;
+  return <RunePageView stats={stats} champ={champ} page={page} vs={vs} data={data}
+                       spells={spellsFor(stats, champ, role, laner)} />;
 }
 
-function RunePageView({ stats, champ, page, vs, data }:
-  { stats: Stats; champ: number; page: Page; vs: number | null; data: RuneData | null }) {
+function RunePageView({ stats, champ, page, vs, data, spells }:
+  { stats: Stats; champ: number; page: Page; vs: number | null; data: RuneData | null;
+    spells: { spells: [number, number]; vs: number | null } | null }) {
   const importer = useContext(RuneImportContext);
+  const spellImporter = useContext(SpellImportContext);
+  const spellInfo = useInfo(loadSpells, stats.ddragon);
+  const [flashKey, setFlashKey] = useFlashKey();
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const ordered = spells ? orderSpells(spells.spells, flashKey) : null;
   const run = async () => {
     if (!importer) {
-      setStatus({ ok: true, text: "Démo : en partie, ces runes remplacent la page sélectionnée dans ta draft." });
+      setStatus({ ok: true, text: `Démo : en partie, ces runes remplacent la page sélectionnée dans ta draft${ordered ? " et les sorts sont choisis" : ""}.` });
       return;
     }
     setBusy(true);
     const name = champName(stats, champ);
     const error = await importer(page, name);
+    const spellError = !error && ordered && spellImporter ? await spellImporter(ordered[0], ordered[1]) : null;
     setBusy(false);
-    setStatus(error ? { ok: false, text: error } : { ok: true, text: `Runes importées dans ta page « Spec : ${name} runes ».` });
+    setStatus(error ? { ok: false, text: error }
+      : spellError ? { ok: false, text: `Runes importées, mais pas les sorts : ${spellError}` }
+      : { ok: true, text: `Runes importées dans ta page « Spec : ${name} runes »${ordered && spellImporter ? ", sorts choisis" : ""}.` });
   };
   const wr = page.games ? `${((page.wins / page.games) * 100).toFixed(1).replace(".", ",")} %` : "";
   return (
@@ -123,11 +140,31 @@ function RunePageView({ stats, champ, page, vs, data }:
         <span className="runes__sep" />
         {page.shards.map((r, i) => <Rune key={`f${i}`} data={data} id={r} size="shard" />)}
         <button className="btn btn--secondary btn--tiny runes__import" onClick={run} disabled={busy}>
-          {busy ? "Import…" : "Importer dans le client"}
+          {busy ? "Import…" : ordered ? "Importer runes et sorts" : "Importer dans le client"}
         </button>
       </div>
+      {ordered && (
+        <div className="spells">
+          <span className="spells__label">Sorts{spells?.vs != null ? ` face à ${champName(stats, spells.vs)}` : ""}</span>
+          <SpellKey data={spellInfo} id={ordered[0]} k="D" />
+          <button className="spells__swap" onClick={() => setFlashKey(flashKey === "F" ? "D" : "F")}
+                  title={`Flash sur ${flashKey === "F" ? "D" : "F"} plutôt`} aria-label="Inverser les touches des sorts">⇄</button>
+          <SpellKey data={spellInfo} id={ordered[1]} k="F" />
+          <span className="muted small">Flash sur {flashKey}, gardé pour tes prochaines parties</span>
+        </div>
+      )}
       {status && <p className={`runes__status${status.ok ? "" : " tone-bad"}`} role="status">{status.text}</p>}
     </div>
+  );
+}
+
+function SpellKey({ data, id, k }: { data: InfoMap | null; id: number; k: "D" | "F" }) {
+  const info = data?.get(id);
+  return (
+    <span className="spells__key" title={info?.name ?? `Sort ${id}`}>
+      {info ? <img src={info.icon} alt={info.name} draggable={false} /> : <span className="spells__fallback" />}
+      <kbd>{k}</kbd>
+    </span>
   );
 }
 

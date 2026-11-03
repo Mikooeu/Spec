@@ -11,10 +11,11 @@ import { TierListScreen } from "./components/TierListScreen";
 import { ChampionScreen } from "./components/ChampionScreen";
 import { useLpTracking } from "./lib/history";
 import { type Stats } from "./lib/score";
-import { loadStats, register, usePersonal } from "./lib/api";
+import { loadStats, register, usePersonal, useRegionStats, type Region } from "./lib/api";
 import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
-import { importRunes, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
-import { RuneImportContext } from "./components/Runes";
+import { importRunes, importSpells, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
+import { RuneImportContext, SpellImportContext } from "./components/Runes";
+import { REGION_LABEL, RegionSelect } from "./components/RegionSelect";
 import { applyCompact, setOnTop } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { useUpdate, type UpdateState } from "./lib/updater";
@@ -22,7 +23,7 @@ import { Logo } from "./components/Logo";
 
 type Screen = "draft" | "profile" | "tier" | "pool" | "champion";
 interface ChampView { champ: number; role: number; inGame: boolean }
-const SCREENS: [Screen, string][] = [["draft", "Draft"], ["profile", "Profil"], ["tier", "Tier list"], ["pool", "Pool"]];
+const SCREENS: [Screen, string][] = [["draft", "Draft"], ["profile", "Profil"], ["tier", "Tier list"], ["pool", "Champion pool"]];
 
 /** Draft fictive de démonstration (remplacée plus tard par la lecture du client LoL). */
 function demoDraft(stats: Stats): Draft {
@@ -50,6 +51,10 @@ export default function App() {
   useEffect(() => { if (!session) setRoleOverride(null); }, [session == null]); // eslint-disable-line react-hooks/exhaustive-deps
   const live = session ? sessionToDraft(session, roleOverride) : null;
   const [tierRole, setTierRole] = useState(0);
+  // région des stats de la tier list et des pages champion : EUW à chaque lancement (la draft reste en EUW)
+  const [region, setRegion] = useState<Region>("euw");
+  const regionStats = useRegionStats(stats, region);
+  const regionSelect = <RegionSelect value={region} onChange={setRegion} />;
   const [champView, setChampView] = useState<ChampView | null>(null);
   const lpVersion = useLpTracking(client);
   const openChamp = (champ: number, role: number) => { setChampView({ champ, role, inGame: false }); setScreen("champion"); };
@@ -65,6 +70,7 @@ export default function App() {
     if (phase === "champselect") { setScreen("draft"); lastPick.current = null; return; }
     if ((phase === "InProgress" || phase === "GameStart") && lastPick.current) {
       setChampView({ ...lastPick.current, inGame: true });
+      setRegion("euw");   // en partie : mêmes stats que la draft
       setScreen("champion");
       lastPick.current = null;
       return;
@@ -117,11 +123,13 @@ export default function App() {
   );
 
   const runeImporter = live ? importRunes : null;
+  const spellImporter = live ? importSpells : null;
 
   if (compact && stats) {
     const current = live ?? draft;
     return (
       <RuneImportContext.Provider value={runeImporter}>
+      <SpellImportContext.Provider value={spellImporter}>
       <CompactScreen stats={stats} draft={current} pool={current ? pools[current.role] : []} live={!!live}
                      onTop={onTop} clientOn={clientOn} clientText={clientText}
                      onRole={(r) => (live ? setRoleOverride(r) : draft && setDraft({ ...draft, role: r }))}
@@ -129,12 +137,14 @@ export default function App() {
                      onDemo={clientOn ? undefined : () => setDraft(demoDraft(stats))} onEndDemo={() => setDraft(null)}
                      onDemoPick={(c) => draft && setDraft({ ...draft, myChamp: c, myLocked: false })}
                      onPreselect={live ? doPreselect : undefined} onBan={live ? doBan : undefined} perso={perso} />
+      </SpellImportContext.Provider>
       </RuneImportContext.Provider>
     );
   }
 
   return (
     <RuneImportContext.Provider value={runeImporter}>
+    <SpellImportContext.Provider value={spellImporter}>
     <div className="window">
       <aside className="sidebar">
         <div className="brand">
@@ -177,11 +187,18 @@ export default function App() {
                            return err;
                          }} />
         )}
-        {stats && screen === "tier" && <TierListScreen stats={stats} role={tierRole} onRole={setTierRole} onOpen={openChamp} />}
-        {stats && screen === "champion" && champView && (
-          <ChampionScreen stats={stats} champ={champView.champ} role={champView.role} inGame={champView.inGame}
+        {stats && (screen === "tier" || (screen === "champion" && champView)) && regionStats.kind !== "ready" && (
+          <RegionWait region={region} missing={regionStats.kind === "missing"} select={regionSelect} />
+        )}
+        {stats && screen === "tier" && regionStats.kind === "ready" && (
+          <TierListScreen stats={regionStats.stats} role={tierRole} onRole={setTierRole} onOpen={openChamp}
+                          region={regionSelect} regionLabel={REGION_LABEL[region]} />
+        )}
+        {stats && screen === "champion" && champView && regionStats.kind === "ready" && (
+          <ChampionScreen stats={regionStats.stats} champ={champView.champ} role={champView.role} inGame={champView.inGame}
                           onRole={(role) => setChampView({ ...champView, role })}
-                          onBack={() => setScreen(champView.inGame ? "draft" : "tier")} />
+                          onBack={() => setScreen(champView.inGame ? "draft" : "tier")}
+                          region={regionSelect} regionLabel={REGION_LABEL[region]} />
         )}
         {stats && screen === "pool" && <PoolScreen stats={stats} pools={pools} onChange={setPools} perso={perso} />}
         {stats && screen === "draft" && live && (
@@ -211,7 +228,28 @@ export default function App() {
         )}
       </main>
     </div>
+    </SpellImportContext.Provider>
     </RuneImportContext.Provider>
+  );
+}
+
+/** Région choisie pas encore téléchargée (ou pas encore de données pour elle). */
+function RegionWait({ region, missing, select }: { region: Region; missing: boolean; select: React.ReactNode }) {
+  return (
+    <div className="content">
+      <header className="page-head"><div><p className="overline">Stats Master+ {REGION_LABEL[region]}</p><h1>Tier list</h1></div>
+        <div className="head-actions">{select}</div></header>
+      <div className="empty-state">
+        {missing ? (
+          <>
+            <h1>Pas encore de stats {REGION_LABEL[region]}</h1>
+            <p className="muted">La collecte de cette région vient de commencer : les stats arrivent au prochain calcul (toutes les 6 h).</p>
+          </>
+        ) : (
+          <><div className="spinner" /><p className="muted">Chargement des stats {REGION_LABEL[region]}…</p></>
+        )}
+      </div>
+    </div>
   );
 }
 

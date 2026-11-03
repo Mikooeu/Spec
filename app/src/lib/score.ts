@@ -2,11 +2,19 @@
 //
 // Score(c) = WR(c,R) + Σe pe(R)·Δlane(c,e) + α·Σe (1 − pe(R))·Δvs(c,e) + β·Σa Δavec(c,a)
 // Chaque winrate est lissé : (victoires + k·référence) / (parties + k).
+//
+// Seul écart avec scoring/score.py : en botlane (ADC et support), l'autre joueur bot d'en face compte
+// comme un vis-à-vis (poids 1 au lieu de α) et la synergie avec ton partenaire de lane compte double.
 
 export const ROLES = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"] as const;
 export const ROLE_LABELS = ["Top", "Jungle", "Mid", "ADC", "Support"];
 export const ROLE_SHORT = ["TOP", "JGL", "MID", "ADC", "SUP"];
 export const DISCOVERY_MIN_GAMES = 200;
+/** Découvertes : champions joués dans au moins 3 % des parties de ce rôle (pas de top proposé en mid). */
+export const DISCOVERY_MIN_PICKRATE = 0.03;
+/** Botlane : partenaire de lane (ADC ↔ support). */
+const BOT_PARTNER: Record<number, number> = { 3: 4, 4: 3 };
+const BOT_SYNERGY_BOOST = 1;   // synergie avec ton partenaire de lane : ×2
 export const LOW_DATA_GAMES = 200;
 
 export type Pair = [games: number, wins: number];
@@ -46,6 +54,7 @@ type GW = [games: number, wins: number];
 /** Page champion (voir scoring/builds.py). g : parties détaillées, tg : parties avec déroulé. */
 export interface ChampPage {
   g: number; tg: number;
+  spellsVs?: [number, number, number, number, number][]; // vis-à-vis, sort 1, sort 2, parties, victoires
   spells: [number, number, number, number][];          // sort 1, sort 2, parties, victoires
   boots: [number, number, number][];                   // objet, parties, victoires
   start: [string, number, number][];                   // « 1056,2003,2003 », parties, victoires
@@ -231,6 +240,9 @@ export function scoreChampion(
   // probabilité que chaque ennemi soit le vis-à-vis, en répartissant les rôles comme une vraie équipe
   const { marginal } = enemyRoles(stats, enemies);
   const probs = enemies.map((_, i) => marginal[i]?.[role] ?? 0);
+  // en botlane, l'autre joueur bot d'en face compte comme un vis-à-vis
+  const partner = BOT_PARTNER[role];
+  const duo = enemies.map((_, i) => (partner != null ? marginal[i]?.[partner] ?? 0 : 0));
 
   let lane = 0, counters = 0, synergies = 0;
   const details: LaneDetail[] = [];
@@ -239,8 +251,8 @@ export function scoreChampion(
     const dLane = smoothed(lg, lw, base, params.k_delta) - base;
     const [vg, vw] = stats.vs.get(k3(champ, role, e)) ?? [0, 0];
     const dVs = smoothed(vg, vw, base, params.k_delta) - base;
-    const laneContribution = probs[i] * dLane;
-    const counterContribution = params.alpha * (1 - probs[i]) * dVs;
+    const laneContribution = probs[i] * dLane + duo[i] * dVs;
+    const counterContribution = params.alpha * Math.max(0, 1 - probs[i] - duo[i]) * dVs;
     lane += laneContribution;
     counters += counterContribution;
     details.push({ enemy: e, p: probs[i], delta: dLane, games: lg, wins: lw,
@@ -248,7 +260,8 @@ export function scoreChampion(
   });
   for (const a of allies) {
     const [ag, aw] = stats.ally.get(k3(champ, role, a)) ?? [0, 0];
-    synergies += params.beta * (smoothed(ag, aw, base, params.k_delta) - base);
+    const boost = partner != null ? 1 + BOT_SYNERGY_BOOST * roleProbability(stats, a, partner) : 1;
+    synergies += boost * params.beta * (smoothed(ag, aw, base, params.k_delta) - base);
   }
   details.sort((x, y) => y.p - x.p);
   return { champ, score: base + lane + counters + synergies, base, lane, counters, synergies,
@@ -257,7 +270,7 @@ export function scoreChampion(
 
 export function recommend(
   stats: Stats, role: number, pool: number[], allies: number[], enemies: number[],
-  bans: number[] = [], top = 3, discoveries = 3,
+  bans: number[] = [], top = 3, discoveries = 6,
 ): { pool: Result[]; discoveries: Result[] } {
   const taken = new Set([...allies, ...enemies, ...bans]);
   const poolResults = pool
@@ -270,11 +283,16 @@ export function recommend(
   for (const [key, [g]] of stats.base) {
     const [cs, rs] = key.split("|");
     const c = Number(cs);
-    if (Number(rs) !== role || g < DISCOVERY_MIN_GAMES || poolSet.has(c) || taken.has(c)) continue;
+    if (Number(rs) !== role || g < DISCOVERY_MIN_GAMES || !playedInRole(stats, g) || poolSet.has(c) || taken.has(c)) continue;
     others.push(scoreChampion(stats, c, role, allies, enemies));
   }
   others.sort((a, b) => b.score - a.score);
   return { pool: poolResults.slice(0, top), discoveries: others.slice(0, discoveries) };
+}
+
+/** Pick rate dans ce rôle d'au moins 3 % (sans données de parties, on ne filtre pas). */
+function playedInRole(stats: Stats, games: number): boolean {
+  return !stats.matchesWeighted || games / stats.matchesWeighted >= DISCOVERY_MIN_PICKRATE;
 }
 
 /** Meilleurs champions d'un rôle, tous confondus (utile en autofill). */
@@ -285,7 +303,7 @@ export function topForRole(stats: Stats, role: number, allies: number[], enemies
   for (const [key, [g]] of stats.base) {
     const [cs, rs] = key.split("|");
     const c = Number(cs);
-    if (Number(rs) !== role || g < DISCOVERY_MIN_GAMES || taken.has(c)) continue;
+    if (Number(rs) !== role || g < DISCOVERY_MIN_GAMES || !playedInRole(stats, g) || taken.has(c)) continue;
     out.push(scoreChampion(stats, c, role, allies, enemies));
   }
   return out.sort((a, b) => b.score - a.score).slice(0, n);
@@ -302,6 +320,27 @@ export function runePageFor(stats: Stats, champ: number, role: number, laner?: n
     if (page) return { page, vs: laner };
   }
   return { page: pages[0], vs: null };
+}
+
+export const FLASH = 4;
+
+/** Sorts conseillés : ceux du matchup s'ils font nettement mieux (≥ 30 parties), sinon les plus joués. */
+export function spellsFor(stats: Stats, champ: number, role: number, laner?: number | null):
+  { spells: [number, number]; vs: number | null } | null {
+  const page = stats.champPages.get(k2(champ, role));
+  if (!page?.spells.length) return null;
+  if (laner != null) {
+    const hit = page.spellsVs?.find(([o]) => o === laner);
+    if (hit) return { spells: [hit[1], hit[2]], vs: laner };
+  }
+  return { spells: [page.spells[0][0], page.spells[0][1]], vs: null };
+}
+
+/** Ordre D puis F : Flash sur la touche choisie (F par défaut), l'autre sort sur l'autre touche. */
+export function orderSpells([a, b]: [number, number], flashKey: "D" | "F"): [number, number] {
+  if (a !== FLASH && b !== FLASH) return [a, b];
+  const other = a === FLASH ? b : a;
+  return flashKey === "D" ? [FLASH, other] : [other, FLASH];
 }
 
 export interface BanSuggestion { champ: number; winrate: number; games: number; against: boolean }
@@ -385,7 +424,7 @@ export function explain(stats: Stats, res: Result, role: number, allies: number[
 
 /** Tier list : champions d'un rôle joués dans plus de `minPick` des parties. */
 export interface TierRow { champ: number; winrate: number; pickrate: number; banrate: number | null; games: number; tier: string }
-export const TIER_MIN_PICKRATE = 0.05;
+export const TIER_MIN_PICKRATE = 0.02;
 
 export function tierLetter(winrate: number): string {
   return winrate >= 0.52 ? "S" : winrate >= 0.51 ? "A" : winrate >= 0.5 ? "B" : winrate >= 0.49 ? "C" : "D";

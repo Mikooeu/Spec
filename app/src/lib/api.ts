@@ -4,9 +4,14 @@ import { parseStats, type Stats } from "./score";
 
 export const API_URL = ((import.meta.env.VITE_SPEC_API_URL as string | undefined) ?? "").replace(/\/+$/, "");
 
-/** Stats Master+ : depuis le serveur si configuré, sinon le fichier exporté localement. */
-export async function loadStats(): Promise<Stats> {
-  const sources = API_URL ? [`${API_URL}/v1/stats`, "/stats.json"] : ["/stats.json"];
+export type Region = "world" | "euw" | "kr" | "na";
+/** Ordre du sélecteur ; l'EUW est la région par défaut (et celle de la draft). */
+export const REGIONS: [Region, string][] = [["world", "World"], ["euw", "EUW"], ["kr", "KR"], ["na", "NA"]];
+
+/** Stats Master+ : depuis le serveur si configuré, sinon le fichier exporté localement (EUW seulement). */
+export async function loadStats(region: Region = "euw"): Promise<Stats> {
+  const sources = region !== "euw" ? (API_URL ? [`${API_URL}/v1/stats?region=${region}`] : [])
+    : API_URL ? [`${API_URL}/v1/stats`, "/stats.json"] : ["/stats.json"];
   let lastError: unknown = null;
   for (const url of sources) {
     try {
@@ -16,6 +21,29 @@ export async function loadStats(): Promise<Stats> {
     } catch (e) { lastError = e; }
   }
   throw lastError ?? new Error("stats introuvables");
+}
+
+const regionCache = new Map<Region, Promise<Stats>>();
+
+export type RegionStats = { kind: "ready"; stats: Stats } | { kind: "loading" } | { kind: "missing" };
+
+/** Stats d'une région, téléchargées seulement quand on la choisit (l'EUW est déjà chargée au démarrage). */
+export function useRegionStats(euw: Stats | null, region: Region): RegionStats {
+  const [state, setState] = useState<RegionStats>({ kind: "loading" });
+  useEffect(() => {
+    if (region === "euw") return;
+    let alive = true;
+    if (!regionCache.has(region)) {
+      regionCache.set(region, loadStats(region).catch((e) => { regionCache.delete(region); throw e; }));
+    }
+    setState({ kind: "loading" });
+    regionCache.get(region)!
+      .then((stats) => alive && setState({ kind: "ready", stats }))
+      .catch(() => alive && setState({ kind: "missing" }));
+    return () => { alive = false; };
+  }, [region]);
+  if (region === "euw") return euw ? { kind: "ready", stats: euw } : { kind: "loading" };
+  return state;
 }
 
 type GW = [number, number]; // parties, victoires

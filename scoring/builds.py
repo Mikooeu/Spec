@@ -15,6 +15,10 @@ SKILL_LEVELS = 15          # on compare les ordres sur les 15 premiers niveaux
 SKILL_FALLBACK = 11
 MIN_SEQ_GAMES = 10         # build complet : parties minimum pour un enchaînement exact
 K_SMOOTH = 20
+FLASH = 4
+VS_MIN_GAMES = 30          # sorts par matchup : parties minimum face à ce champion
+VS_MIN_OPTION = 10
+VS_MIN_LIFT = 0.02         # +2 points lissés pour changer de sorts face à ce champion
 
 
 def _add(counter: dict, key, win: int, w: float) -> None:
@@ -54,15 +58,44 @@ def skill_priority(order: str) -> str:
     return " > ".join(["R", *basics])
 
 
-def compute_builds(rows: list[tuple], items: Items) -> list:
-    """rows : (champ, role, win, w, spell1, spell2, items, skills, purchases).
-    Renvoie [[champ, role, {...}], ...] prêt pour l'export JSON."""
+def spells_vs(default: tuple, by_opp: dict) -> list:
+    """Sorts face à un vis-à-vis précis, seulement s'ils font nettement mieux que les sorts habituels
+    dans ce matchup. Flash est toujours gardé si les sorts habituels l'ont."""
+    out = []
+    for opp, pairs in by_opp.items():
+        total = sum(g for g, _ in pairs.values())
+        if total < VS_MIN_GAMES:
+            continue
+        ref = sum(w for _, w in pairs.values()) / total
+        score = lambda gw: (gw[1] + K_SMOOTH * ref) / (gw[0] + K_SMOOTH)
+        base = score(pairs.get(default, [0.0, 0.0]))
+        floor = max(VS_MIN_OPTION, 0.05 * total)
+        best, best_score = None, base + VS_MIN_LIFT
+        for pair, gw in pairs.items():
+            if pair == default or gw[0] < floor or (FLASH in default and FLASH not in pair):
+                continue
+            if score(gw) >= best_score:
+                best, best_score = pair, score(gw)
+        if best is not None:
+            g, w = pairs[best]
+            out.append([opp, best[0], best[1], _r(g), _r(w)])
+    return sorted(out)
+
+
+def compute_builds(rows, items: Items) -> list:
+    """rows : (champ, role, win, w, spell1, spell2, items, skills, purchases[, adversaire de lane]).
+    Lues une seule fois (un générateur suffit). Renvoie [[champ, role, {...}], ...] pour l'export JSON."""
     per: dict = defaultdict(lambda: {"g": 0.0, "tg": 0.0, "spells": {}, "boots": {}, "start": {},
-                                     "skills": {}, "ranks": defaultdict(dict), "rank_g": Counter(), "seq": {}})
-    for champ, role, win, w, s1, s2, final, skills, purchases in rows:
+                                     "skills": {}, "ranks": defaultdict(dict), "rank_g": Counter(), "seq": {},
+                                     "vs": defaultdict(dict)})
+    for row in rows:
+        champ, role, win, w, s1, s2, final, skills, purchases = row[:9]
+        opp = row[9] if len(row) > 9 else None
         d = per[(champ, role)]
         d["g"] += w
         _add(d["spells"], (s1, s2), win, w)
+        if opp is not None:
+            _add(d["vs"][opp], (s1, s2), win, w)
         boots = [int(x) for x in (final or "").split(",") if x and int(x) in items.boots]
         if boots:
             _add(d["boots"], boots[0], win, w)
@@ -101,5 +134,9 @@ def compute_builds(rows: list[tuple], items: Items) -> list:
                       for k in sorted(d["ranks"])],
             "builds": [[list(k), _r(g), _r(w)] for k, (g, w) in seqs[:3]],
         }
+        top_spells = _top(d["spells"], 1)
+        vs = spells_vs(top_spells[0][0], d["vs"]) if top_spells else []
+        if vs:
+            entry["spellsVs"] = vs
         out.append([champ, role, entry])
     return out

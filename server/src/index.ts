@@ -23,6 +23,11 @@ export interface Env {
 }
 
 const MAX_STATS_BYTES = 24 * 1024 * 1024;
+/** Stats par région : l'EUW garde la clé historique « stats » (anciennes versions de l'appli). */
+const STATS_KEYS: Record<string, string> = { euw: "stats", kr: "stats-kr", na: "stats-na", world: "stats-world" };
+function statsKey(url: URL): string | null {
+  return STATS_KEYS[url.searchParams.get("region") ?? "euw"] ?? null;
+}
 const MAX_PATH = 512;
 const DEVICE_WINDOW_MS = 15 * 60 * 1000;
 
@@ -86,7 +91,9 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
 
     // Stats Master+ publiées par `python -m scoring export --upload`
     if (method === "GET" && path === "/v1/stats") {
-      const { value, metadata } = await env.STATS.getWithMetadata<{ etag: string }>("stats", "stream");
+      const key = statsKey(url);
+      if (!key) return error(400, "bad_region");
+      const { value, metadata } = await env.STATS.getWithMetadata<{ etag: string }>(key, "stream");
       if (!value) return error(404, "no_stats");
       const etag = metadata?.etag ? `"${metadata.etag}"` : undefined;
       if (etag && req.headers.get("If-None-Match") === etag) return new Response(null, { status: 304, headers: CORS });
@@ -100,6 +107,8 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
 
     if (method === "PUT" && path === "/admin/stats") {
       if (!(await isAdmin(req, env))) return error(401, "unauthorized");
+      const key = statsKey(url);
+      if (!key) return error(400, "bad_region");
       const size = Number(req.headers.get("Content-Length") ?? "0");
       if (size > MAX_STATS_BYTES) return error(413, "too_large");
       const text = await req.text();
@@ -109,7 +118,7 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       if (!parsed.meta || !Array.isArray(parsed.champions) || !Array.isArray(parsed.base)) return error(400, "bad_stats");
       const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
       const etag = [...digest.slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
-      await env.STATS.put("stats", text, { metadata: { etag, updatedAt: now } });
+      await env.STATS.put(key, text, { metadata: { etag, updatedAt: now } });
       return json({ ok: true, bytes: text.length, etag });
     }
 
@@ -157,6 +166,28 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
           .bind(clientHash, puuid, now),
       ]);
       return json({ ok: true, registered: true }, 201);
+    }
+
+    // Historique détaillé d'un joueur inscrit (parties classées solo de la saison), page par page.
+    const h = /^\/v1\/players\/([^/]+)\/matches$/.exec(path);
+    if (method === "GET" && h) {
+      const client = decodeURIComponent(h[1]);
+      if (!CLIENT_RE.test(client)) return error(400, "bad_client");
+      const player = await env.DB.prepare(`SELECT puuid FROM devices WHERE client_hash = ?1`)
+        .bind(await sha256Hex(client)).first<{ puuid: string }>();
+      if (!player) return error(404, "not_registered");
+      const before = Number(url.searchParams.get("before") ?? "");
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") ?? "20") || 20));
+      const { results } = await env.DB.prepare(
+        `SELECT match_id AS id, game_creation AS t, champion_id AS c, role AS r, opponent_id AS o, win AS w,
+                remake AS x, detail AS d
+         FROM player_matches WHERE puuid = ?1 AND game_creation < ?2
+         ORDER BY game_creation DESC LIMIT ?3`,
+      ).bind(player.puuid, Number.isFinite(before) && before > 0 ? before : Number.MAX_SAFE_INTEGER, limit)
+        .all<{ id: string; t: number; c: number; r: number; o: number | null; w: number; x: number; d: string | null }>();
+      return json({
+        matches: results.map((m) => [m.id, m.t, m.c, m.r, m.o, m.w, m.x, m.d ? JSON.parse(m.d) : null]),
+      }, 200, { "Cache-Control": "no-store" });
     }
 
     // Stats perso d'un joueur inscrit

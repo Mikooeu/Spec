@@ -1,6 +1,7 @@
 // Lecture du client LoL via les commandes Rust (src-tauri/src/lcu.rs).
-// Spec ne lit que la phase, le compte, la région et la session de sélection.
-// Il ne lit ni n'affiche les noms des autres joueurs, et ne verrouille jamais un pick.
+// Spec lit la phase, le compte, la région et la session de sélection. Pendant la draft, il n'affiche
+// jamais le nom des autres joueurs ; il ne verrouille jamais un pick. Les noms n'apparaissent qu'après coup,
+// dans le détail d'une partie terminée ou un profil cherché, comme dans le client.
 
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -192,5 +193,16 @@ export async function importRunes(page: { primaryStyle: number; subStyle: number
     }
     if (e === "not_running") return "Le client LoL ne répond pas.";
     return "Le client n’a pas accepté les runes. Réessaie dans un instant.";
+  }
+}
+
+/** Choisit les sorts d'invocateur (D puis F) pendant la draft. Message d'erreur, ou null si c'est fait. */
+export async function importSpells(spell1: number, spell2: number): Promise<string | null> {
+  try {
+    await invoke("lcu_set_spells", { spell1, spell2 });
+    return null;
+  } catch (e) {
+    if (e === "not_running") return "le client LoL ne répond pas.";
+    return "le client ne les a pas acceptés (sort pas encore débloqué ?).";
   }
 }

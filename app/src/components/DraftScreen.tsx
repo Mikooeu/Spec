@@ -130,16 +130,19 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
             </>
           )}
           <div className={`section-head${draft.banPhase ? " section-head--spaced" : ""}`}>
-            <h2>{autofill ? `Picks recommandés en autofill ${ROLE_LABELS[draft.role]}` : "Picks recommandés pour toi"}</h2>
+            <h2>{draft.myLocked ? "Ton pick est verrouillé" : autofill ? `Picks recommandés en autofill ${ROLE_LABELS[draft.role]}` : "Picks recommandés pour toi"}</h2>
             <span className="muted small">
               {int(Number(stats.meta.matches ?? 0))} parties Master+ · patch {patchLabel(stats.meta.patch)}
             </span>
           </div>
           {draft.myChamp != null && <MyPick stats={stats} draft={draft} />}
-          {autofill && (
+          {draft.myLocked && (
+            <p className="hint">Plus de présélection à faire : importe tes runes et tes sorts ci-dessus.</p>
+          )}
+          {!draft.myLocked && autofill && (
             <p className="hint">Ton pool est vide pour ce rôle : voici les meilleurs choix de cette draft.</p>
           )}
-          {rows.map(({ res, kind }, i) => (
+          {!draft.myLocked && rows.map(({ res, kind }, i) => (
             <div key={res.champ}>
               {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">Envie de tester ?</p>}
               <RecoRow stats={stats} res={res} rank={kind === "pool" ? String(i + 1) : "—"}
@@ -149,10 +152,10 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
                        role={draft.role} />
             </div>
           ))}
-          {rows.length === 0 && (
+          {!draft.myLocked && rows.length === 0 && (
             <p className="hint">Pas encore assez de parties pour ce rôle. Laisse tourner le collecteur.</p>
           )}
-          {wide && selected && <MatchupPanel stats={stats} res={selected} perso={perso} role={draft.role} />}
+          {wide && selected && !draft.myLocked && <MatchupPanel stats={stats} res={selected} perso={perso} role={draft.role} />}
         </section>
       </div>
 
@@ -313,7 +316,7 @@ export function useRecos(stats: Stats, draft: Draft, pool: number[]) {
     const r = recommend(stats, draft.role, pool, allies, enemies, draft.bans);
     const autofill = r.pool.length === 0;
     const rows: RecoItem[] = autofill
-      ? topForRole(stats, draft.role, allies, enemies, draft.bans, 4).map((res) => ({ res, kind: "discovery" as const }))
+      ? topForRole(stats, draft.role, allies, enemies, draft.bans, 6).map((res) => ({ res, kind: "discovery" as const }))
       : [...r.pool.map((res) => ({ res, kind: "pool" as const })),
          ...r.discoveries.map((res) => ({ res, kind: "discovery" as const }))];
     return { allies, enemies, autofill, rows };

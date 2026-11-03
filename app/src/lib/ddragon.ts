@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 
 export const CDN = "https://ddragon.leagueoflegends.com/cdn";
-export interface Info { name: string; icon: string; desc: string }
+export interface Info { name: string; icon: string; desc: string; boots?: boolean }
 export type InfoMap = Map<number, Info>;
 
 /** Texte brut d'une description Data Dragon (balises retirées sans jamais les interpréter). */
@@ -22,14 +22,15 @@ function load(key: string, url: string, parse: (json: { data: Record<string, unk
   return cache.get(key)!;
 }
 
-type RawItem = { name: string; plaintext?: string; image: { full: string } };
+type RawItem = { name: string; plaintext?: string; image: { full: string }; tags?: string[] };
 type RawSpell = { key: string; name: string; description: string; image: { full: string } };
 
 export function loadItems(version: string): Promise<InfoMap> {
   return load(`items-${version}`, `${CDN}/${version}/data/fr_FR/item.json`, ({ data }) => {
     const map: InfoMap = new Map();
     for (const [id, it] of Object.entries(data as Record<string, RawItem>)) {
-      map.set(Number(id), { name: it.name, desc: it.plaintext ?? "", icon: `${CDN}/${version}/img/item/${it.image.full}` });
+      map.set(Number(id), { name: it.name, desc: it.plaintext ?? "", icon: `${CDN}/${version}/img/item/${it.image.full}`,
+                            boots: it.tags?.includes("Boots") ?? false });
     }
     return map;
   });

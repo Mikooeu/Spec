@@ -9,7 +9,7 @@ import { syncRun } from "../src/sync.ts";
 // --- D1 et KV en mémoire, avec la même interface que Cloudflare -------------------------------
 function fakeD1() {
   const db = new DatabaseSync(":memory:");
-  for (const f of ["0001_init.sql", "0002_client_id.sql", "0003_devices.sql"]) {
+  for (const f of ["0001_init.sql", "0002_client_id.sql", "0003_devices.sql", "0004_match_detail.sql"]) {
     db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url).pathname, "utf8"));
   }
   class Stmt {
@@ -75,7 +75,10 @@ const reg = (e: Env, client: string, riotId: string, invite = "K7Q2-M9XD") =>
 
 function match(id: string, opts: { duration?: number; p1Champ?: number; p1Win?: boolean; withP2?: boolean } = {}): MatchDto {
   const mk = (puuid: string, championId: number, teamId: number, teamPosition: string, win: boolean) =>
-    ({ puuid, championId, teamId, teamPosition, win });
+    ({ puuid, championId, teamId, teamPosition, win, kills: 7, deaths: 2, assists: 9, totalMinionsKilled: 200,
+       neutralMinionsKilled: 14, goldEarned: 12000, totalDamageDealtToChampions: 24310.4, item0: 3089, item1: 6655,
+       item6: 3364, roleBoundItem: 3006, summoner1Id: 4, summoner2Id: 14,
+       perks: { styles: [{ style: 8100, selections: [{ perk: 8112 }] }, { style: 8200 }] } });
   const parts = [
     mk(P1, opts.p1Champ ?? 103, 100, "MIDDLE", opts.p1Win ?? true),
     mk(opts.withP2 ? P2 : "x".repeat(78), 122, 100, "TOP", opts.p1Win ?? true),
@@ -168,6 +171,17 @@ test("synchro : historique, détail des parties, remakes exclus, vis-à-vis", as
   const r2 = await (await call(e, "GET", "/v1/players/" + C2)).json() as { champions: number[][] };
   assert.deepEqual(r2.champions, [[122, 0, 1, 1]]);
 
+  // historique détaillé : du plus récent au plus ancien, sans pseudo, et sans appel Riot
+  riotCalls = 0;
+  const hist = await (await call(e, "GET", "/v1/players/" + C1 + "/matches?limit=10")).json() as { matches: unknown[][] };
+  assert.equal(riotCalls, 0);
+  assert.equal(hist.matches.length, 3);                  // remake compris (marqué), 404 exclue
+  const first = hist.matches.find((m) => m[0] === "EUW1_103")!;
+  assert.deepEqual(first.slice(2, 7), [103, 2, 134, 1, 0]);
+  assert.deepEqual(first[7], [1800, 7, 2, 9, 214, 12000, 24310, [3089, 6655, 0, 0, 0, 0, 3364, 3006], [4, 14], 8112, 8200]);
+  assert.ok(!JSON.stringify(hist).includes("p".repeat(78)));
+  assert.equal((await call(e, "GET", "/v1/players/" + "1a1b2c3d-1111-5222-9333-444455556666" + "/matches")).status, 404);
+
   // second passage : rien de nouveau, aucun appel
   log.length = 0;
   const again = await syncRun(e.DB, new Riot("RGAPI-test", "europe", 14, riotFetch(ids, matches, log)),
@@ -208,6 +222,14 @@ test("stats Master+ : envoi protégé par jeton, lecture avec ETag", async () =>
   assert.equal(got.headers.get("Access-Control-Allow-Origin"), "*");
   const etag = got.headers.get("ETag")!;
   assert.equal((await call(e, "GET", "/v1/stats", undefined, { "If-None-Match": etag })).status, 304);
+  // une version par région ; l'EUW reste la valeur par défaut
+  const kr = JSON.stringify({ meta: { patch: "16.22" }, champions: [], base: [] });
+  assert.equal((await call(e, "PUT", "/admin/stats?region=kr", kr, { Authorization: "Bearer " + ADMIN })).status, 200);
+  assert.equal(await (await call(e, "GET", "/v1/stats?region=kr")).text(), kr);
+  assert.equal(await (await call(e, "GET", "/v1/stats?region=euw")).text(), stats);
+  assert.equal((await call(e, "GET", "/v1/stats?region=world")).status, 404);
+  assert.equal((await call(e, "GET", "/v1/stats?region=mars")).status, 400);
+  assert.equal((await call(e, "PUT", "/admin/stats?region=mars", kr, { Authorization: "Bearer " + ADMIN })).status, 400);
 });
 
 test("administration : jeton requis pour lister et supprimer", async () => {

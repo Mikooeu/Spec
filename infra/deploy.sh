@@ -7,8 +7,8 @@
 # Ce qu'il fait :
 #   1. sur la VM : Python, 2 Go de mémoire d'appoint (swap), code Spec depuis GitHub, environnement Python ;
 #   2. copie .env (clé Riot, accès au serveur Spec) et la base de parties du Mac vers la VM (1re fois seulement) ;
-#   3. lance deux services : le collecteur (redémarré tout seul en cas d'erreur ou de redémarrage de la VM)
-#      et le calcul + l'envoi des stats toutes les 6 h.
+#   3. lance les services : un collecteur par région (EUW, KR, NA ; redémarrés tout seuls en cas d'erreur
+#      ou de redémarrage de la VM) et le calcul + l'envoi des stats de chaque région toutes les 6 h.
 # La clé Riot ne quitte le Mac que vers ta VM, par SSH ; elle n'est jamais mise sur GitHub.
 
 set -euo pipefail
@@ -59,6 +59,23 @@ RestartSec=30
 WantedBy=multi-user.target
 UNIT
 
+sudo tee /etc/systemd/system/spec-collector@.service >/dev/null <<'UNIT'
+[Unit]
+Description=Spec - collecteur de parties Master+ (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Spec
+ExecStart=/home/ubuntu/Spec/venv/bin/python -m collector run --region %i
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 sudo tee /etc/systemd/system/spec-stats.service >/dev/null <<'UNIT'
 [Unit]
 Description=Spec - calcul et envoi des stats
@@ -68,7 +85,7 @@ Type=oneshot
 User=ubuntu
 WorkingDirectory=/home/ubuntu/Spec
 Environment=DUCKDB_MEMORY_LIMIT=500MB
-ExecStart=/bin/bash -c 'venv/bin/python -m scoring build && venv/bin/python -m scoring export --upload'
+ExecStart=/bin/bash /home/ubuntu/Spec/infra/stats-all.sh
 UNIT
 
 sudo tee /etc/systemd/system/spec-stats.timer >/dev/null <<'UNIT'
@@ -103,15 +120,16 @@ if ! "${SSH[@]}" test -f Spec/data/draft.duckdb && [ -f data/draft.duckdb ]; the
 fi
 
 say "Démarrage des services…"
-"${SSH[@]}" "sudo systemctl enable --now spec-collector spec-stats.timer >/dev/null 2>&1 && sudo systemctl restart spec-collector"
+"${SSH[@]}" "sudo systemctl enable --now spec-collector spec-collector@kr spec-collector@na spec-stats.timer >/dev/null 2>&1 && sudo systemctl restart spec-collector spec-collector@kr spec-collector@na"
 sleep 5
-"${SSH[@]}" "systemctl is-active spec-collector >/dev/null && echo '✓ Collecteur en route' || echo '✗ Le collecteur ne démarre pas : journalctl -u spec-collector -n 30'"
+"${SSH[@]}" 'for s in spec-collector spec-collector@kr spec-collector@na; do systemctl is-active $s >/dev/null && echo "✓ $s en route" || echo "✗ $s ne démarre pas : journalctl -u $s -n 30"; done'
 cat <<EOM
 
-C'est en place. Le collecteur tourne 24 h/24 sur la VM et les stats partent au serveur toutes les 6 h.
+C'est en place. Les collecteurs EUW, KR et NA tournent 24 h/24 sur la VM et les stats de chaque région
+(plus « World ») partent au serveur toutes les 6 h.
 Tu peux fermer les onglets du collecteur et des stats sur le Mac.
 
-Suivre le collecteur :       ssh -i $KEY ubuntu@$IP "journalctl -u spec-collector -f"
-Avancement de la collecte :  ssh -i $KEY ubuntu@$IP "cd Spec && venv/bin/python -m collector stats"
+Suivre le collecteur EUW :   ssh -i $KEY ubuntu@$IP "journalctl -u spec-collector -f"   (KR : spec-collector@kr, NA : spec-collector@na)
+Avancement de la collecte :  ssh -i $KEY ubuntu@$IP "cd Spec && venv/bin/python -m collector stats --region kr"
 Stats tout de suite :        ssh -i $KEY ubuntu@$IP "sudo systemctl start spec-stats"
 EOM

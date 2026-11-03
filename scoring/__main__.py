@@ -80,7 +80,6 @@ def main() -> None:
     load_dotenv()
     data_dir = Path(os.getenv("DB_PATH", "data/draft.duckdb")).parent
     db_path = Path(os.getenv("DB_PATH", "data/draft.duckdb"))
-    stats_path = data_dir / "stats.duckdb"
     champs_path = data_dir / "champions.json"
 
     parser = argparse.ArgumentParser(prog="scoring")
@@ -88,7 +87,7 @@ def main() -> None:
     b = sub.add_parser("build", help="agréger les parties en stats")
     b.add_argument("--patch", help="forcer un patch, ex. 15.21")
     e = sub.add_parser("export", help="exporter les stats en JSON pour l'appli Spec")
-    e.add_argument("--out", default="app/public/stats.json")
+    e.add_argument("--out", help="fichier JSON (par défaut app/public/stats.json en EUW, data/export/stats-<région>.json sinon)")
     e.add_argument("--upload", action="store_true", help="envoyer aussi les stats au serveur Cloudflare de Spec")
     c = sub.add_parser("calibrate", help="vérifier et régler le score sur 10 %% de parties mises de côté")
     c.add_argument("--force", action="store_true", help="écrire les réglages même avec peu de parties")
@@ -98,7 +97,12 @@ def main() -> None:
     r.add_argument("--allies", default="")
     r.add_argument("--enemies", default="")
     r.add_argument("--bans", default="")
+    for cmd in (b, e, r):
+        cmd.add_argument("--region", default="euw", choices=["euw", "kr", "na", "world"],
+                         help="région des stats (world = EUW, KR et NA réunies)")
     args = parser.parse_args()
+    region = getattr(args, "region", "euw")
+    stats_path = data_dir / ("stats.duckdb" if region == "euw" else f"stats-{region}.duckdb")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -108,21 +112,30 @@ def main() -> None:
         from .items import Items
         champions = Champions.load(champs_path, refresh=True)
         items = Items.load(data_dir / "items.json", champions.version)
-        meta = build_stats(db_path, stats_path, args.patch, items=items)
+        from collector.config import db_path_for
+        if region == "world":
+            sources = [db_path_for(r) for r in ("euw", "kr", "na") if db_path_for(r).exists()]
+        else:
+            sources = [db_path_for(region)]
+        if not sources or not sources[0].exists():
+            sys.exit(f"Aucune base de parties pour {region} : lance d'abord le collecteur de cette région.")
+        meta = build_stats(sources, stats_path, args.patch, items=items)
         prev = f" + patch {meta['previous_patch']} à 50 %" if meta["previous_patch"] else ""
-        print(f"Stats prêtes : patch {meta['patch']}{prev}, {int(meta['matches'])} parties.")
+        print(f"Stats {region.upper()} prêtes : patch {meta['patch']}{prev}, {int(meta['matches'])} parties.")
         return
 
     if args.command == "export":
         from .export import export_json
-        meta = export_json(stats_path, Champions.load(champs_path), Params.load(data_dir / "params.json"),
-                           Path(args.out))
-        print(f"Stats exportées dans {args.out} (patch {meta.get('patch')}, {meta.get('matches')} parties).")
+        out = Path(args.out or ("app/public/stats.json" if region == "euw" else f"data/export/stats-{region}.json"))
+        if not stats_path.exists():
+            sys.exit(f"Pas de stats {region.upper()} : lance d'abord `python -m scoring build --region {region}`.")
+        meta = export_json(stats_path, Champions.load(champs_path), Params.load(data_dir / "params.json"), out)
+        print(f"Stats {region.upper()} exportées dans {out} (patch {meta.get('patch')}, {meta.get('matches')} parties).")
         if args.upload:
             from .upload import upload_stats
             load_dotenv()
-            size = upload_stats(Path(args.out), os.getenv("SPEC_API_URL", ""), os.getenv("SPEC_ADMIN_TOKEN", ""))
-            print(f"Stats envoyées au serveur Spec ({size // 1024} Ko).")
+            size = upload_stats(out, os.getenv("SPEC_API_URL", ""), os.getenv("SPEC_ADMIN_TOKEN", ""), region=region)
+            print(f"Stats {region.upper()} envoyées au serveur Spec ({size // 1024} Ko).")
         return
 
     if args.command == "calibrate":

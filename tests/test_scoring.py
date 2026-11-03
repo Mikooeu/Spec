@@ -144,7 +144,11 @@ def test_upload_sends_token_and_rejects_bad_config(tmp_path):
     token = "t" * 40
     size = upload_stats(f, "https://spec.example.workers.dev/", token, transport=httpx.MockTransport(handler))
     assert size == f.stat().st_size
-    assert seen == {"auth": f"Bearer {token}", "url": "https://spec.example.workers.dev/admin/stats", "method": "PUT"}
+    assert seen == {"auth": f"Bearer {token}", "url": "https://spec.example.workers.dev/admin/stats?region=euw", "method": "PUT"}
+    upload_stats(f, "https://spec.example.workers.dev", token, transport=httpx.MockTransport(handler), region="kr")
+    assert seen["url"].endswith("/admin/stats?region=kr")
+    with pytest.raises(SystemExit):
+        upload_stats(f, "https://spec.example.workers.dev", token, region="mars")
     with pytest.raises(SystemExit):
         upload_stats(f, "http://insecure.example", token)
     with pytest.raises(SystemExit):
@@ -266,3 +270,28 @@ def test_export_includes_champion_pages(tmp_path, champions):
     data = _json.loads(out.read_text())
     ahri = [e for c, r, e in data["champ"] if c == 1 and r == 2]
     assert ahri and ahri[0]["spells"][0][:2] == [4, 14]
+
+
+def test_world_adds_up_several_regions(tmp_path):
+    euw, kr = tmp_path / "draft.duckdb", tmp_path / "draft-kr.duckdb"
+    synthetic_db(euw, n_matches=300, seed=1)
+    store = synthetic_db(kr, n_matches=200, seed=2)
+    with store._connect() as con:   # numéros de parties coréens distincts
+        con.execute("UPDATE participants SET match_id = replace(match_id, 'EUW1_', 'KR_')")
+        con.execute("UPDATE matches SET match_id = replace(match_id, 'EUW1_', 'KR_'), platform = 'kr'")
+    meta = build_stats([euw, kr], tmp_path / "stats-world.duckdb")
+    assert int(meta["matches"]) == 500
+    assert int(build_stats([kr], tmp_path / "stats-kr.duckdb")["matches"]) == 200
+
+
+def test_spells_change_against_a_matchup_only_when_clearly_better():
+    from scoring.builds import compute_builds
+    from scoring.items import Items
+    # Jinx : Flash + Soins d'habitude ; face à 22 (Ashe), Flash + Purge gagne nettement plus
+    rows = ([(9, "BOTTOM", 1, 1.0, 4, 7, "", None, None, 30)] * 60 + [(9, "BOTTOM", 0, 1.0, 4, 7, "", None, None, 30)] * 60
+            + [(9, "BOTTOM", 1, 1.0, 1, 4, "", None, None, 22)] * 30 + [(9, "BOTTOM", 0, 1.0, 1, 4, "", None, None, 22)] * 5
+            + [(9, "BOTTOM", 1, 1.0, 4, 7, "", None, None, 22)] * 10 + [(9, "BOTTOM", 0, 1.0, 4, 7, "", None, None, 22)] * 20
+            + [(9, "BOTTOM", 1, 1.0, 7, 12, "", None, None, 22)] * 25)   # sans Flash : jamais proposé
+    [[_, _, e]] = compute_builds(iter(rows), Items(None))
+    assert e["spells"][0][:2] == [4, 7]
+    assert [v[:3] for v in e["spellsVs"]] == [[22, 1, 4]]

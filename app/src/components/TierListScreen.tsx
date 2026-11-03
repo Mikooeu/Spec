@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ROLE_LABELS, TIER_MIN_PICKRATE, tierList, type Stats, type TierRow } from "../lib/score";
 import { champName, int, patchLabel, pct, wrTone } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
@@ -7,8 +7,9 @@ type SortKey = "winrate" | "pickrate" | "banrate";
 const SORTS: [SortKey, string][] = [["winrate", "Winrate"], ["pickrate", "Pickrate"], ["banrate", "Banrate"]];
 
 /** Tier list solo/duo Master+ par rôle, triable par winrate, pickrate ou banrate. */
-export function TierListScreen({ stats, role, onRole, onOpen }:
-  { stats: Stats; role: number; onRole: (role: number) => void; onOpen: (champ: number, role: number) => void }) {
+export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabel = "EUW" }:
+  { stats: Stats; role: number; onRole: (role: number) => void; onOpen: (champ: number, role: number) => void;
+    region?: ReactNode; regionLabel?: string }) {
   const [sort, setSort] = useState<SortKey>("winrate");
   const [asc, setAsc] = useState(false); // décroissant par défaut
   // même colonne : on inverse l'ordre ; autre colonne : on repart en décroissant
@@ -28,9 +29,10 @@ export function TierListScreen({ stats, role, onRole, onOpen }:
     <div className="content">
       <header className="page-head">
         <div>
-          <p className="overline">Tier list · solo/duo Master+ · patch {patchLabel(stats.meta.patch)}</p>
+          <p className="overline">Tier list · solo/duo Master+ {regionLabel} · patch {patchLabel(stats.meta.patch)}</p>
           <h1>Tier list</h1>
         </div>
+        {region && <div className="head-actions">{region}</div>}
       </header>
 
       <div className="tier-controls">

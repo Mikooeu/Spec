@@ -84,11 +84,11 @@ export async function syncRun(db: D1Database, riot: Riot, seasonStart: number, n
   if (rows.length) {
     await db.prepare(
       `INSERT OR REPLACE INTO player_matches
-         (puuid, match_id, game_creation, champion_id, role, opponent_id, win, remake)
+         (puuid, match_id, game_creation, champion_id, role, opponent_id, win, remake, detail)
        SELECT json_extract(value, '$.puuid'), json_extract(value, '$.matchId'),
               json_extract(value, '$.gameCreation'), json_extract(value, '$.championId'),
               json_extract(value, '$.role'), json_extract(value, '$.opponentId'),
-              json_extract(value, '$.win'), json_extract(value, '$.remake')
+              json_extract(value, '$.win'), json_extract(value, '$.remake'), json(json_extract(value, '$.detail'))
        FROM json_each(?1)`,
     ).bind(JSON.stringify(rows.map((r) => ({ ...r, win: r.win ? 1 : 0, remake: r.remake ? 1 : 0 })))).run();
     report.stored = rows.length;

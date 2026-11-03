@@ -55,16 +55,38 @@ export interface MatchDto {
     queueId: number;
     gameCreation: number;
     gameDuration: number;
-    participants: {
-      puuid: string; championId: number; teamId: number; teamPosition: string; win: boolean;
-      gameEndedInEarlySurrender?: boolean;
-    }[];
+    participants: ParticipantDto[];
   };
+}
+
+export interface ParticipantDto {
+  puuid: string; championId: number; teamId: number; teamPosition: string; win: boolean;
+  gameEndedInEarlySurrender?: boolean;
+  kills?: number; deaths?: number; assists?: number;
+  totalMinionsKilled?: number; neutralMinionsKilled?: number;
+  goldEarned?: number; totalDamageDealtToChampions?: number;
+  item0?: number; item1?: number; item2?: number; item3?: number; item4?: number; item5?: number; item6?: number;
+  roleBoundItem?: number;   // emplacement de la quête de rôle (bottes des ADC)
+  summoner1Id?: number; summoner2Id?: number;
+  perks?: { styles?: { style?: number; selections?: { perk?: number }[] }[] };
+}
+
+/** Détail compact d'une partie : [durée, K, D, A, CS, or, dégâts, [objets 0 à 6 puis celui de la quête de rôle],
+ *  [2 sorts], rune clé, arbre secondaire]. */
+export type Detail = [number, number, number, number, number, number, number, number[], number[], number, number];
+
+export function detailOf(p: ParticipantDto, duration: number): Detail {
+  const n = (x: number | undefined) => (Number.isFinite(x) ? Math.max(0, Math.round(x as number)) : 0);
+  const items = [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6, p.roleBoundItem].map(n);
+  const styles = p.perks?.styles ?? [];
+  return [n(duration), n(p.kills), n(p.deaths), n(p.assists),
+          n(p.totalMinionsKilled) + n(p.neutralMinionsKilled), n(p.goldEarned), n(p.totalDamageDealtToChampions),
+          items, [n(p.summoner1Id), n(p.summoner2Id)], n(styles[0]?.selections?.[0]?.perk), n(styles[1]?.style)];
 }
 
 export interface PlayerRow {
   puuid: string; matchId: string; gameCreation: number; championId: number;
-  role: number; opponentId: number | null; win: boolean; remake: boolean;
+  role: number; opponentId: number | null; win: boolean; remake: boolean; detail: Detail;
 }
 
 /** Lignes à enregistrer pour les joueurs inscrits présents dans la partie. */
@@ -81,6 +103,7 @@ export function rowsForPlayers(m: MatchDto, registered: Set<string>): PlayerRow[
       return {
         puuid: p.puuid, matchId: m.metadata.matchId, gameCreation: m.info.gameCreation,
         championId: p.championId, role, opponentId: opp?.championId ?? null, win: p.win, remake,
+        detail: detailOf(p, m.info.gameDuration),
       };
     });
 }

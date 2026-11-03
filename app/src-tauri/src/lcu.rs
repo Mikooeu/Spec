@@ -3,9 +3,12 @@
 //! Sécurité :
 //! - le client n'écoute que sur 127.0.0.1 ; on n'appelle jamais d'autre hôte ;
 //! - seuls quelques chemins en lecture sont autorisés (liste blanche exacte) ;
-//! - deux écritures seulement : la présélection (hover) d'un champion, sans jamais envoyer
-//!   `completed` (Spec ne verrouille pas un pick), et l'import de runes dans la page sélectionnée
-//!   dans la draft (ou une page « Spec » si celle-ci n'est pas modifiable) ; aucune autre page n'est touchée.
+//! - quelques lectures construites ici à partir d'identifiants validés (détail d'une partie, profil,
+//!   rang et historique d'un joueur cherché par son Riot ID), comme le fait le client dans son profil ;
+//! - trois écritures seulement : la présélection (hover) d'un champion, sans jamais envoyer
+//!   `completed` (Spec ne verrouille pas un pick), l'import de runes dans la page sélectionnée
+//!   dans la draft (ou une page « Spec » si celle-ci n'est pas modifiable ; aucune autre page n'est touchée),
+//!   et le choix des deux sorts d'invocateur pendant la draft.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -33,6 +36,60 @@ pub const READ_PATHS: &[&str] = &[
 pub fn match_history_path(count: u32) -> String {
     let end = count.clamp(1, 50);
     format!("/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex={end}")
+}
+
+/// Encodage d'un morceau d'URL : tout sauf les caractères non réservés.
+fn encode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+/// Identifiant de joueur du client (UUID) : lettres, chiffres, « - » et « _ » seulement.
+pub fn valid_puuid(p: &str) -> bool {
+    (20..=100).contains(&p.len()) && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Riot ID : nom de 3 à 16 caractères (sans « # », « / », « ? » ni caractère de contrôle), tag de 2 à 5 lettres ou chiffres.
+pub fn valid_riot_id(name: &str, tag: &str) -> bool {
+    let n = name.chars().count();
+    (3..=16).contains(&n)
+        && name.chars().all(|c| !c.is_control() && !matches!(c, '#' | '/' | '?' | '\\'))
+        && (2..=5).contains(&tag.len())
+        && tag.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+pub fn game_path(game_id: u64) -> Result<String, String> {
+    if game_id == 0 { return Err("bad_game".into()); }
+    Ok(format!("/lol-match-history/v1/games/{game_id}"))
+}
+
+pub fn lookup_paths(name: &str, tag: &str) -> Result<[String; 2], String> {
+    if !valid_riot_id(name, tag) { return Err("bad_riot_id".into()); }
+    Ok([
+        format!("/lol-summoner/v1/alias/lookup?gameName={}&tagLine={}", encode(name), encode(tag)),
+        format!("/lol-summoner/v1/summoners?name={}", encode(&format!("{name}#{tag}"))),
+    ])
+}
+
+pub fn player_paths(puuid: &str, count: u32) -> Result<[String; 3], String> {
+    if !valid_puuid(puuid) { return Err("bad_puuid".into()); }
+    let end = count.clamp(1, 20);
+    Ok([
+        format!("/lol-summoner/v2/summoners/puuid/{puuid}"),
+        format!("/lol-ranked/v1/ranked-stats/{puuid}"),
+        format!("/lol-match-history/v1/products/lol/{puuid}/matches?begIndex=0&endIndex={end}"),
+    ])
+}
+
+/// Corps du choix des sorts : deux sorts différents, identifiants plausibles, rien d'autre.
+pub fn spells_body(spell1: u32, spell2: u32) -> Result<Value, String> {
+    let ok = |s: u32| (1..=99).contains(&s);
+    if !ok(spell1) || !ok(spell2) || spell1 == spell2 { return Err("bad_spells".into()); }
+    Ok(json!({ "spell1Id": spell1, "spell2Id": spell2 }))
 }
 
 pub fn is_allowed(path: &str) -> bool {
@@ -197,6 +254,42 @@ impl Lcu {
             200..=299 => resp.json().await.map_err(|_| "bad_json".into()),
             code => Err(format!("http_{code}")),
         }
+    }
+
+    /// Lecture d'un chemin construit ici (jamais un chemin venu de l'interface).
+    async fn read(&self, path: &str) -> Result<Value, String> {
+        let resp = self.raw(reqwest::Method::GET, path, None).await?;
+        resp.json().await.map_err(|_| "bad_json".into())
+    }
+
+    /// Détail d'une partie (les 10 joueurs), comme quand on l'ouvre dans le client.
+    pub async fn game(&self, game_id: u64) -> Result<Value, String> {
+        self.read(&game_path(game_id)?).await
+    }
+
+    /// Joueur cherché par son Riot ID.
+    pub async fn find_player(&self, name: &str, tag: &str) -> Result<Value, String> {
+        let [alias, legacy] = lookup_paths(name, tag)?;
+        match self.read(&alias).await {
+            Ok(v) if v.get("puuid").and_then(Value::as_str).is_some_and(|p| !p.is_empty()) => Ok(v),
+            Err(e) if e == "not_running" => Err(e),
+            _ => self.read(&legacy).await.map_err(|e| if e == "http_404" { "not_found".into() } else { e }),
+        }
+    }
+
+    /// Profil, rang et dernières parties d'un joueur (identifiant du client).
+    pub async fn player(&self, puuid: &str, count: u32) -> Result<Value, String> {
+        let [summoner, ranked, history] = player_paths(puuid, count)?;
+        let summoner = self.read(&summoner).await?;
+        let ranked = self.read(&ranked).await.unwrap_or(Value::Null);
+        let history = self.read(&history).await.unwrap_or(Value::Null);
+        Ok(json!({ "summoner": summoner, "ranked": ranked, "history": history }))
+    }
+
+    /// Choisit les deux sorts d'invocateur (D puis F) pendant la draft.
+    pub async fn set_spells(&self, spell1: u32, spell2: u32) -> Result<(), String> {
+        let body = spells_body(spell1, spell2)?;
+        self.raw(reqwest::Method::PATCH, "/lol-champ-select/v1/session/my-selection", Some(&body)).await.map(|_| ())
     }
 
     async fn raw(&self, method: reqwest::Method, path: &str, body: Option<&Value>) -> Result<reqwest::Response, String> {
@@ -429,11 +522,43 @@ mod tests {
         assert!(!has_free_slot(&json!([]), &json!({})));
     }
 
+    #[test]
+    fn built_paths_only_take_validated_ids() {
+        assert_eq!(game_path(7412345678).unwrap(), "/lol-match-history/v1/games/7412345678");
+        assert!(game_path(0).is_err());
+        let [alias, legacy] = lookup_paths("Héo Lune", "EUW").unwrap();
+        assert_eq!(alias, "/lol-summoner/v1/alias/lookup?gameName=H%C3%A9o%20Lune&tagLine=EUW");
+        assert_eq!(legacy, "/lol-summoner/v1/summoners?name=H%C3%A9o%20Lune%23EUW");
+        assert!(lookup_paths("ab", "EUW").is_err());
+        assert!(lookup_paths("../../lol-login", "EUW").is_err());
+        assert!(lookup_paths("Miko", "K/CO").is_err());
+        assert!(lookup_paths("Mi?ko", "EUW").is_err());
+        let uuid = "0a1b2c3d-1111-5222-9333-444455556666";
+        let [s, r, h] = player_paths(uuid, 500).unwrap();
+        assert_eq!(s, format!("/lol-summoner/v2/summoners/puuid/{uuid}"));
+        assert_eq!(r, format!("/lol-ranked/v1/ranked-stats/{uuid}"));
+        assert!(h.ends_with("begIndex=0&endIndex=20"));
+        assert!(player_paths("../x", 20).is_err());
+        assert!(player_paths("a/b/c/d/e/f/g/h/i/j/k/l", 20).is_err());
+    }
+
+    #[test]
+    fn spells_body_is_minimal() {
+        assert_eq!(spells_body(14, 4).unwrap(), json!({ "spell1Id": 14, "spell2Id": 4 }));
+        assert!(spells_body(4, 4).is_err());
+        assert!(spells_body(0, 4).is_err());
+        assert!(spells_body(4, 1000).is_err());
+    }
+
     #[tokio::test]
     async fn rejects_forbidden_path_before_any_call() {
         let lcu = Lcu::new();
         assert_eq!(lcu.get("/lol-login/v1/session").await, Err("forbidden_path".into()));
         assert_eq!(lcu.preselect(1, 0).await, Err("bad_champion".into()));
         assert_eq!(lcu.set_rune_page("Ahri", 8100, 8100, &[]).await, Err("bad_page".into()));
+        assert_eq!(lcu.set_spells(4, 4).await, Err("bad_spells".into()));
+        assert_eq!(lcu.player("../../x", 20).await, Err("bad_puuid".into()));
+        assert_eq!(lcu.find_player("a", "b").await, Err("bad_riot_id".into()));
+        assert_eq!(lcu.game(0).await, Err("bad_game".into()));
     }
 }

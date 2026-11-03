@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ROLE_LABELS, gamesIn, type Stats } from "../lib/score";
-import { champName, normalize } from "../lib/ui";
+import { champName, normalize, pct, wrTone } from "../lib/ui";
 import { PREFILL_MIN_GAMES, topChampions, type PersonalState } from "../lib/api";
 import { ChampionIcon } from "./ChampionIcon";
 
@@ -13,7 +13,9 @@ interface Props {
   perso: PersonalState;
 }
 
-/** Pool : les champions joués dans chaque rôle, recommandés en priorité pendant la draft. */
+const WR_MIN_GAMES = 100;   // en dessous, le winrate du rôle n'est pas affiché (trop peu de parties)
+
+/** Champion pool : les champions joués dans chaque rôle, recommandés en priorité pendant la draft. */
 export function PoolScreen({ stats, pools, onChange, perso }: Props) {
   const [role, setRole] = useState(2);
   const [query, setQuery] = useState("");
@@ -36,6 +38,12 @@ export function PoolScreen({ stats, pools, onChange, perso }: Props) {
       .sort((a, b) => gamesIn(stats, b.id, role) - gamesIn(stats, a.id, role) || a.name.localeCompare(b.name, "fr"));
   }, [stats, query, role]);
 
+  // winrate Master+ du champion dans le rôle choisi (Ambessa n'a pas le même en top et en jungle)
+  const roleWr = (champ: number) => {
+    const [g, w] = stats.base.get(`${champ}|${role}`) ?? [0, 0];
+    return g >= WR_MIN_GAMES ? w / g : null;
+  };
+
   const toggle = (champ: number) => {
     const next = pools.map((p) => [...p]);
     next[role] = pool.includes(champ) ? pool.filter((c) => c !== champ) : [...pool, champ];
@@ -46,11 +54,11 @@ export function PoolScreen({ stats, pools, onChange, perso }: Props) {
     <div className="content">
       <header className="page-head">
         <div>
-          <p className="overline">Pool</p>
-          <h1>Ton pool</h1>
+          <p className="overline">Champion pool</p>
+          <h1>Ton champion pool</h1>
         </div>
       </header>
-      <p className="muted page-intro">Choisis les champions que tu joues dans chaque rôle : Spec te les recommande en priorité pendant la draft.</p>
+      <p className="muted page-intro">Choisis les champions que tu joues dans chaque rôle : Spec te les recommande en priorité pendant la draft. Le pourcentage est leur winrate Master+ dans le rôle choisi.</p>
 
       <section className="pool">
         <div className="segmented" role="tablist" aria-label="Rôle">
@@ -77,6 +85,7 @@ export function PoolScreen({ stats, pools, onChange, perso }: Props) {
             <button key={c} className="chip" onClick={() => toggle(c)} aria-label={`Retirer ${champName(stats, c)}`}>
               <ChampionIcon stats={stats} champ={c} size={1.75} />
               {champName(stats, c)}
+              {roleWr(c) != null && <span className={`chip__wr tone-${wrTone(roleWr(c)!)}`}>{pct(roleWr(c)!)}</span>}
               <span className="chip__x" aria-hidden>×</span>
             </button>
           ))}
@@ -96,13 +105,18 @@ export function PoolScreen({ stats, pools, onChange, perso }: Props) {
           )}
         </div>
         <div className="grid">
-          {list.map((c) => (
-            <button key={c.id} className={`tile${pool.includes(c.id) ? " is-selected" : ""}`}
-                    aria-pressed={pool.includes(c.id)} onClick={() => toggle(c.id)}>
-              <ChampionIcon stats={stats} champ={c.id} size={3} />
-              <span>{c.name}</span>
-            </button>
-          ))}
+          {list.map((c) => {
+            const wr = roleWr(c.id);
+            return (
+              <button key={c.id} className={`tile${pool.includes(c.id) ? " is-selected" : ""}`}
+                      aria-pressed={pool.includes(c.id)} onClick={() => toggle(c.id)}
+                      title={wr == null ? `Pas assez de parties ${ROLE_LABELS[role]}` : `${pct(wr)} de winrate en ${ROLE_LABELS[role]} (Master+)`}>
+                <ChampionIcon stats={stats} champ={c.id} size={3} />
+                <span>{c.name}</span>
+                <span className={`tile__wr tone-${wr == null ? "neutral" : wrTone(wr)}`}>{wr == null ? "—" : pct(wr)}</span>
+              </button>
+            );
+          })}
           {list.length === 0 && <p className="muted small">Aucun champion ne correspond à « {query} ».</p>}
         </div>
       </section>

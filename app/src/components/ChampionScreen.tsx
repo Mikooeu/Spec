@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ROLE_LABELS, gamesIn, smoothed, tierLetter, type ChampPage, type Stats,
 } from "../lib/score";
@@ -15,6 +15,9 @@ interface Props {
   onBack: () => void;
   /** Ouverte automatiquement au lancement de la partie. */
   inGame?: boolean;
+  /** Sélecteur de région des stats. */
+  region?: ReactNode;
+  regionLabel?: string;
 }
 
 const ROLE_MIN_GAMES = 200;   // un rôle est proposé à partir de ce nombre de parties
@@ -22,7 +25,7 @@ const RARE = 0.01;            // en dessous de 1 % des parties, l'objet est gris
 const RELATIVE = 0.015;       // vert / rouge à 1,5 point de la moyenne du rang
 
 /** Page d'un champion : ordre des sorts, runes, objets de départ, sorts d'invocateur, bottes, objets, builds. */
-export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = false }: Props) {
+export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = false, region, regionLabel = "EUW" }: Props) {
   const items = useInfo(loadItems, stats.ddragon);
   const spells = useInfo(loadSpells, stats.ddragon);
   const page = stats.champPages.get(`${champ}|${role}`) ?? null;
@@ -36,12 +39,15 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
 
   return (
     <div className="content champ">
-      <button className="link-back" onClick={onBack}>← {inGame ? "Draft" : `Tier list · ${ROLE_LABELS[role]}`}</button>
+      <div className="champ__top">
+        <button className="link-back" onClick={onBack}>← {inGame ? "Draft" : `Tier list · ${ROLE_LABELS[role]}`}</button>
+        {region}
+      </div>
       <header className="champ__head">
         <ChampionIcon stats={stats} champ={champ} size={3.5} />
         <div>
           <p className="overline">
-            {inGame ? "En partie · " : ""}{ROLE_LABELS[role]} · Tier {tier} · patch {patchLabel(stats.meta.patch)}
+            {inGame ? "En partie · " : ""}{ROLE_LABELS[role]} · Tier {tier} · Master+ {regionLabel} · patch {patchLabel(stats.meta.patch)}
           </p>
           <h1>{champName(stats, champ)}</h1>
         </div>

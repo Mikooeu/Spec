@@ -10,13 +10,15 @@ from .db import Store
 def main() -> None:
     parser = argparse.ArgumentParser(prog="collector", description="Collecteur Master+ Spec")
     parser.add_argument("command", choices=["run", "stats"], help="run : collecter, stats : résumé")
+    parser.add_argument("--region", default="euw", choices=["euw", "kr", "na"],
+                        help="région collectée (euw par défaut)")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
                         datefmt="%H:%M:%S")
     logging.getLogger("httpx").setLevel(logging.WARNING)  # pas d'URL ni de bruit dans les logs
 
-    cfg = load_config()
+    cfg = load_config(args.region)
     store = Store(cfg.db_path, read_only=(args.command == "stats"))
     try:
         if args.command == "stats":

@@ -37,6 +37,8 @@ cd ~/Documents/Spec && source venv/bin/activate
 python -m collector stats
 ```
 
+Depuis la 0.3.3, Spec collecte trois régions : `--region euw` (par défaut), `--region kr` et `--region na`, chacune dans sa propre base (`data/draft.duckdb`, `data/draft-kr.duckdb`, `data/draft-na.duckdb`). Riot compte le débit séparément par région : KR et NA ne ralentissent pas l'EUW. Sur la VM, `deploy.sh` lance les trois collecteurs.
+
 Depuis la 0.2, chaque partie enregistre aussi les bans, les sorts d'invocateur et les objets de fin de partie. Pour 1 partie sur 3, le collecteur télécharge en plus son déroulé (ordre des sorts et des achats) : un appel Riot de plus, d'où une collecte environ 25 % plus lente. Le banrate de la tier list et la page champion (0.3) s'appuient sur ces parties.
 
 ## 2. Construire les stats
@@ -48,6 +50,8 @@ python -m scoring build
 ```
 
 Le patch le plus récent est utilisé. Tant qu'il a moins de 20 000 parties, le patch précédent est ajouté à 50 %.
+
+Par région : `python -m scoring build --region kr` (ou `na`, ou `world` pour réunir EUW, KR et NA), puis `python -m scoring export --region kr --upload`. Sur la VM, `infra/stats-all.sh` fait les quatre toutes les 6 h. La draft utilise toujours l'EUW ; la tier list et les pages champion ont un sélecteur World, EUW, KR, NA.
 
 Depuis la 0.1.1, le collecteur enregistre aussi la page de runes de chaque joueur (relance-le pour en profiter). `build` en tire la meilleure page par champion et par rôle, choix après choix (rune clé, runes mineures, arbre secondaire, fragments), et une autre rune clé face à un vis-à-vis quand elle y fait nettement mieux sur assez de parties.
 

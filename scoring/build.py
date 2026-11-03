@@ -45,10 +45,44 @@ def choose_patches(src_con) -> tuple[str, str | None, dict]:
 HOLDOUT_SQL = "hash(m.match_id) % 10 = 0"   # 10 % des parties, toujours les mêmes
 
 
-def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
+SOURCE_TABLES = ("matches", "participants", "runes", "match_ext", "bans", "builds")
+
+
+def _attach(con, path: Path, alias: str) -> None:
+    """Attache une base du collecteur en lecture seule, en attendant son tour si besoin."""
+    deadline = time.monotonic() + 60
+    while True:
+        try:
+            con.execute(f"ATTACH '{Path(path).as_posix()}' AS {alias} (READ_ONLY)")
+            return
+        except duckdb.Error as exc:
+            if "lock" not in str(exc).lower() or time.monotonic() > deadline:
+                raise
+            time.sleep(0.3)
+
+
+def _has(con, table: str) -> bool:
+    return con.execute(
+        """SELECT (SELECT count(*) FROM duckdb_tables() WHERE database_name = 'src' AND table_name = ?)
+                + (SELECT count(*) FROM duckdb_views() WHERE database_name = 'src' AND view_name = ?)""",
+        [table, table]).fetchone()[0] > 0
+
+
+def _stream(cursor, size: int = 20_000):
+    """Lignes lues par paquets : la petite VM n'a pas à tout garder en mémoire."""
+    while True:
+        chunk = cursor.fetchmany(size)
+        if not chunk:
+            return
+        yield from chunk
+
+
+def build_stats(db_path: Path | list[Path], out_path: Path, patch: str | None = None,
                 holdout: bool = False, items: Items | None = None) -> dict:
-    """holdout=True : exclut les 10 % de parties réservées au calibrage."""
-    db_path, out_path = Path(db_path), Path(out_path)
+    """holdout=True : exclut les 10 % de parties réservées au calibrage.
+    db_path : une base, ou plusieurs (« World ») dont les parties sont additionnées."""
+    sources = [Path(x) for x in db_path] if isinstance(db_path, (list, tuple)) else [Path(db_path)]
+    db_path, out_path = sources[0], Path(out_path)
     tmp = out_path.with_suffix(".building.duckdb")
     tmp.unlink(missing_ok=True)
 
@@ -61,16 +95,19 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
         con.execute(f"SET temp_directory = '{(db_path.parent / 'tmp').as_posix()}'")
         con.execute("SET preserve_insertion_order = false")
         con.execute("SET threads = 1")
-    # attache la base du collecteur en lecture seule, en attendant son tour si besoin
-    deadline = time.monotonic() + 60
-    while True:
-        try:
-            con.execute(f"ATTACH '{db_path.as_posix()}' AS src (READ_ONLY)")
-            break
-        except duckdb.Error as exc:
-            if "lock" not in str(exc).lower() or time.monotonic() > deadline:
-                raise
-            time.sleep(0.3)
+    # bases du collecteur en lecture seule (plusieurs pour « World » : elles sont réunies dans des vues)
+    if len(sources) == 1:
+        _attach(con, sources[0], "src")
+    else:
+        for i, path in enumerate(sources):
+            _attach(con, path, f"s{i}")
+        con.execute("ATTACH ':memory:' AS src")
+        for table in SOURCE_TABLES:
+            parts = [f"SELECT * FROM s{i}.{table}" for i in range(len(sources))
+                     if con.execute("SELECT count(*) FROM duckdb_tables() WHERE database_name = ? AND table_name = ?",
+                                    [f"s{i}", table]).fetchone()[0]]
+            if parts:
+                con.execute(f"CREATE VIEW src.{table} AS " + " UNION ALL ".join(parts))
 
     try:
         current, previous, counts = choose_patches(con)
@@ -91,9 +128,7 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
         """ + (f" AND NOT ({HOLDOUT_SQL})" if holdout else ""),
             [current, weight_prev, current, previous or current])
         # pages de runes (collectées depuis la 0.1.1 ; la table peut ne pas encore exister)
-        has_runes = con.execute(
-            "SELECT count(*) FROM duckdb_tables() WHERE database_name = 'src' AND table_name = 'runes'"
-        ).fetchone()[0] > 0
+        has_runes = _has(con, "runes")
         rune_rows, laner_rows = [], []
         if has_runes:
             con.execute("""
@@ -102,16 +137,16 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
                        ru.p1, ru.p2, ru.p3, ru.sub_style, ru.s1, ru.s2, ru.sh1, ru.sh2, ru.sh3
                 FROM p a JOIN src.runes ru
                   ON ru.match_id = a.match_id AND ru.team_id = a.team_id AND ru.champion_id = a.champ""")
+            # regroupées en SQL (winrate moyen, poids total) : compute_runes ne fait que des sommes
             rune_rows = con.execute("""SELECT champ, role, keystone, primary_style, p1, p2, p3,
-                                              sub_style, s1, s2, sh1, sh2, sh3, win, w FROM rr""").fetchall()
+                                              sub_style, s1, s2, sh1, sh2, sh3,
+                                              sum(w * win) / sum(w), sum(w) FROM rr GROUP BY ALL""").fetchall()
             laner_rows = con.execute("""
-                SELECT a.champ, a.role, b.champ, a.keystone, a.win, a.w
+                SELECT a.champ, a.role, b.champ, a.keystone, sum(a.w * a.win) / sum(a.w), sum(a.w)
                 FROM rr a JOIN p b ON a.match_id = b.match_id AND a.team_id <> b.team_id AND a.role = b.role
-            """).fetchall()
+                GROUP BY 1, 2, 3, 4""").fetchall()
         # bans (collectés depuis la 0.2) : banrate = bans / parties avec le détail
-        has_bans = con.execute(
-            "SELECT count(*) FROM duckdb_tables() WHERE database_name = 'src' AND table_name = 'bans'"
-        ).fetchone()[0] > 0
+        has_bans = _has(con, "bans")
         ban_rows, ban_matches = [], 0.0
         if has_bans:
             weighted = """SELECT e.match_id, CASE WHEN m.patch = ? THEN 1.0 ELSE ? END AS w
@@ -123,17 +158,19 @@ def build_stats(db_path: Path, out_path: Path, patch: str | None = None,
             ban_rows = con.execute("""SELECT b.champion_id, sum(bm.w) FROM src.bans b JOIN bm USING (match_id)
                                       GROUP BY 1""").fetchall()
         # page champion : sorts, objets, ordre des sorts (collectés depuis la 0.2)
-        has_builds = con.execute(
-            "SELECT count(*) FROM duckdb_tables() WHERE database_name = 'src' AND table_name = 'builds'"
-        ).fetchone()[0] > 0
-        build_rows = con.execute("""
-            SELECT a.champ, a.role, a.win, a.w, b.spell1, b.spell2, b.items, b.skills, b.purchases
-            FROM p a JOIN src.builds b
-              ON b.match_id = a.match_id AND b.team_id = a.team_id AND b.champion_id = a.champ""").fetchall() \
-            if has_builds else []
+        champ_pages = []
+        if _has(con, "builds"):
+            # avec le champion d'en face sur la même lane (sorts conseillés par matchup)
+            cur = con.execute("""
+                SELECT a.champ, a.role, a.win, a.w, b.spell1, b.spell2, b.items, b.skills, b.purchases, o.champ
+                FROM p a JOIN src.builds b
+                  ON b.match_id = a.match_id AND b.team_id = a.team_id AND b.champion_id = a.champ
+                LEFT JOIN p o ON o.match_id = a.match_id AND o.team_id <> a.team_id AND o.role = a.role""")
+            champ_pages = compute_builds(_stream(cur), items or Items(None))
         con.execute("DETACH src")
+        for i in range(len(sources) if len(sources) > 1 else 0):
+            con.execute(f"DETACH s{i}")
         runes = compute_runes(rune_rows, laner_rows)
-        champ_pages = compute_builds(build_rows, items or Items(None))
 
         con.execute(f"ATTACH '{tmp.as_posix()}' AS out")
         con.execute("""CREATE TABLE out.base AS

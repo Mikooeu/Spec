@@ -15,7 +15,7 @@ MIN_SHARE = 0.05        # part minimale d'une option (sinon c'est du bruit)
 MIN_OPTION_GAMES = 10
 K_SMOOTH = 50           # lissage vers le winrate de référence
 MAX_KEYSTONES = 3
-VS_MIN_GAMES = 15
+VS_MIN_GAMES = 30      # parties minimum dans le matchup pour changer de rune clé
 VS_MIN_LIFT = 0.02      # +2 points lissés face à ce vis-à-vis pour changer de rune clé
 
 

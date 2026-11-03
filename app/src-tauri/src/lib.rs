@@ -27,6 +27,30 @@ async fn lcu_set_rune_page(state: tauri::State<'_, Lcu>, champion: String, prima
     state.set_rune_page(&champion, primary_style, sub_style, &perks).await
 }
 
+/// Détail d'une partie : les 10 joueurs, leurs scores et leurs objets.
+#[tauri::command]
+async fn lcu_game(state: tauri::State<'_, Lcu>, game_id: u64) -> Result<Value, String> {
+    state.game(game_id).await
+}
+
+/// Cherche un joueur par son Riot ID (via le client LoL).
+#[tauri::command]
+async fn lcu_find_player(state: tauri::State<'_, Lcu>, game_name: String, tag_line: String) -> Result<Value, String> {
+    state.find_player(&game_name, &tag_line).await
+}
+
+/// Profil, rang et dernières parties d'un joueur.
+#[tauri::command]
+async fn lcu_player(state: tauri::State<'_, Lcu>, puuid: String, count: u32) -> Result<Value, String> {
+    state.player(&puuid, count).await
+}
+
+/// Choisit les sorts d'invocateur pendant la draft (D puis F).
+#[tauri::command]
+async fn lcu_set_spells(state: tauri::State<'_, Lcu>, spell1: u32, spell2: u32) -> Result<(), String> {
+    state.set_spells(spell1, spell2).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -39,7 +63,10 @@ pub fn run() {
             Ok(())
         })
         .manage(Lcu::new())
-        .invoke_handler(tauri::generate_handler![lcu_get, lcu_preselect, lcu_set_rune_page, lcu_match_history])
+        .invoke_handler(tauri::generate_handler![
+            lcu_get, lcu_preselect, lcu_set_rune_page, lcu_match_history,
+            lcu_game, lcu_find_player, lcu_player, lcu_set_spells
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

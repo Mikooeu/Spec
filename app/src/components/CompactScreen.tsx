@@ -90,6 +90,9 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
       {draft.banPhase && <BanPanel stats={stats} draft={draft} compact onSelect={makeBanSelect(stats, live ? onBan : undefined, setNotice)} />}
       {draft.myChamp != null && <MyPick stats={stats} draft={draft} compact />}
 
+      {draft.myLocked ? (
+        <p className="hint">Champion verrouillé : importe tes runes et tes sorts ci-dessus.</p>
+      ) : (
       <div className="compact__recos">
         <p className="compact__section">{autofill ? `Autofill en ${ROLE_LABELS[draft.role]}` : "Recommandés pour toi"}</p>
         {rows.map(({ res, kind }, i) => (
@@ -104,6 +107,7 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
         ))}
         {rows.length === 0 && <p className="hint">Pas encore assez de parties pour ce rôle.</p>}
       </div>
+      )}
 
       {!live && <button className="btn btn--secondary btn--small" onClick={onEndDemo}>Terminer la démo</button>}
       {notice && <div className="toast toast--compact" role="status">{notice}</div>}
