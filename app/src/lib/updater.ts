@@ -10,7 +10,10 @@ export type UpdateState =
 
 type Update = Awaited<ReturnType<typeof import("@tauri-apps/plugin-updater").check>>;
 
-export function useUpdate(): [UpdateState, () => void] {
+/** Résultat d'une recherche lancée à la main (écran Réglages). */
+export type CheckResult = "available" | "uptodate" | "error" | "unavailable";
+
+export function useUpdate(): [UpdateState, () => void, () => Promise<CheckResult>] {
   const [state, setState] = useState<UpdateState>({ kind: "none" });
   const [update, setUpdate] = useState<Update>(null);
 
@@ -49,5 +52,15 @@ export function useUpdate(): [UpdateState, () => void] {
     }
   }, [update]);
 
-  return [state, install];
+  const checkNow = useCallback(async (): Promise<CheckResult> => {
+    if (!IN_APP) return "unavailable";
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const found = await check();
+      if (found) { setUpdate(found); setState({ kind: "available", version: found.version }); return "available"; }
+      return "uptodate";
+    } catch { return "error"; }
+  }, []);
+
+  return [state, install, checkNow];
 }

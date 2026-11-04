@@ -11,8 +11,9 @@ async function win() {
   return { w: mod.getCurrentWindow(), LogicalSize: mod.LogicalSize };
 }
 
-/** Passe la fenêtre en mode compact (petite, au premier plan) ou la remet en grand. */
-export async function applyCompact(on: boolean, onTop: boolean): Promise<void> {
+/** Passe la fenêtre en mode compact (petite, au premier plan) ou la remet en grand.
+ *  `keepSize` : on quitte le mode compact parce que l'utilisateur a agrandi la fenêtre lui-même : on ne touche pas à sa taille. */
+export async function applyCompact(on: boolean, onTop: boolean, keepSize = false): Promise<void> {
   if (!IN_APP) return;
   try {
     const { w, LogicalSize } = await win();
@@ -23,6 +24,9 @@ export async function applyCompact(on: boolean, onTop: boolean): Promise<void> {
       await w.setMinSize(new LogicalSize(COMPACT.minWidth, COMPACT.minHeight));
       await w.setSize(new LogicalSize(COMPACT.width, COMPACT.height));
       await w.setAlwaysOnTop(onTop);
+    } else if (keepSize) {
+      await w.setAlwaysOnTop(false);
+      previous = null;
     } else {
       await w.setAlwaysOnTop(false);
       const back = previous ?? FULL;
@@ -41,4 +45,23 @@ export async function setOnTop(on: boolean): Promise<void> {
     const { w } = await win();
     await w.setAlwaysOnTop(on);
   } catch { /* ignoré */ }
+}
+
+/** Largeur (logique) au-delà de laquelle une fenêtre compacte agrandie repasse en affichage complet. */
+const EXPAND_WIDTH = 760;
+
+/** Appelle `onExpand` si l'utilisateur agrandit la fenêtre compacte (bouton Agrandir de Windows ou bord tiré). */
+export async function watchCompactExpand(onExpand: () => void): Promise<() => void> {
+  if (!IN_APP) return () => undefined;
+  try {
+    const { w } = await win();
+    const since = Date.now();   // le passage en compact redimensionne lui-même la fenêtre : on l'ignore
+    return await w.onResized(async ({ payload }) => {
+      if (Date.now() - since < 1500) return;
+      const scale = await w.scaleFactor();
+      if (payload.width / scale > EXPAND_WIDTH || (await w.isMaximized())) onExpand();
+    });
+  } catch {
+    return () => undefined;
+  }
 }

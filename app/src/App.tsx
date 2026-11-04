@@ -18,14 +18,17 @@ import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui"
 import { importRunes, importSpells, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
 import { RuneImportContext, SpellImportContext } from "./components/Runes";
 import { REGION_LABEL, RegionSelect } from "./components/RegionSelect";
-import { applyCompact, setOnTop } from "./lib/window";
+import { applyCompact, setOnTop, watchCompactExpand } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { useUpdate, type UpdateState } from "./lib/updater";
 import { Logo } from "./components/Logo";
+import { SettingsScreen } from "./components/SettingsScreen";
+import { Onboarding } from "./components/Onboarding";
+import { useDefaultRegion, useOnboarded, useRoles } from "./lib/settings";
 
-type Screen = "draft" | "profile" | "tier" | "pool" | "champion";
+type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "settings";
 interface ChampView { champ: number; role: number; inGame: boolean }
-const SCREENS: [Screen, string][] = [["draft", "Draft"], ["profile", "Profil"], ["tier", "Tier list"], ["pool", "Champion pool"]];
+const SCREENS: [Screen, string][] = [["draft", "Draft"], ["profile", "Profil"], ["tier", "Tier list"], ["pool", "Champion pool"], ["settings", "Réglages"]];
 
 /** Draft fictive de démonstration (remplacée plus tard par la lecture du client LoL). */
 function demoDraft(stats: Stats): Draft {
@@ -52,9 +55,12 @@ export default function App() {
   const session = client.status === "champselect" ? client.session : null;
   useEffect(() => { if (!session) setRoleOverride(null); }, [session == null]); // eslint-disable-line react-hooks/exhaustive-deps
   const live = session ? sessionToDraft(session, roleOverride) : null;
-  const [tierRole, setTierRole] = useState(0);
-  // région des stats de la tier list et des pages champion : EUW à chaque lancement (la draft reste en EUW)
-  const [region, setRegion] = useState<Region>("euw");
+  const [roles, setRoles] = useRoles();
+  const [tierRole, setTierRole] = useState(roles.main ?? 0);
+  // région des stats de la tier list et des pages champion : celle des réglages à chaque lancement (la draft reste en EUW)
+  const [defaultRegion] = useDefaultRegion();
+  const [region, setRegion] = useState<Region>(defaultRegion);
+  useEffect(() => { setRegion(defaultRegion); }, [defaultRegion]);
   const regionStats = useRegionStats(stats, region);
   const regionSelect = <RegionSelect value={region} onChange={setRegion} />;
   const [champView, setChampView] = useState<ChampView | null>(null);
@@ -106,12 +112,26 @@ export default function App() {
   }, [account?.puuid, account?.icon]); // eslint-disable-line react-hooks/exhaustive-deps
   const me = account?.puuid ? account : savedAccount;
   const [perso, refreshPerso] = usePersonal(me?.puuid ?? null);
-  const [update, installUpdate] = useUpdate();
+  const [update, installUpdate, checkUpdate] = useUpdate();
   const [compact, setCompact] = usePersistent<boolean>("spec.compact", false);
   const [onTop, setOnTopPref] = usePersistent<boolean>("spec.compact.onTop", true);
 
   // applique la taille de fenêtre au lancement et à chaque bascule
-  useEffect(() => { applyCompact(compact && stats != null, onTop); }, [compact, stats != null]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [onboarded, setOnboarded] = useOnboarded();
+  const [onboarding, setOnboarding] = useState(false);
+  // fenêtre compacte agrandie à la main (bouton Agrandir de Windows, bord tiré) : on repasse en affichage complet
+  const expandedByUser = useRef(false);
+  useEffect(() => {
+    if (!compact) return;
+    let stop: (() => void) | null = null, cancelled = false;
+    watchCompactExpand(() => { expandedByUser.current = true; setCompact(false); }).then((u) => { if (cancelled) u(); else stop = u; });
+    return () => { cancelled = true; stop?.(); };
+  }, [compact]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const keep = expandedByUser.current;
+    expandedByUser.current = false;
+    applyCompact(compact && stats != null && !onboarding, onTop, keep);
+  }, [compact, stats != null, onboarding]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleTop = () => { setOnTopPref(!onTop); setOnTop(!onTop); };
   const [clientOn, clientText] = clientStatus(client);
   const doPreselect = (champ: number) => preselect(session!, champ);
@@ -123,14 +143,18 @@ export default function App() {
       .catch(() => setError("Stats introuvables : lance `python -m scoring export` dans le dossier Spec."));
   }, []);
 
-  // pool de démo au premier lancement, pour voir tout de suite des recommandations
+  // accueil au premier lancement ; ceux qui ont déjà un pool (versions précédentes) ne le voient pas
   useEffect(() => {
-    if (!stats || pools.some((p) => p.length)) return;
-    const ids = ["Ahri", "Orianna", "Viktor"]
-      .map((n) => [...stats.champions.values()].find((c) => c.name === n)?.id)
-      .filter((x): x is number => x != null);
-    setPools([[], [], ids, [], []]);
+    if (!stats || onboarded) return;
+    if (pools.some((p) => p.length)) setOnboarded(true);
+    else setOnboarding(true);
   }, [stats]); // eslint-disable-line react-hooks/exhaustive-deps
+  const finishOnboarding = () => {
+    setOnboarded(true);
+    setOnboarding(false);
+    if (roles.main != null) setTierRole(roles.main);
+    setScreen("draft");
+  };
 
   const footer = useMemo(
     () => (stats ? `Stats Master+ · patch ${patchLabel(stats.meta.patch)} · ${int(Number(stats.meta.matches ?? 0))} parties` : ""),
@@ -139,6 +163,18 @@ export default function App() {
 
   const runeImporter = live ? importRunes : null;
   const spellImporter = live ? importSpells : null;
+
+  if (onboarding && stats) {
+    return (
+      <Onboarding stats={stats} roles={roles} onRoles={setRoles} pools={pools} onPools={setPools}
+                  clientOn={clientOn} account={me} perso={perso} onDone={finishOnboarding}
+                  onRegister={async (code) => {
+                    const err = me?.puuid ? await register(me.puuid, me.name, code) : "Lance le client LoL pour lier ton compte.";
+                    if (!err) refreshPerso();
+                    return err;
+                  }} />
+    );
+  }
 
   if (compact && stats) {
     const current = live ?? draft;
@@ -215,7 +251,12 @@ export default function App() {
                           onBack={() => setScreen(champView.inGame ? "draft" : "tier")}
                           region={regionSelect} regionLabel={REGION_LABEL[region]} />
         )}
-        {stats && screen === "pool" && <PoolScreen stats={stats} pools={pools} onChange={setPools} perso={perso} />}
+        {stats && screen === "pool" && <PoolScreen stats={stats} pools={pools} onChange={setPools} perso={perso} initialRole={roles.main ?? 2} />}
+        {screen === "settings" && (
+          <SettingsScreen account={me} registered={perso.kind === "ready"}
+                          compact={compact} onCompact={setCompact} onTop={onTop} onOnTop={setOnTopPref}
+                          onCheckUpdate={checkUpdate} onReplayOnboarding={() => setOnboarding(true)} />
+        )}
         {stats && screen === "draft" && live && (
           <DraftScreen stats={stats} draft={live} pool={pools[live.role]} wide={wide} live
                        onChange={(d) => setRoleOverride(d.role)}

@@ -13,13 +13,15 @@ interface Props {
   pools: Pools;
   onChange: (p: Pools) => void;
   perso: PersonalState;
+  /** Rôle affiché à l'ouverture (rôle principal choisi à l'accueil). */
+  initialRole?: number;
 }
 
 const WR_MIN_GAMES = 100;   // en dessous, le winrate du rôle n'est pas affiché (trop peu de parties)
 
 /** Champion pool : les champions joués dans chaque rôle, recommandés en priorité pendant la draft. */
-export function PoolScreen({ stats, pools, onChange, perso }: Props) {
-  const [role, setRole] = useState(2);
+export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: Props) {
+  const [role, setRole] = useState(initialRole);
   const [query, setQuery] = useState("");
   const ready = perso.kind === "ready" ? perso.data : null;
   const suggested = ready ? topChampions(ready, role) : [];

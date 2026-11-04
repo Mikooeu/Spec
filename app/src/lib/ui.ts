@@ -41,6 +41,9 @@ export function useUiScale() {
 }
 
 /** État persistant dans le stockage local de l'appli (pool par rôle, etc.). */
+const PERSIST_EVENT = "spec-persist";
+
+/** Valeur gardée entre deux lancements ; tous les écrans qui lisent la même clé restent synchronisés. */
 export function usePersistent<T>(key: string, initial: T): [T, (v: T) => void] {
   const [value, setValue] = useState<T>(() => {
     try {
@@ -50,6 +53,14 @@ export function usePersistent<T>(key: string, initial: T): [T, (v: T) => void] {
       return initial;
     }
   });
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ key: string; value: T }>).detail;
+      if (d?.key === key) setValue(d.value);
+    };
+    window.addEventListener(PERSIST_EVENT, on);
+    return () => window.removeEventListener(PERSIST_EVENT, on);
+  }, [key]);
   const save = (v: T) => {
     setValue(v);
     try {
@@ -57,6 +68,7 @@ export function usePersistent<T>(key: string, initial: T): [T, (v: T) => void] {
     } catch {
       /* stockage indisponible : on garde la valeur en mémoire */
     }
+    window.dispatchEvent(new CustomEvent(PERSIST_EVENT, { detail: { key, value: v } }));
   };
   return [value, save];
 }

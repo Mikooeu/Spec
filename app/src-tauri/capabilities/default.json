@@ -11,6 +11,7 @@
     "core:window:allow-set-always-on-top",
     "core:window:allow-center",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "autostart:default"
   ]
 }
