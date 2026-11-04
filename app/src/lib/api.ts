@@ -56,6 +56,7 @@ export interface Personal {
   byChamp: Map<number, GW>;    // toutes lanes
   matchups: Map<string, GW>;   // `${champ}:${role}:${adversaire}`
   champions: [number, number, number, number][];
+  weeks: [number, number, number][];   // début de semaine (lundi UTC), parties, victoires : 8 dernières semaines
 }
 
 export type PersonalState =
@@ -70,6 +71,7 @@ function parsePersonal(raw: {
   status: { matches: number; pending: number; syncing: boolean };
   champions: [number, number, number, number][];
   matchups: [number, number, number, number, number][];
+  weeks?: [number, number, number][];
 }): Personal {
   const byRole = new Map<string, GW>(), byChamp = new Map<number, GW>(), matchups = new Map<string, GW>();
   for (const [c, r, g, w] of raw.champions) {
@@ -78,7 +80,7 @@ function parsePersonal(raw: {
     byChamp.set(c, [t[0] + g, t[1] + w]);
   }
   for (const [c, r, o, g, w] of raw.matchups) matchups.set(`${c}:${r}:${o}`, [g, w]);
-  return { ...raw.status, byRole, byChamp, matchups, champions: raw.champions };
+  return { ...raw.status, byRole, byChamp, matchups, champions: raw.champions, weeks: raw.weeks ?? [] };
 }
 
 /** Stats perso du joueur (`client` = identifiant du client LoL), rafraîchies chaque minute pendant la synchro, toutes les 10 min ensuite. */

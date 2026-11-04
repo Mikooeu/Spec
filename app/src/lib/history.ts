@@ -55,6 +55,36 @@ const TIERS = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMO
 const DIVISIONS = ["IV", "III", "II", "I"];
 const LP_KEY = "spec.lp.games";
 const BEFORE_KEY = "spec.lp.before";
+const SERIES_KEY = "spec.lp.series";
+
+/** Point de la courbe des LP (Solo/Duo) : LP « absolus » (promotions comprises) à un instant donné. */
+export interface LpPoint { at: number; lp: number; game?: number }
+
+export function readLpSeries(): LpPoint[] {
+  try { const v = JSON.parse(localStorage.getItem(SERIES_KEY) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+/** Ajoute un point si les LP ont changé depuis le dernier (ou pour lier une partie à un point déjà noté). */
+function pushLpPoint(p: LpPoint) {
+  const list = readLpSeries();
+  const last = list[list.length - 1];
+  if (last && last.lp === p.lp && (!p.game || last.game === p.game)) return;
+  if (p.game && list.some((x) => x.game === p.game)) return;
+  list.push(p);
+  try { localStorage.setItem(SERIES_KEY, JSON.stringify(list.slice(-600))); } catch { /* stockage plein */ }
+}
+/** Note les LP Solo/Duo actuels (au chargement du profil, en début de draft). */
+export function noteSoloLp(r: RankedStats | null) {
+  const lp = absoluteLp(r?.queueMap?.RANKED_SOLO_5x5);
+  if (lp != null) pushLpPoint({ at: Date.now(), lp });
+}
+/** « Émeraude II · 47 LP » à partir de LP absolus. */
+export function lpLabel(total: number, short = false): string {
+  const apex = TIERS.length * 400;
+  if (total >= apex) return short ? "Maître+" : `Maître+ · ${total - apex} LP`;
+  const t = Math.max(0, Math.floor(total / 400)), d = Math.min(3, Math.floor((total % 400) / 100));
+  const name = `${TIER_FR[TIERS[t]]} ${DIVISIONS[d]}`;
+  return short ? name : `${name} · ${total % 100} LP`;
+}
 
 const get = <T,>(path: string) => invoke<T>("lcu_get", { path });
 
@@ -304,6 +334,7 @@ export function useLpTracking(client: ClientState): number {
     if (phase === "ChampSelect" || phase === "InProgress") {
       readRanked().then((r) => {
         if (r?.queueMap) localStorage.setItem(BEFORE_KEY, JSON.stringify({ at: Date.now(), queueMap: r.queueMap }));
+        noteSoloLp(r);
       });
     }
     if (phase === "EndOfGame" || phase === "PreEndOfGame") {
@@ -321,6 +352,7 @@ export function useLpTracking(client: ClientState): number {
             const map = readLp();
             map[String(game.id)] = after - before;
             localStorage.setItem(LP_KEY, JSON.stringify(map));
+            if (type === "RANKED_SOLO_5x5") pushLpPoint({ at: game.created + game.duration * 1000, lp: after, game: game.id });
             localStorage.removeItem(BEFORE_KEY);
             setVersion((v) => v + 1);
             return;

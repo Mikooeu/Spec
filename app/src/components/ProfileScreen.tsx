@@ -6,11 +6,11 @@ import type { Account } from "../lib/lcu";
 import { ChampionIcon } from "./ChampionIcon";
 import { Rune, useRuneData, type RuneData } from "./Runes";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
-import { IMPACT_MIN, IMPACT_RELIABLE, impact, settle } from "../lib/impact";
+import { IMPACT_MIN, IMPACT_RELIABLE, impact, recaps, settle, type Recap } from "../lib/impact";
 import { Trend } from "./Trend";
 import {
   QUEUE_LABELS, duoPartner, loadDuos, type Duo, findPlayer, loadGameDetail, loadHistory, loadPlayer, loadServerHistory, mergeHistory, rankText,
-  readRanked, type Game, type GameDetail, type OtherPlayer, type PlayerLine, type QueueKind,
+  readRanked, readLpSeries, noteSoloLp, lpLabel, type LpPoint, type Game, type GameDetail, type OtherPlayer, type PlayerLine, type QueueKind,
 } from "../lib/history";
 import { noteText, noteTone, rateGame, type Rating } from "../lib/rating";
 import { Segmented } from "./Segmented";
@@ -123,6 +123,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   const [duo, setDuo] = useState<DuoFilter | null>(null);
   const [duoGames, setDuoGames] = useState<Game[] | null>(null);
   const [impactVersion, setImpactVersion] = useState(0);
+  const [focus, setFocus] = useState<number | null>(null);   // partie à déplier en ouvrant l’historique
   const registered = perso.kind === "ready";
 
   useEffect(() => {
@@ -130,7 +131,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
     let alive = true;
     loadHistory(50, guess).then((g) => { if (alive) { setClientGames(g); setHistoryError(false); } })
       .catch(() => alive && setHistoryError(true));
-    readRanked().then((r) => alive && setRank(rankText(r?.queueMap?.RANKED_SOLO_5x5)));
+    readRanked().then((r) => { noteSoloLp(r); if (alive) setRank(rankText(r?.queueMap?.RANKED_SOLO_5x5)); });
     return () => { alive = false; };
   }, [clientOn, lpVersion, guess]);
 
@@ -169,6 +170,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
     return () => { alive = false; };
   }, [duo?.key, account?.puuid]); // eslint-disable-line react-hooks/exhaustive-deps
   const openDuo = (f: DuoFilter) => { setDuo(f); setTab("history"); };
+  const openGame = (id: number) => { setDuo(null); setRole(null); setFocus(id); setTab("history"); };
   const activate = async () => {
     setBusy(true);
     setMessage(await onRegister(code));
@@ -214,7 +216,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
 
       {perso.kind === "ready" && <SeasonTiles stats={stats} data={perso.data} games={games} />}
 
-      <ProfileTabs tab={tab} onTab={setTab} tabs={registered ? ["history", "stats", "duo"] : ["history", "stats"]} />
+      <ProfileTabs tab={tab} onTab={setTab} tabs={registered ? ["history", "stats", "progress", "duo"] : ["history", "stats", "progress"]} />
 
       <div key={tab} className="profile-view fade-in">
       {tab === "history" && (
@@ -225,7 +227,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
                    : "Tes dernières parties. Clique sur une partie pour voir le détail des 10 joueurs. Active tes stats perso pour retrouver toute ta saison."}
                  empty={!clientOn && !games ? "Lance le client LoL pour voir ton historique." : null}
                  error={historyError && !serverGames.length ? "Le client LoL n’a pas renvoyé ton historique. Réessaie dans un instant." : null}
-                 onOpenPlayer={onOpenPlayer} showLp duo={duo} onClearDuo={() => setDuo(null)}
+                 onOpenPlayer={onOpenPlayer} showLp duo={duo} onClearDuo={() => setDuo(null)} focus={focus}
                  footer={!duo && registered && serverGames.length > 0 && more !== "end" ? (
                    <button className="btn btn--secondary btn--small history__more" onClick={loadMore} disabled={more === "loading"}>
                      {more === "loading" ? "Chargement…" : "Afficher plus de parties"}
@@ -239,6 +241,9 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
             ? <OwnBestPicks stats={stats} data={perso.data} />
             : <p className="hint">Active tes stats perso pour voir tes meilleurs picks de la saison.</p>}
         </>
+      )}
+      {tab === "progress" && (
+        <ProgressView stats={stats} games={games} perso={perso} version={lpVersion + impactVersion} onOpenGame={openGame} />
       )}
       {tab === "duo" && account?.puuid && (
         <DuoList stats={stats} client={account.puuid} selected={duo?.key ?? null} onOpen={openDuo} />
@@ -458,13 +463,20 @@ interface HistoryProps {
   onOpenPlayer: (puuid: string | null) => void;
   /** Historique filtré sur un partenaire de duo. */
   duo?: DuoFilter | null; onClearDuo?: () => void;
+  /** Partie à déplier à l’ouverture (depuis un bilan de l’onglet Progression). */
+  focus?: number | null;
 }
 
 /** Historique : filtre par file et par poste (le poste choisit aussi les meilleurs picks), ligne dépliable. */
 function History({ stats, games, assets, role, onRole, me, subject, title, intro, empty, error, footer,
-                   showLp = false, onOpenPlayer, duo, onClearDuo }: HistoryProps) {
+                   showLp = false, onOpenPlayer, duo, onClearDuo, focus = null }: HistoryProps) {
   const [queue, setQueue] = useState<"all" | QueueKind>("all");
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<number | null>(focus);
+  useEffect(() => {
+    if (focus == null) return;
+    setOpen(focus);
+    window.setTimeout(() => document.getElementById(`game-${focus}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+  }, [focus]);
   const ratings = useRatings(stats, games, subject ?? me);
   const inQueue = useMemo(() => (games ?? []).filter((g) => queue === "all" ? g.queue !== "other" : g.queue === queue), [games, queue]);
   const shown = role == null ? inQueue : inQueue.filter((g) => g.role === role);
@@ -515,7 +527,7 @@ function History({ stats, games, assets, role, onRole, me, subject, title, intro
           {shown.map((g) => (
             <Fragment key={g.id}>
               {open === g.id ? (
-                <div className="game-open">
+                <div className="game-open" id={`game-${g.id}`}>
                   <GameRow stats={stats} game={g} assets={assets} open showLp={showLp} rating={ratings.get(g.id)}
                            partner={duo ? partnerText(stats, duo, g.id) : undefined} onToggle={() => setOpen(null)} />
                   <GameDetailPanel stats={stats} game={g} assets={assets} me={subject ?? me} onOpenPlayer={onOpenPlayer} />
@@ -806,8 +818,8 @@ function ProfileIcon({ version, icon, size = 3 }: { version: string; icon: numbe
 // ---------------------------------------------------------------------------------------------
 // Onglets, filtre de rôle, impact de Spec, duo
 
-type Tab = "history" | "stats" | "duo";
-const TAB_LABELS: Record<Tab, string> = { history: "Historique", stats: "Stats", duo: "Duo" };
+type Tab = "history" | "stats" | "progress" | "duo";
+const TAB_LABELS: Record<Tab, string> = { history: "Historique", stats: "Stats", progress: "Progression", duo: "Duo" };
 
 function ProfileTabs({ tab, onTab, tabs }: { tab: Tab; onTab: (t: Tab) => void; tabs: Tab[] }) {
   return (
@@ -970,5 +982,204 @@ function DuoList({ stats, client, selected, onOpen }:
       )}
       <p className="muted small">Les pseudos sont lus dans le client LoL (le serveur Spec n’en garde aucun) : ouvre le client pour les voir.</p>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Progression : courbe des LP, winrate par semaine, bilan après chaque partie
+
+const WEEK = 7 * 86400_000, WEEK_OFFSET = 4 * 86400_000;   // semaines du lundi (UTC), comme le serveur
+const weekStart = (t: number) => Math.floor((t - WEEK_OFFSET) / WEEK) * WEEK + WEEK_OFFSET;
+const shortDate = (t: number) => new Date(t).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+
+function ProgressView({ stats, games, perso, version, onOpenGame }:
+  { stats: Stats; games: Game[] | null; perso: PersonalState; version: number; onOpenGame: (id: number) => void }) {
+  const series = useMemo(() => readLpSeries(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
+  // winrate par semaine : serveur Spec (toute la saison) si les stats perso sont actives, sinon l’historique du client
+  const weeks = useMemo(() => {
+    const start = weekStart(Date.now()) - 7 * WEEK;
+    const by = new Map<number, [number, number]>();
+    for (let k = 0; k < 8; k++) by.set(start + k * WEEK, [0, 0]);
+    if (perso.kind === "ready") {
+      for (const [w, g, v] of perso.data.weeks) if (by.has(w)) by.set(w, [g, v]);
+    } else {
+      for (const g of games ?? []) {
+        if (g.queue !== "solo" || g.remake) continue;
+        const t = by.get(weekStart(g.created));
+        if (t) { t[0] += 1; t[1] += g.win ? 1 : 0; }
+      }
+    }
+    return [...by.entries()];
+  }, [perso, games]);
+  const list = useMemo(() => recaps(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const byId = useMemo(() => new Map((games ?? []).map((g) => [g.id, g])), [games]);
+  const month = list.filter((r) => Date.now() - r.at < 30 * 86400_000);
+  const followed = month.filter((r) => r.rank === 1).length;
+
+  return (
+    <>
+      <section className="best">
+        <div className="section-head">
+          <div>
+            <h2>Évolution des LP</h2>
+            <p className="muted small">Solo/Duo · chaque point = une partie classée suivie par Spec</p>
+          </div>
+          {series.length > 0 && <span className="muted small">Depuis le {shortDate(series[0].at)}</span>}
+        </div>
+        <LpChart series={series} />
+      </section>
+
+      <section className="best">
+        <div className="section-head">
+          <div>
+            <h2>Winrate par semaine</h2>
+            <p className="muted small">Solo/Duo · la ligne pointillée marque 50 %</p>
+          </div>
+          <span className="muted small">8 dernières semaines</span>
+        </div>
+        <WeekBars weeks={weeks} />
+      </section>
+
+      <section className="best">
+        <div className="section-head">
+          <div>
+            <h2>Après chaque partie</h2>
+            <p className="muted small">Ce que Spec t’avait conseillé, ce que tu as joué, et le résultat. Clique sur une partie pour ouvrir son détail.</p>
+          </div>
+          {month.length > 0 && <span className="muted small">Ce mois-ci : conseil suivi {followed} fois sur {month.length}</span>}
+        </div>
+        {list.length === 0 ? (
+          <p className="hint">Joue une partie classée avec Spec ouvert pendant la sélection des champions : son bilan s’affichera ici.</p>
+        ) : (
+          <div className="recaps stagger">
+            {list.slice(0, 15).map((r) => <RecapRow key={r.game} stats={stats} recap={r} game={byId.get(r.game)} onOpen={() => onOpenGame(r.game)} />)}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function LpChart({ series }: { series: LpPoint[] }) {
+  if (series.length < 2) {
+    return (
+      <div className="card lp-card">
+        <p className="hint">La courbe démarre avec tes prochaines parties classées jouées avec Spec ouvert : le client LoL ne garde pas l’historique de tes LP.</p>
+      </div>
+    );
+  }
+  const pts = series.slice(-80);
+  const first = pts[0], last = pts[pts.length - 1];
+  const peak = pts.reduce((a, p) => (p.lp > a.lp ? p : a), first);
+  const gain = last.lp - first.lp;
+  // échelle : divisions entières autour des points (au moins 2 divisions visibles)
+  let lo = Math.floor(Math.min(...pts.map((p) => p.lp)) / 100) * 100;
+  let hi = Math.ceil((Math.max(...pts.map((p) => p.lp)) + 1) / 100) * 100;
+  if (hi - lo < 200) { lo = Math.max(0, lo - 100); hi = lo + 200; }
+  const W = 900, H = 200, L = 96, R = 12, T = 10, B = 176;
+  const x = (i: number) => L + ((W - L - R) * i) / Math.max(1, pts.length - 1);
+  const y = (v: number) => T + (B - T) * (1 - (v - lo) / (hi - lo));
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p.lp).toFixed(1)}`).join(" ");
+  const area = `${line} L${x(pts.length - 1).toFixed(1)} ${B} L${x(0).toFixed(1)} ${B} Z`;
+  const bands: number[] = [];
+  for (let v = lo; v <= hi; v += 100) bands.push(v);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (pts.length - 1)));
+  const tone = gain > 0 ? "good" : gain < 0 ? "bad" : "neutral";
+  return (
+    <div className="card lp-card">
+      <div className="lp-card__head">
+        <div><span className="small muted">Rang actuel</span><strong>{lpLabel(last.lp)}</strong></div>
+        <div><span className="small muted">Depuis le début du suivi</span>
+          <strong className={`tone-${tone}`}>{gain > 0 ? "+" : gain < 0 ? "−" : ""}{Math.abs(gain)} LP<Trend tone={tone} /></strong></div>
+        <div><span className="small muted">Meilleur moment</span><strong>{lpLabel(peak.lp)}</strong></div>
+      </div>
+      <svg className="lp-chart" viewBox={`0 0 ${W} ${H + 20}`} role="img"
+           aria-label={`Courbe des LP : de ${lpLabel(first.lp)} à ${lpLabel(last.lp)}`}>
+        <defs>
+          <linearGradient id="lp-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="var(--accent)" stopOpacity="0.22" />
+            <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {bands.map((v) => <line key={v} x1={L} x2={W - R} y1={y(v)} y2={y(v)} className="lp-chart__grid" />)}
+        {bands.slice(0, -1).map((v) => (
+          <text key={`t${v}`} x={0} y={(y(v) + y(v + 100)) / 2 + 4} className="lp-chart__label">{lpLabel(v, true)}</text>
+        ))}
+        <path d={area} fill="url(#lp-fill)" />
+        <path d={line} className="lp-chart__line" />
+        {pts.map((p, i) => <circle key={i} cx={x(i)} cy={y(p.lp)} r={i === pts.length - 1 ? 4.5 : 2.5}
+                                   className={i === pts.length - 1 ? "lp-chart__last" : "lp-chart__dot"}>
+          <title>{`${shortDate(p.at)} · ${lpLabel(p.lp)}`}</title>
+        </circle>)}
+        {[...new Set(ticks)].map((i) => (
+          <text key={`d${i}`} x={x(i)} y={H + 14} textAnchor={i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"}
+                className="lp-chart__label">{shortDate(pts[i].at)}</text>
+        ))}
+      </svg>
+      <p className="muted small">Les LP ne sont connus que pour les parties jouées avec Spec ouvert : le client LoL ne garde pas l’historique des LP.</p>
+    </div>
+  );
+}
+
+function WeekBars({ weeks }: { weeks: [number, [number, number]][] }) {
+  const total = weeks.reduce((a, [, [g]]) => a + g, 0);
+  if (!total) return <div className="card"><p className="hint">Aucune partie classée Solo/Duo ces 8 dernières semaines.</p></div>;
+  return (
+    <div className="card weeks">
+      <div className="weeks__plot">
+        <span className="weeks__half" aria-hidden />
+        {weeks.map(([start, [g, w]]) => {
+          const wr = g ? w / g : 0;
+          const tone = !g ? "neutral" : wrTone(wr);
+          // échelle 30 % → 70 % : les écarts autour de 50 % restent lisibles
+          const h = g ? Math.max(4, Math.min(100, ((wr - 0.3) / 0.4) * 100)) : 0;
+          return (
+            <div key={start} className="weeks__col" title={g ? `${w} victoire${w > 1 ? "s" : ""} sur ${g} partie${g > 1 ? "s" : ""}` : "Aucune partie"}>
+              <div className="weeks__bar-wrap">
+                {g > 0 && <span className={`weeks__value tone-${tone}`}>{pct(wr)}<Trend tone={tone} /></span>}
+                <span className={`weeks__bar tone-bg-${tone}`} style={{ height: `${h}%` }} />
+              </div>
+              <span className="weeks__label">{shortDate(start)}</span>
+              <span className="weeks__games">{g ? `${g} partie${g > 1 ? "s" : ""}` : "—"}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RecapRow({ stats, recap: r, game, onOpen }: { stats: Stats; recap: Recap; game: Game | undefined; onOpen: () => void }) {
+  const verdict = r.rank === 1 ? ["Conseil suivi", "good"] : r.rank != null && r.rank <= 3 ? ["Dans le top 3", "good"] : ["Autre choix", "neutral"];
+  const result = game?.remake ? "Remake" : r.win ? "Victoire" : "Défaite";
+  return (
+    <button className={`recap recap--${game?.remake ? "remake" : r.win ? "win" : "loss"}`} onClick={onOpen} disabled={!game}
+            title={game ? "Ouvrir le détail de la partie" : "Partie plus chargée dans l’historique"}>
+      <span className="game__bar" aria-hidden />
+      <span className="recap__played">
+        <ChampionIcon stats={stats} champ={r.champ} size={2.5} />
+        <span>
+          <strong>{champName(stats, r.champ)}</strong>
+          <small>{game?.role != null ? `${ROLE_LABELS[game.role]} · ` : ""}{ago(game?.created ?? r.at)}</small>
+        </span>
+      </span>
+      <span className="recap__spec">
+        <small className="recap__label">Spec conseillait</small>
+        <span className="recap__picks">
+          {r.top.map((c, i) => (
+            <span key={c} className={`recap__pick${c === r.champ ? " is-played" : ""}`}>
+              <ChampionIcon stats={stats} champ={c} size={1.375} />{i + 1}. {champName(stats, c)}
+            </span>
+          ))}
+        </span>
+      </span>
+      <span className={`recap__verdict recap__verdict--${verdict[1]}`}>{verdict[0]}</span>
+      <span className="stat-col recap__result">
+        <span className={`game__lp-value${game?.lp == null ? "" : game.lp > 0 ? " tone-good" : game.lp < 0 ? " tone-bad" : ""}`}>
+          {game?.lp == null ? result : lpText(game.lp)}
+        </span>
+        <span className="stat-col__label">{game?.lp == null ? `${Math.round((game?.duration ?? 0) / 60) || "—"} min` : result}</span>
+      </span>
+    </button>
   );
 }

@@ -7,8 +7,8 @@ const DONE = "spec.impact.games";
 const MAX_AGE = 30 * 86400_000;
 
 /** Pick verrouillé avec Spec ouvert : `rank` = place dans les recos (1 = conseillé en premier), null si absent. */
-export interface LockedPick { at: number; champ: number; role: number; rank: number | null }
-interface Settled { followed: boolean; win: boolean; at: number }
+export interface LockedPick { at: number; champ: number; role: number; rank: number | null; top?: number[] }
+interface Settled { followed: boolean; win: boolean; at: number; champ?: number; rank?: number | null; top?: number[] }
 
 const read = <T,>(key: string, fallback: T): T => {
   try { return JSON.parse(localStorage.getItem(key) ?? "") as T; } catch { return fallback; }
@@ -32,7 +32,7 @@ export function settle(games: Game[]): boolean {
   for (const p of pending) {
     const g = games.find((x) => x.champ === p.champ && !x.remake && x.queue !== "other"
       && x.created >= p.at - 15 * 60_000 && x.created <= p.at + 60 * 60_000 && !done[String(x.id)]);
-    if (g) { done[String(g.id)] = { followed: p.rank === 1, win: g.win, at: p.at }; changed = true; }
+    if (g) { done[String(g.id)] = { followed: p.rank === 1, win: g.win, at: p.at, champ: p.champ, rank: p.rank, top: p.top }; changed = true; }
     else if (Date.now() - p.at < 2 * 86400_000) left.push(p);      // la partie peut encore arriver
   }
   write(PENDING, left);
@@ -55,3 +55,14 @@ export function impact(): Impact {
 
 export const IMPACT_MIN = 20;       // en dessous : barre de progression, pas de pourcentage
 export const IMPACT_RELIABLE = 100; // à partir de là : « Résultat fiable »
+
+/** Bilan d'une partie jouée avec Spec ouvert : ce que Spec conseillait (3 premiers), ce que tu as joué, le résultat. */
+export interface Recap { game: number; at: number; champ: number; rank: number | null; top: number[]; win: boolean }
+
+/** Bilans détaillés, du plus récent au plus ancien (seulement les parties notées depuis la 0.3.7). */
+export function recaps(): Recap[] {
+  return Object.entries(read<Record<string, Settled>>(DONE, {}))
+    .filter(([, d]) => d.champ != null && d.top?.length)
+    .map(([id, d]) => ({ game: Number(id), at: d.at, champ: d.champ!, rank: d.rank ?? null, top: d.top!, win: d.win }))
+    .sort((a, b) => b.at - a.at);
+}

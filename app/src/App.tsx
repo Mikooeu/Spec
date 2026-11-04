@@ -10,7 +10,8 @@ import { PoolScreen, type Pools } from "./components/PoolScreen";
 import { TierListScreen } from "./components/TierListScreen";
 import { ChampionScreen } from "./components/ChampionScreen";
 import { useLpTracking } from "./lib/history";
-import { recommend, topForRole, type Stats } from "./lib/score";
+import { recommend, topForRole, type Result, type Stats } from "./lib/score";
+import { analyzeTeam, bumpForComposition } from "./lib/composition";
 import { recordPick } from "./lib/impact";
 import { loadStats, register, usePersonal, useRegionStats, type Region } from "./lib/api";
 import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
@@ -90,9 +91,12 @@ export default function App() {
     const allies = live.allies.filter((c, i): c is number => c != null && i !== live.role);
     const enemies = live.enemies.filter((c): c is number => c != null);
     const r = recommend(stats, live.role, pools[live.role], allies, enemies, live.bans);
-    const list = r.pool.length ? [...r.pool, ...r.discoveries] : topForRole(stats, live.role, allies, enemies, live.bans, 6);
+    // même ordre que l'écran de draft (bonus de composition compris)
+    const team = analyzeTeam(stats, allies);
+    const bump = (l: Result[]) => bumpForComposition(stats, l, team);
+    const list = r.pool.length ? [...bump(r.pool), ...bump(r.discoveries)] : bump(topForRole(stats, live.role, allies, enemies, live.bans, 6));
     const k = list.findIndex((x) => x.champ === live.myChamp);
-    recordPick({ at: Date.now(), champ: live.myChamp, role: live.role, rank: k >= 0 ? k + 1 : null });
+    recordPick({ at: Date.now(), champ: live.myChamp, role: live.role, rank: k >= 0 ? k + 1 : null, top: list.slice(0, 3).map((x) => x.champ) });
   }, [live?.myLocked, live?.myChamp]); // eslint-disable-line react-hooks/exhaustive-deps
   const account = client.status === "idle" || client.status === "champselect" ? client.account : null;
   // dernier compte vu dans le client : les stats perso restent visibles client fermé

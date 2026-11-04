@@ -168,6 +168,10 @@ test("synchro : historique, détail des parties, remakes exclus, vis-à-vis", as
   assert.deepEqual(r.status, { matches: 2, pending: 0, syncing: false, lastSync: 1_800_000_000_000 } as never);
   assert.deepEqual(r.champions, [[103, 2, 2, 1]]);       // Ahri mid : 2 parties, 1 victoire
   assert.deepEqual(r.matchups, [[103, 2, 134, 2, 1]]);   // face à Syndra
+  // winrate par semaine : lundi UTC, 8 dernières semaines seulement
+  const weeks = (r as unknown as { weeks: number[][] }).weeks;
+  assert.ok(Array.isArray(weeks));
+  for (const [start] of weeks) assert.equal(new Date(start).getUTCDay(), 1);
   const r2 = await (await call(e, "GET", "/v1/players/" + C2)).json() as { champions: number[][] };
   assert.deepEqual(r2.champions, [[122, 0, 1, 1]]);
 

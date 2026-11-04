@@ -10,6 +10,7 @@ import type { PersonalState } from "../lib/api";
 import { ChampionPicker } from "./ChampionPicker";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
+import { GAP_LABEL, analyzeTeam, bumpForComposition, fills, type Gap, type TeamComp } from "../lib/composition";
 
 export interface Draft {
   role: number;                    // rôle assigné (index dans ROLES)
@@ -45,7 +46,9 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
   const [openChamp, setOpenChamp] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const { allies, enemies, autofill, rows } = useRecos(stats, draft, pool);
+  const { allies, enemies, autofill, rows, team } = useRecos(stats, draft, pool);
+  const myComp = useMemo(() => analyzeTeam(stats, draft.myChamp != null ? [...allies, draft.myChamp] : allies), [stats, allies, draft.myChamp]);
+  const enemyComp = useMemo(() => analyzeTeam(stats, enemies), [stats, enemies]);
 
   const selected = rows.find((r) => r.res.champ === openChamp)?.res ?? null;
   // ton champion présélectionné : sa ligne s'ouvre, avec l'explication (pas de carte en double au-dessus)
@@ -95,7 +98,7 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
 
       <div className={wide ? "columns" : "stack"}>
         <section className={wide ? "teams teams--column" : "teams"} aria-label="Équipes">
-          <TeamCard title="Ton équipe">
+          <TeamCard title="Ton équipe" comp={<CompSummary comp={myComp} mine />}>
             {draft.allies.map((c, i) => {
               const me = i === draft.role;
               const mine = me ? draft.myChamp ?? null : null;
@@ -110,7 +113,7 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
               );
             })}
           </TeamCard>
-          <TeamCard title="Équipe adverse">
+          <TeamCard title="Équipe adverse" comp={<CompSummary comp={enemyComp} mine={false} />}>
             {draft.enemies.map((c, i) => {
               const role = enemyRole[i];
               return (
@@ -157,7 +160,8 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
                            onToggle={() => setOpenChamp(openChamp === res.champ ? null : res.champ)}
                            onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
                            role={draft.role} mine={res.champ === draft.myChamp}
-                           why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies) : undefined} />
+                           why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies) : undefined}
+                           fill={fills(stats, res.champ, team)} />
                 </div>
               ))}
             </div>
@@ -190,10 +194,10 @@ function rolesText(stats: Stats, champ: number): string {
   return second && second.p >= 0.15 ? `${head} · ${ROLE_WORDS[second.role]} : ${Math.round(second.p * 100)} %` : head;
 }
 
-function TeamCard({ title, children }: { title: string; children: React.ReactNode }) {
+function TeamCard({ title, children, comp }: { title: string; children: React.ReactNode; comp?: React.ReactNode }) {
   return (
     <div className="card team">
-      <h3 className="card__title">{title}</h3>
+      <div className="team__head"><h3 className="card__title">{title}</h3>{comp}</div>
       {children}
     </div>
   );
@@ -222,9 +226,11 @@ interface RecoRowProps {
   onToggle: () => void; onPreselect: () => void; compact?: boolean; perso?: PersoCell; role: number;
   /** Ton champion présélectionné : badge et explication dans la ligne. */
   mine?: boolean; why?: string;
+  /** Manques de ton équipe que ce champion comble. */
+  fill?: Gap[];
 }
 
-export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why }: RecoRowProps) {
+export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [] }: RecoRowProps) {
   const laner = res.details[0];
   return (
     <div className={`reco${open ? " is-open" : ""}`}>
@@ -236,7 +242,9 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
           <span className="reco__meta">
             {mine && <span className="badge badge--mine">Présélectionné</span>}
             {discovery && <span className="badge">Découverte</span>}
-            {!compact && <span>{discovery ? "Hors de ton pool" : "Dans ton pool"}</span>}
+            {!compact && (fill.length
+              ? <span className="reco__fill" title="Ce champion comble ce qui manque à ton équipe">Comble : {fill.map((g) => GAP_LABEL[g]).join(" · ")}</span>
+              : <span>{discovery ? "Hors de ton pool" : "Dans ton pool"}</span>)}
             {res.games < LOW_DATA_GAMES && <span className="warn">Peu de données</span>}
             {compact && perso?.short && <span className={`tone-${perso.tone}`}>{perso.short} <Trend tone={perso.tone} /></span>}
           </span>
@@ -329,11 +337,14 @@ export function useRecos(stats: Stats, draft: Draft, pool: number[]) {
     const enemies = draft.enemies.filter((c): c is number => c != null);
     const r = recommend(stats, draft.role, pool, allies, enemies, draft.bans);
     const autofill = r.pool.length === 0;
+    // composition de ton équipe sans toi : un pick qui comble un manque gagne au plus une place
+    const team = analyzeTeam(stats, allies);
+    const bump = (list: Result[]) => bumpForComposition(stats, list.map((res) => ({ champ: res.champ, res })), team).map((x) => x.res);
     const rows: RecoItem[] = autofill
-      ? topForRole(stats, draft.role, allies, enemies, draft.bans, 6).map((res) => ({ res, kind: "discovery" as const }))
-      : [...r.pool.map((res) => ({ res, kind: "pool" as const })),
-         ...r.discoveries.map((res) => ({ res, kind: "discovery" as const }))];
-    return { allies, enemies, autofill, rows };
+      ? bump(topForRole(stats, draft.role, allies, enemies, draft.bans, 6)).map((res) => ({ res, kind: "discovery" as const }))
+      : [...bump(r.pool).map((res) => ({ res, kind: "pool" as const })),
+         ...bump(r.discoveries).map((res) => ({ res, kind: "discovery" as const }))];
+    return { allies, enemies, autofill, rows, team };
   }, [stats, draft, pool]);
 }
 
@@ -473,5 +484,31 @@ export function BanPanel({ stats, draft, compact = false, titled = true, onSelec
         ))}
       </div>
     </div>
+  );
+}
+
+/** Composition d'une équipe en une ligne : barre AD/AP et manques ; le détail s'affiche au survol. */
+function CompSummary({ comp, mine }: { comp: TeamComp; mine: boolean }) {
+  if (comp.known < 2) return null;
+  const ad = Math.round(comp.ad * 100), ap = 100 - ad;
+  const dmgIssue = comp.issues.find((i) => i.gap === "ap" || i.gap === "ad");
+  const others = comp.issues.filter((i) => i !== dmgIssue && (mine || i.level === "bad"));
+  const dmgText = dmgIssue ? dmgIssue.short : ad >= 60 ? `${ad} % AD` : ap >= 60 ? `${ap} % AP` : "AD / AP équilibré";
+  return (
+    <span className="comp" tabIndex={0} aria-label={`Composition : ${dmgText}${others.length ? `, manque : ${others.map((i) => i.short).join(", ")}` : ""}`}>
+      <span className="comp__bar" aria-hidden><span className="comp__ad" style={{ width: `${ad}%` }} /><span className="comp__ap" /></span>
+      <span className={`comp__dmg${dmgIssue ? " tone-bad" : ""}`}>{dmgText}</span>
+      {mine && others.slice(0, 2).map((i) => (
+        <span key={i.gap} className={`comp__chip comp__chip--${i.level}`}>✕ {i.short}</span>
+      ))}
+      <span className="comp__pop" role="tooltip">
+        <strong>{mine ? "Composition de ton équipe" : "Composition adverse"}</strong>
+        {comp.issues.length === 0 && <span className="comp__line"><b className="tone-good">✓</b>Rien ne manque pour l’instant.</span>}
+        {comp.issues.map((i) => (
+          <span key={i.gap} className="comp__line"><b className={i.level === "bad" ? "tone-bad" : "tone-warn"}>{i.level === "bad" ? "✕" : "~"}</b>{i.text}</span>
+        ))}
+        {mine && comp.issues.length > 0 && <small>Les picks qui comblent ces manques sont marqués « Comble : … ».</small>}
+      </span>
+    </span>
   );
 }

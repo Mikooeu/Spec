@@ -257,7 +257,7 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       ).bind(await sha256Hex(client)).first<{ puuid: string; ids_cursor: number | null; ids_refreshed_at: number | null; last_seen_at: number }>();
       if (!player) return error(404, "not_registered");
       const puuid = player.puuid;
-      const [champs, matchups, counts] = await env.DB.batch([
+      const [champs, matchups, counts, weekly] = await env.DB.batch([
         env.DB.prepare(
           `SELECT champion_id AS c, role AS r, COUNT(*) AS g, SUM(win) AS w FROM player_matches
            WHERE puuid = ?1 AND remake = 0 GROUP BY champion_id, role`).bind(puuid),
@@ -267,6 +267,11 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
         env.DB.prepare(
           `SELECT (SELECT COUNT(*) FROM player_matches WHERE puuid = ?1 AND remake = 0) AS matches,
                   (SELECT COUNT(*) FROM pending WHERE puuid = ?1) AS pending`).bind(puuid),
+        // winrate par semaine (semaines du lundi au dimanche, en UTC) sur les 8 dernières semaines
+        env.DB.prepare(
+          `SELECT (game_creation - ${WEEK_OFFSET}) / ${WEEK} AS k, COUNT(*) AS g, SUM(win) AS w FROM player_matches
+           WHERE puuid = ?1 AND remake = 0 AND game_creation >= ?2 GROUP BY k ORDER BY k`)
+          .bind(puuid, weekStart(now) - 7 * WEEK),
       ]);
       if (now - player.last_seen_at > 3600_000) {
         await env.DB.prepare(`UPDATE players SET last_seen_at = ?2 WHERE puuid = ?1`).bind(puuid, now).run();
@@ -281,6 +286,7 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
         },
         champions: (champs.results as Agg[]).map((x) => [x.c, x.r, x.g, x.w]),
         matchups: (matchups.results as Agg[]).map((x) => [x.c, x.r, x.o, x.g, x.w]),
+        weeks: (weekly.results as { k: number; g: number; w: number }[]).map((x) => [x.k * WEEK + WEEK_OFFSET, x.g, x.w]),
       }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -341,6 +347,11 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
     return error(500, "server_error");
   }
 }
+
+/** Semaines du lundi 00:00 UTC (le 1er janvier 1970 était un jeudi : premier lundi le 5 janvier). */
+const WEEK = 7 * 86400_000;
+const WEEK_OFFSET = 4 * 86400_000;
+const weekStart = (t: number) => Math.floor((t - WEEK_OFFSET) / WEEK) * WEEK + WEEK_OFFSET;
 
 export default {
   fetch: (req: Request, env: Env) => handle(req, env),
