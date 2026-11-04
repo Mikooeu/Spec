@@ -182,6 +182,23 @@ test("synchro : historique, détail des parties, remakes exclus, vis-à-vis", as
   assert.ok(!JSON.stringify(hist).includes("p".repeat(78)));
   assert.equal((await call(e, "GET", "/v1/players/" + "1a1b2c3d-1111-5222-9333-444455556666" + "/matches")).status, 404);
 
+  // duo : EUW1_103 jouée avec P2 dans la même équipe ; aucun PUUID ni pseudo renvoyé
+  const duo = await (await call(e, "GET", "/v1/players/" + C1 + "/duos")).json() as
+    { duos: { key: string; games: number; wins: number; combos: number[][]; matches: unknown[][] }[] };
+  assert.equal(duo.duos.length, 1);
+  assert.deepEqual([duo.duos[0].games, duo.duos[0].wins], [1, 1]);
+  assert.deepEqual(duo.duos[0].combos, [[103, 122, 1, 1]]);
+  assert.deepEqual(duo.duos[0].matches, [["EUW1_103", 122, 103]]);
+  assert.match(duo.duos[0].key, /^[0-9a-f]{16}$/);
+  assert.ok(!JSON.stringify(duo).includes("q".repeat(78)));
+  const together = await (await call(e, "GET", `/v1/players/${C1}/matches?with=${duo.duos[0].key}`)).json() as { matches: unknown[][] };
+  assert.deepEqual(together.matches.map((m) => m[0]), ["EUW1_103"]);
+  const nobody = await (await call(e, "GET", `/v1/players/${C1}/matches?with=0123456789abcdef`)).json() as { matches: unknown[] };
+  assert.equal(nobody.matches.length, 0);
+  // la clé du duo est propre à chaque joueur
+  const duo2 = await (await call(e, "GET", "/v1/players/" + C2 + "/duos")).json() as { duos: { key: string }[] };
+  assert.notEqual(duo2.duos[0].key, duo.duos[0].key);
+
   // second passage : rien de nouveau, aucun appel
   log.length = 0;
   const again = await syncRun(e.DB, new Riot("RGAPI-test", "europe", 14, riotFetch(ids, matches, log)),

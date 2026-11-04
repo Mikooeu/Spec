@@ -79,6 +79,18 @@ async function isAdmin(req: Request, env: Env) {
   return env.ADMIN_TOKEN?.length >= 32 && auth.startsWith("Bearer ") && safeEqual(auth.slice(7), env.ADMIN_TOKEN);
 }
 
+/** Clé opaque d'un partenaire de duo, propre à chaque joueur (on ne peut pas en déduire le PUUID). */
+async function duoKey(me: string, partner: string): Promise<string> {
+  return (await sha256Hex(`duo:${me}:${partner}`)).slice(0, 16);
+}
+
+async function partnerFromKey(env: Env, me: string, key: string): Promise<string | null> {
+  if (!/^[0-9a-f]{16}$/.test(key)) return null;
+  const { results } = await env.DB.prepare(`SELECT puuid FROM players WHERE puuid <> ?1`).bind(me).all<{ puuid: string }>();
+  for (const r of results) if ((await duoKey(me, r.puuid)) === key) return r.puuid;
+  return null;
+}
+
 export async function handle(req: Request, env: Env, now = Date.now(), fetcher?: typeof fetch): Promise<Response> {
   const url = new URL(req.url);
   if (url.pathname.length > MAX_PATH) return error(414, "uri_too_long");
@@ -169,6 +181,7 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
     }
 
     // Historique détaillé d'un joueur inscrit (parties classées solo de la saison), page par page.
+    // `with=<clé de duo>` : seulement les parties jouées avec ce joueur (dans la même équipe).
     const h = /^\/v1\/players\/([^/]+)\/matches$/.exec(path);
     if (method === "GET" && h) {
       const client = decodeURIComponent(h[1]);
@@ -178,16 +191,59 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       if (!player) return error(404, "not_registered");
       const before = Number(url.searchParams.get("before") ?? "");
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") ?? "20") || 20));
+      const withKey = url.searchParams.get("with");
+      let partner: string | null = null;
+      if (withKey) {
+        partner = await partnerFromKey(env, player.puuid, withKey);
+        if (!partner) return json({ matches: [] }, 200, { "Cache-Control": "no-store" });
+      }
       const { results } = await env.DB.prepare(
-        `SELECT match_id AS id, game_creation AS t, champion_id AS c, role AS r, opponent_id AS o, win AS w,
-                remake AS x, detail AS d
-         FROM player_matches WHERE puuid = ?1 AND game_creation < ?2
-         ORDER BY game_creation DESC LIMIT ?3`,
-      ).bind(player.puuid, Number.isFinite(before) && before > 0 ? before : Number.MAX_SAFE_INTEGER, limit)
+        `SELECT a.match_id AS id, a.game_creation AS t, a.champion_id AS c, a.role AS r, a.opponent_id AS o, a.win AS w,
+                a.remake AS x, a.detail AS d
+         FROM player_matches a
+         WHERE a.puuid = ?1 AND a.game_creation < ?2
+           AND (?4 IS NULL OR EXISTS (SELECT 1 FROM player_matches b WHERE b.match_id = a.match_id AND b.puuid = ?4 AND b.win = a.win))
+         ORDER BY a.game_creation DESC LIMIT ?3`,
+      ).bind(player.puuid, Number.isFinite(before) && before > 0 ? before : Number.MAX_SAFE_INTEGER, limit, partner)
         .all<{ id: string; t: number; c: number; r: number; o: number | null; w: number; x: number; d: string | null }>();
       return json({
         matches: results.map((m) => [m.id, m.t, m.c, m.r, m.o, m.w, m.x, m.d ? JSON.parse(m.d) : null]),
       }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // Duo : parties classées solo jouées dans la même équipe qu'un autre joueur inscrit.
+    // Aucun pseudo : chaque joueur est désigné par une clé opaque ; l'appli retrouve son nom dans le client LoL.
+    const du = /^\/v1\/players\/([^/]+)\/duos$/.exec(path);
+    if (method === "GET" && du) {
+      const client = decodeURIComponent(du[1]);
+      if (!CLIENT_RE.test(client)) return error(400, "bad_client");
+      const player = await env.DB.prepare(`SELECT puuid FROM devices WHERE client_hash = ?1`)
+        .bind(await sha256Hex(client)).first<{ puuid: string }>();
+      if (!player) return error(404, "not_registered");
+      const { results } = await env.DB.prepare(
+        `SELECT b.puuid AS p, a.match_id AS id, a.game_creation AS t, a.champion_id AS c, b.champion_id AS pc, a.win AS w
+         FROM player_matches a JOIN player_matches b
+           ON b.match_id = a.match_id AND b.puuid <> a.puuid AND b.win = a.win
+         WHERE a.puuid = ?1 AND a.remake = 0
+         ORDER BY a.game_creation DESC`,
+      ).bind(player.puuid).all<{ p: string; id: string; t: number; c: number; pc: number; w: number }>();
+      const by = new Map<string, { games: number; wins: number; combos: Map<string, [number, number, number, number]>; matches: [string, number, number][] }>();
+      for (const r of results) {
+        const d = by.get(r.p) ?? { games: 0, wins: 0, combos: new Map<string, [number, number, number, number]>(), matches: [] as [string, number, number][] };
+        d.games++; d.wins += r.w ? 1 : 0;
+        const k = `${r.c}:${r.pc}`;
+        const c = d.combos.get(k) ?? [r.c, r.pc, 0, 0];
+        c[2]++; c[3] += r.w ? 1 : 0; d.combos.set(k, c);
+        if (d.matches.length < 200) d.matches.push([r.id, r.pc, r.c]);
+        by.set(r.p, d);
+      }
+      const duos: { key: string; games: number; wins: number; combos: number[][]; matches: [string, number, number][] }[] = [];
+      for (const [p, d] of by) {
+        duos.push({ key: await duoKey(player.puuid, p), games: d.games, wins: d.wins,
+                    combos: [...d.combos.values()].sort((x, y) => y[2] - x[2]).slice(0, 10), matches: d.matches });
+      }
+      duos.sort((x, y) => y.games - x.games);
+      return json({ duos }, 200, { "Cache-Control": "no-store" });
     }
 
     // Stats perso d'un joueur inscrit

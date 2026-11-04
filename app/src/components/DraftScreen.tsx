@@ -9,6 +9,7 @@ import { ChampionIcon } from "./ChampionIcon";
 import type { PersonalState } from "../lib/api";
 import { ChampionPicker } from "./ChampionPicker";
 import { Segmented } from "./Segmented";
+import { Trend } from "./Trend";
 
 export interface Draft {
   role: number;                    // rôle assigné (index dans ROLES)
@@ -237,17 +238,17 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
             {discovery && <span className="badge">Découverte</span>}
             {!compact && <span>{discovery ? "Hors de ton pool" : "Dans ton pool"}</span>}
             {res.games < LOW_DATA_GAMES && <span className="warn">Peu de données</span>}
-            {compact && perso?.short && <span className={`tone-${perso.tone}`}>{perso.short}</span>}
+            {compact && perso?.short && <span className={`tone-${perso.tone}`}>{perso.short} <Trend tone={perso.tone} /></span>}
           </span>
         </span>
         <span className="reco__stat">
-          <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}</span>
+          <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}<Trend tone={wrTone(res.score)} /></span>
           <span className="reco__label">Dans cette draft</span>
         </span>
         {!compact && <>
           <span className="reco__sep" />
           <span className="reco__perso">
-            <span className={`reco__perso-value tone-${perso?.tone ?? "neutral"}`}>{perso?.value ?? "—"}</span>
+            <span className={`reco__perso-value tone-${perso?.tone ?? "neutral"}`}>{perso?.value ?? "—"}<Trend tone={perso?.tone} /></span>
             <span className="reco__label">{perso?.label ?? "Stats perso indisponibles"}</span>
           </span>
         </>}
@@ -274,7 +275,7 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
 function Factor({ label, value }: { label: string; value: number }) {
   return (
     <span className="factor">
-      {label} <strong className={`tone-${value > 0.0005 ? "good" : value < -0.0005 ? "bad" : "neutral"}`}>{pts(value)}</strong>
+      {label} <strong className={`tone-${value > 0.0005 ? "good" : value < -0.0005 ? "bad" : "neutral"}`}>{pts(value)}<Trend tone={value > 0.0005 ? "good" : value < -0.0005 ? "bad" : "neutral"} /></strong>
     </span>
   );
 }
@@ -428,7 +429,7 @@ export function MyPick({ stats, draft, compact = false }: { stats: Stats; draft:
           <p className="mypick__name">{champName(stats, champ)}</p>
         </div>
         <span className="reco__stat">
-          <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}</span>
+          <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}<Trend tone={wrTone(res.score)} /></span>
           <span className="reco__label">Dans cette draft</span>
         </span>
       </div>

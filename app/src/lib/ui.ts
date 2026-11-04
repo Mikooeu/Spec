@@ -9,6 +9,9 @@ export const int = (x: number) => Math.round(x).toLocaleString("fr-FR");
 /** Couleur d'un winrate : vert dès 51,5 %, rouge sous 49 %. */
 export const wrTone = (x: number) => (x >= 0.515 ? "good" : x < 0.49 ? "bad" : "neutral");
 
+/** Flèche qui double la couleur (lisible sans distinguer le vert du rouge) : ▲ bon, ▼ mauvais, rien sinon. */
+export const toneArrow = (tone: string | undefined) => (tone === "good" ? "▲" : tone === "bad" ? "▼" : "");
+
 export const iconUrl = (stats: Stats, champ: number) => {
   const c = stats.champions.get(champ);
   return c ? `https://ddragon.leagueoflegends.com/cdn/${stats.ddragon}/img/champion/${c.key}.png` : "";

@@ -6,8 +6,10 @@ import type { Account } from "../lib/lcu";
 import { ChampionIcon } from "./ChampionIcon";
 import { Rune, useRuneData, type RuneData } from "./Runes";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
+import { IMPACT_MIN, IMPACT_RELIABLE, impact, settle } from "../lib/impact";
+import { Trend } from "./Trend";
 import {
-  QUEUE_LABELS, findPlayer, loadGameDetail, loadHistory, loadPlayer, loadServerHistory, mergeHistory, rankText,
+  QUEUE_LABELS, duoPartner, loadDuos, type Duo, findPlayer, loadGameDetail, loadHistory, loadPlayer, loadServerHistory, mergeHistory, rankText,
   readRanked, type Game, type GameDetail, type OtherPlayer, type PlayerLine, type QueueKind,
 } from "../lib/history";
 import { noteText, noteTone, rateGame, type Rating } from "../lib/rating";
@@ -117,6 +119,10 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [role, setRole] = useState<number | null>(null);
+  const [tab, setTab] = useState<Tab>("history");   // le profil s'ouvre toujours sur l'historique
+  const [duo, setDuo] = useState<DuoFilter | null>(null);
+  const [duoGames, setDuoGames] = useState<Game[] | null>(null);
+  const [impactVersion, setImpactVersion] = useState(0);
   const registered = perso.kind === "ready";
 
   useEffect(() => {
@@ -151,6 +157,18 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   };
 
   const games = clientGames || serverGames.length ? mergeHistory(clientGames ?? [], serverGames) : null;
+  // picks notés au lock : on les relie aux parties terminées
+  useEffect(() => { if (games && settle(games)) setImpactVersion((v) => v + 1); }, [games?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // historique filtré sur un partenaire de duo (toutes vos parties ensemble, depuis le serveur)
+  useEffect(() => {
+    if (!duo || !account?.puuid) { setDuoGames(null); return; }
+    let alive = true;
+    setDuoGames(null);
+    loadServerHistory(account.puuid, undefined, 50, duo.key).then((g) => alive && setDuoGames(g)).catch(() => alive && setDuoGames([]));
+    return () => { alive = false; };
+  }, [duo?.key, account?.puuid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openDuo = (f: DuoFilter) => { setDuo(f); setTab("history"); };
   const activate = async () => {
     setBusy(true);
     setMessage(await onRegister(code));
@@ -195,20 +213,37 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
       )}
 
       {perso.kind === "ready" && <SeasonTiles stats={stats} data={perso.data} games={games} />}
-      {perso.kind === "ready" && <OwnBestPicks stats={stats} data={perso.data} role={role} />}
 
-      <History stats={stats} games={games} assets={assets} role={role} onRole={setRole} me={account?.puuid ?? null}
-               intro={registered
-                 ? "Tes parties de la saison. Clique sur une partie pour voir le détail des 10 joueurs. Les LP s’affichent pour les parties jouées avec Spec ouvert."
-                 : "Tes dernières parties. Clique sur une partie pour voir le détail des 10 joueurs. Active tes stats perso pour retrouver toute ta saison."}
-               empty={!clientOn && !games ? "Lance le client LoL pour voir ton historique." : null}
-               error={historyError && !serverGames.length ? "Le client LoL n’a pas renvoyé ton historique. Réessaie dans un instant." : null}
-               onOpenPlayer={onOpenPlayer} showLp
-               footer={registered && serverGames.length > 0 && more !== "end" ? (
-                 <button className="btn btn--secondary btn--small history__more" onClick={loadMore} disabled={more === "loading"}>
-                   {more === "loading" ? "Chargement…" : "Afficher plus de parties"}
-                 </button>
-               ) : null} />
+      <ProfileTabs tab={tab} onTab={setTab} tabs={registered ? ["history", "stats", "duo"] : ["history", "stats"]} />
+
+      <div key={tab} className="profile-view fade-in">
+      {tab === "history" && (
+        <History stats={stats} games={duo ? duoGames : games} assets={assets} role={role} onRole={setRole} me={account?.puuid ?? null}
+                 intro={duo ? `Vos ${duo.games} parties ensemble en Solo/Duo, de la plus récente à la plus ancienne.`
+                   : registered
+                   ? "Tes parties de la saison. Clique sur une partie pour voir le détail des 10 joueurs. Les LP s’affichent pour les parties jouées avec Spec ouvert."
+                   : "Tes dernières parties. Clique sur une partie pour voir le détail des 10 joueurs. Active tes stats perso pour retrouver toute ta saison."}
+                 empty={!clientOn && !games ? "Lance le client LoL pour voir ton historique." : null}
+                 error={historyError && !serverGames.length ? "Le client LoL n’a pas renvoyé ton historique. Réessaie dans un instant." : null}
+                 onOpenPlayer={onOpenPlayer} showLp duo={duo} onClearDuo={() => setDuo(null)}
+                 footer={!duo && registered && serverGames.length > 0 && more !== "end" ? (
+                   <button className="btn btn--secondary btn--small history__more" onClick={loadMore} disabled={more === "loading"}>
+                     {more === "loading" ? "Chargement…" : "Afficher plus de parties"}
+                   </button>
+                 ) : null} />
+      )}
+      {tab === "stats" && (
+        <>
+          <ImpactCard version={impactVersion} />
+          {perso.kind === "ready"
+            ? <OwnBestPicks stats={stats} data={perso.data} />
+            : <p className="hint">Active tes stats perso pour voir tes meilleurs picks de la saison.</p>}
+        </>
+      )}
+      {tab === "duo" && account?.puuid && (
+        <DuoList stats={stats} client={account.puuid} selected={duo?.key ?? null} onOpen={openDuo} />
+      )}
+      </div>
     </>
   );
 }
@@ -245,7 +280,7 @@ function Tile({ label, value, detail, tone, stats, champ }:
       <span className="tile-stat__label">{label}</span>
       <span className={`tile-stat__value${champ != null ? " tile-stat__value--champ" : ""}${tone ? ` tone-${tone}` : ""}`}>
         {stats && champ != null && <ChampionIcon stats={stats} champ={champ} size={1.75} />}
-        {value}
+        {value}{tone && <Trend tone={tone} />}
       </span>
       <span className="tile-stat__detail">{detail}</span>
     </div>
@@ -274,7 +309,8 @@ function bestPicks(rows: [number, number, number, number][], role: number | null
     .slice(0, 3);
 }
 
-function OwnBestPicks({ stats, data, role }: { stats: Stats; data: Personal; role: number | null }) {
+function OwnBestPicks({ stats, data }: { stats: Stats; data: Personal }) {
+  const [role, setRole] = useState<number | null>(null);
   const season = data.champions.reduce((a, [, , g]) => a + g, 0);
   const min = season < 200 ? 10 : 20;   // seuil adapté au nombre de parties de la saison
   const picks = bestPicks(data.champions, role, min);
@@ -282,17 +318,19 @@ function OwnBestPicks({ stats, data, role }: { stats: Stats; data: Personal; rol
   return (
     <BestPicks stats={stats} picks={picks}
                sub={`Tes 3 meilleurs champions${where} cette saison en Solo/Duo · minimum ${min} parties`}
-               empty={`Aucun champion avec ${min} parties ou plus${where} cette saison.`} />
+               empty={`Aucun champion avec ${min} parties ou plus${where} cette saison.`}
+               filter={<RoleFilter role={role} onRole={setRole} />} />
   );
 }
 
-function BestPicks({ stats, picks, sub, empty }: { stats: Stats; picks: Pick[]; sub: string; empty: string }) {
+function BestPicks({ stats, picks, sub, empty, filter }: { stats: Stats; picks: Pick[]; sub: string; empty: string; filter?: React.ReactNode }) {
   return (
     <section className="best">
       <div>
         <h2>Meilleurs picks</h2>
         <p className="muted small">{sub}</p>
       </div>
+      {filter}
       {picks.length ? (
         <div className="best__cards">
           {picks.map((p, i) => (
@@ -304,7 +342,7 @@ function BestPicks({ stats, picks, sub, empty }: { stats: Stats; picks: Pick[]; 
                 <span className="muted small">{int(p.games)} partie{p.games > 1 ? "s" : ""}</span>
               </span>
               <span className="best__stats">
-                <span className={`best__wr tone-${wrTone(p.wins / p.games)}`}>{pct(p.wins / p.games)}</span>
+                <span className={`best__wr tone-${wrTone(p.wins / p.games)}`}>{pct(p.wins / p.games)}<Trend tone={wrTone(p.wins / p.games)} /></span>
                 <span className="muted small">{Math.round(p.share * 100)} % de pick</span>
               </span>
             </div>
@@ -324,6 +362,8 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
   const [player, setPlayer] = useState<OtherPlayer | null>(null);
   const [error, setError] = useState(false);
   const [role, setRole] = useState<number | null>(null);
+  const [pickRole, setPickRole] = useState<number | null>(null);
+  const [tab, setTab] = useState<Tab>("history");
   useEffect(() => {
     let alive = true;
     loadPlayer(puuid, guess).then((p) => alive && setPlayer(p)).catch(() => alive && setError(true));
@@ -341,7 +381,7 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
   const mainRole = roles.indexOf(Math.max(...roles));
   const rows = ranked.map((g) => [g.champ, g.role ?? -1, 1, g.win ? 1 : 0] as [number, number, number, number]);
-  const picks = bestPicks(rows, role, 3);
+  const picks = bestPicks(rows, pickRole, 3);
 
   return (
     <>
@@ -374,13 +414,20 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
                     detail={roles[mainRole] ? `${roles[mainRole]} partie${roles[mainRole] > 1 ? "s" : ""} sur ${ranked.length}` : ""} />
             </div>
           )}
-          <BestPicks stats={stats} picks={picks}
-                     sub={`Sur ses 20 dernières parties (le client LoL ne donne pas plus) · minimum 3 parties`}
-                     empty="Pas assez de parties sur un même champion pour ce filtre." />
-          <History stats={stats} games={player.games} assets={assets} role={role} onRole={setRole} me={me}
-                   title="Ses dernières parties"
-                   intro="Les 20 dernières parties visibles dans le client LoL. Clique sur une partie pour voir le détail."
-                   onOpenPlayer={onOpenPlayer} subject={puuid} />
+          <ProfileTabs tab={tab} onTab={setTab} tabs={["history", "stats"]} />
+          <div key={tab} className="profile-view fade-in">
+          {tab === "stats" && (
+            <BestPicks stats={stats} picks={picks}
+                       sub={`Sur ses 20 dernières parties (le client LoL ne donne pas plus) · minimum 3 parties`}
+                       empty="Pas assez de parties sur un même champion pour ce filtre."
+                       filter={<RoleFilter role={pickRole} onRole={setPickRole} />} />
+          )}
+          {tab === "history" && (
+            <History stats={stats} games={player.games} assets={assets} role={role} onRole={setRole} me={me}
+                     intro="Ses 20 dernières parties visibles dans le client LoL. Clique sur une partie pour voir le détail."
+                     onOpenPlayer={onOpenPlayer} subject={puuid} />
+          )}
+          </div>
         </>
       )}
     </>
@@ -409,11 +456,13 @@ interface HistoryProps {
   title?: string; intro: string; empty?: string | null; error?: string | null;
   footer?: React.ReactNode; showLp?: boolean;
   onOpenPlayer: (puuid: string | null) => void;
+  /** Historique filtré sur un partenaire de duo. */
+  duo?: DuoFilter | null; onClearDuo?: () => void;
 }
 
 /** Historique : filtre par file et par poste (le poste choisit aussi les meilleurs picks), ligne dépliable. */
-function History({ stats, games, assets, role, onRole, me, subject, title = "Historique", intro, empty, error, footer,
-                   showLp = false, onOpenPlayer }: HistoryProps) {
+function History({ stats, games, assets, role, onRole, me, subject, title, intro, empty, error, footer,
+                   showLp = false, onOpenPlayer, duo, onClearDuo }: HistoryProps) {
   const [queue, setQueue] = useState<"all" | QueueKind>("all");
   const [open, setOpen] = useState<number | null>(null);
   const ratings = useRatings(stats, games, subject ?? me);
@@ -424,9 +473,21 @@ function History({ stats, games, assets, role, onRole, me, subject, title = "His
   return (
     <section className="history">
       <div>
-        <h2>{title}</h2>
+        {title && <h2>{title}</h2>}
         <p className="muted small">{intro}</p>
       </div>
+      {duo && (
+        <div className="duo-filter">
+          <button className="duo-chip" onClick={onClearDuo} title="Revenir à tout l’historique">
+            <ProfileIcon version={stats.ddragon} icon={duo.icon} size={1.125} />
+            Avec {duo.name}<span aria-hidden>✕</span>
+          </button>
+          <span className={`small tone-${wrTone(duo.wins / Math.max(1, duo.games))}`}>
+            {duo.wins} V – {duo.games - duo.wins} D · {pct(duo.wins / Math.max(1, duo.games))}<Trend tone={wrTone(duo.wins / Math.max(1, duo.games))} />
+          </span>
+        </div>
+      )}
+      {duo && !games && <div className="skeleton">{[0, 1, 2].map((i) => <span key={i} />)}</div>}
       {empty && <p className="hint">{empty}</p>}
       {error && <p className="hint">{error}</p>}
       {games && (
@@ -456,12 +517,12 @@ function History({ stats, games, assets, role, onRole, me, subject, title = "His
               {open === g.id ? (
                 <div className="game-open">
                   <GameRow stats={stats} game={g} assets={assets} open showLp={showLp} rating={ratings.get(g.id)}
-                           onToggle={() => setOpen(null)} />
+                           partner={duo ? partnerText(stats, duo, g.id) : undefined} onToggle={() => setOpen(null)} />
                   <GameDetailPanel stats={stats} game={g} assets={assets} me={subject ?? me} onOpenPlayer={onOpenPlayer} />
                 </div>
               ) : (
                 <GameRow stats={stats} game={g} assets={assets} open={false} showLp={showLp} rating={ratings.get(g.id)}
-                         onToggle={() => setOpen(g.id)} />
+                         partner={duo ? partnerText(stats, duo, g.id) : undefined} onToggle={() => setOpen(g.id)} />
               )}
             </Fragment>
           ))}
@@ -562,8 +623,9 @@ function Loadout({ spells, keystone, subStyle, assets, size }:
   );
 }
 
-function GameRow({ stats, game: g, assets, open, showLp, rating, onToggle }:
-  { stats: Stats; game: Game; assets: Assets; open: boolean; showLp: boolean; rating: Rating | null | undefined; onToggle: () => void }) {
+function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onToggle }:
+  { stats: Stats; game: Game; assets: Assets; open: boolean; showLp: boolean; rating: Rating | null | undefined;
+    partner?: string; onToggle: () => void }) {
   const result = g.remake ? "remake" : g.win ? "win" : "loss";
   const kda = g.deaths ? (g.kills + g.assists) / g.deaths : g.kills + g.assists;
   const min = Math.round(g.duration / 60);
@@ -575,7 +637,7 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, onToggle }:
       <span className="game__id">
         <span className="game__name">{champName(stats, g.champ)}</span>
         <span className="muted small">
-          {g.queue === "other" ? g.queueName : QUEUE_LABELS[g.queue]}{g.role != null ? ` · ${ROLE_LABELS[g.role]}` : ""} · {ago(g.created)}
+          {partner ?? `${g.queue === "other" ? g.queueName : QUEUE_LABELS[g.queue]}${g.role != null ? ` · ${ROLE_LABELS[g.role]}` : ""}`} · {ago(g.created)}
         </span>
       </span>
       <ItemRow items={g.items} role={g.role} assets={assets} size="md" />
@@ -583,6 +645,7 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, onToggle }:
       <span className="stat-col game__note">
         <span className="stat-col__value">
           <span className={`tone-${rating ? noteTone(rating.note) : "neutral"}`}>{rating ? noteText(rating.note) : "—"}</span>
+          {rating && <Trend tone={noteTone(rating.note)} />}
           <small> /20</small>
         </span>
         <span className="stat-col__label">
@@ -724,13 +787,184 @@ function persoText(perso: PersonalState): string {
 }
 
 /** Icône d'invocateur (Data Dragon), cercle vide si inconnue. */
-function ProfileIcon({ version, icon }: { version: string; icon: number | null }) {
+function ProfileIcon({ version, icon, size = 3 }: { version: string; icon: number | null; size?: number }) {
   const [failed, setFailed] = useState(false);
-  if (icon == null || failed) return <span className="icon icon--empty" style={{ width: "3rem", height: "3rem" }} aria-hidden />;
+  const box = { width: `${size}rem`, height: `${size}rem` };
+  if (icon == null || failed) return <span className="icon icon--empty" style={box} aria-hidden />;
   return (
-    <span className="icon icon--image account__icon" style={{ width: "3rem", height: "3rem" }}>
+    <span className="icon icon--image account__icon" style={box}>
       <img src={`https://ddragon.leagueoflegends.com/cdn/${version}/img/profileicon/${icon}.png`} alt="Icône d’invocateur"
            draggable={false} onError={() => setFailed(true)} />
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Onglets, filtre de rôle, impact de Spec, duo
+
+type Tab = "history" | "stats" | "duo";
+const TAB_LABELS: Record<Tab, string> = { history: "Historique", stats: "Stats", duo: "Duo" };
+
+function ProfileTabs({ tab, onTab, tabs }: { tab: Tab; onTab: (t: Tab) => void; tabs: Tab[] }) {
+  return (
+    <div className="ptabs" role="tablist" aria-label="Sections du profil">
+      {tabs.map((t) => (
+        <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "is-active" : ""} onClick={() => onTab(t)}>
+          {TAB_LABELS[t]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RoleFilter({ role, onRole }: { role: number | null; onRole: (r: number | null) => void }) {
+  return (
+    <Segmented className="segmented" role="tablist" aria-label="Rôle">
+      {[null, 0, 1, 2, 3, 4].map((r) => (
+        <button key={String(r)} role="tab" aria-selected={role === r} className={role === r ? "is-active" : ""} onClick={() => onRole(r)}>
+          {r == null ? "Tous" : ROLE_LABELS[r]}
+        </button>
+      ))}
+    </Segmented>
+  );
+}
+
+/** « Spec t'aide-t-il à gagner ? » : progression jusqu'à 20 parties, puis tendance, puis résultat fiable. */
+function ImpactCard({ version }: { version: number }) {
+  const data = useMemo(() => impact(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [fg, fw] = data.followed, [og, ow] = data.other;
+  const reliable = data.total >= IMPACT_RELIABLE;
+  return (
+    <section className="best">
+      <div>
+        <h2>Spec t’aide-t-il à gagner ?</h2>
+        <p className="muted small">Tes parties classées jouées avec Spec ouvert : le pick que Spec classait n°1, ou un autre.</p>
+      </div>
+      <div className="card impact">
+        {data.total < IMPACT_MIN ? (
+          <>
+            <div className="impact__head">
+              <strong>{data.total} / {IMPACT_MIN} parties enregistrées</strong>
+              <span className="grow" />
+              <span className="muted small">Encore {IMPACT_MIN - data.total} partie{IMPACT_MIN - data.total > 1 ? "s" : ""}</span>
+            </div>
+            <div className="impact__progress"><span style={{ width: `${(data.total / IMPACT_MIN) * 100}%` }} /></div>
+            <p className="muted small">Spec note le pick qu’il te conseillait à chaque partie jouée avec l’appli ouverte. Le résultat s’affiche après {IMPACT_MIN} parties.</p>
+          </>
+        ) : (
+          <>
+            <div className="impact__head">
+              <strong>{data.total} parties enregistrées</strong>
+              <span className={`badge ${reliable ? "badge--mine" : ""}`}>{reliable ? "Résultat fiable" : "Tendance"}</span>
+              <span className="grow" />
+              {!reliable && <span className="muted small">Résultat fiable à partir de {IMPACT_RELIABLE} parties</span>}
+            </div>
+            <div className="impact__cols">
+              <ImpactStat label="Tu joues le n°1 de Spec" games={fg} wins={fw} />
+              <ImpactStat label="Tu joues autre chose" games={og} wins={ow} />
+              {fg > 0 && og > 0 && (() => {
+                const d = fw / fg - ow / og;
+                return (
+                  <div className="impact__diff">
+                    <strong className={`tone-${d > 0.005 ? "good" : d < -0.005 ? "bad" : "neutral"}`}>
+                      {d >= 0 ? "+" : "−"}{Math.abs(d * 100).toFixed(1).replace(".", ",")} pts
+                    </strong>
+                    <span className="muted small">en suivant Spec</span>
+                  </div>
+                );
+              })()}
+            </div>
+            {!reliable && <p className="muted small">Tendance : sur si peu de parties, l’écart peut encore venir du hasard. Continue de jouer avec Spec ouvert pour l’affiner.</p>}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ImpactStat({ label, games, wins }: { label: string; games: number; wins: number }) {
+  const wr = games ? wins / games : 0;
+  const tone = games ? wrTone(wr) : "neutral";
+  return (
+    <div className="impact__stat">
+      <span className="small">{label}</span>
+      <strong className={`tone-${tone}`}>{games ? pct(wr) : "—"}<Trend tone={tone} /></strong>
+      <span className="impact__bar"><span className={`tone-bg-${tone}`} style={{ width: `${wr * 100}%` }} /></span>
+      <span className="muted small">{games} partie{games > 1 ? "s" : ""} · {wins} victoire{wins > 1 ? "s" : ""}</span>
+    </div>
+  );
+}
+
+interface DuoFilter { key: string; name: string; icon: number | null; games: number; wins: number; partner: Map<number, number> }
+
+function partnerText(stats: Stats, duo: DuoFilter, gameId: number): string {
+  const champ = duo.partner.get(gameId);
+  const first = duo.name.split("#")[0];
+  return champ != null ? `Avec ${first} (${champName(stats, champ)})` : `Avec ${first}`;
+}
+
+/** Duo : joueurs avec qui tu as joué en Solo/Duo (comptes liés à Spec), winrate ensemble et meilleur combo. */
+function DuoList({ stats, client, selected, onOpen }:
+  { stats: Stats; client: string; selected: string | null; onOpen: (f: DuoFilter) => void }) {
+  const [duos, setDuos] = useState<Duo[] | null>(null);
+  const [error, setError] = useState(false);
+  const [names, setNames] = useState<Map<string, { name: string; icon: number | null } | null>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    loadDuos(client).then((d) => alive && setDuos(d)).catch(() => alive && setError(true));
+    return () => { alive = false; };
+  }, [client]);
+  useEffect(() => {
+    if (!duos) return;
+    let alive = true;
+    (async () => {
+      for (const d of duos) {
+        const p = await duoPartner(d, client);
+        if (alive) setNames((m) => new Map(m).set(d.key, p));
+      }
+    })();
+    return () => { alive = false; };
+  }, [duos, client]);
+
+  if (error) return <p className="hint">Le serveur Spec ne répond pas pour l’instant. Réessaie dans un instant.</p>;
+  if (!duos) return <div className="skeleton">{[0, 1, 2].map((i) => <span key={i} />)}</div>;
+  return (
+    <section className="best">
+      <p className="muted small">Tes parties en Solo/Duo avec d’autres joueurs qui ont lié leur compte Spec. Clique sur un profil pour voir vos parties ensemble dans l’onglet Historique.</p>
+      {duos.length === 0 ? (
+        <p className="hint">Aucune partie en duo avec un joueur Spec pour l’instant.</p>
+      ) : (
+        <div className="card duo-list stagger">
+          <div className="duo-row duo-row--head"><span>Joueur</span><span>Winrate ensemble</span><span className="duo-row__combo">Meilleur combo</span><span /></div>
+          {duos.map((d) => {
+            const who = names.get(d.key);
+            const name = who?.name ?? (names.has(d.key) ? "Joueur Spec" : "…");
+            const wr = d.wins / d.games, tone = wrTone(wr);
+            const best = [...d.combos].sort((a, b) => (b[3] / b[2] - a[3] / a[2]) || b[2] - a[2]).find((c) => c[2] >= 3) ?? d.combos[0];
+            return (
+              <button key={d.key} className={`duo-row${selected === d.key ? " is-selected" : ""}`}
+                      onClick={() => onOpen({ key: d.key, name, icon: who?.icon ?? null, games: d.games, wins: d.wins,
+                                              partner: new Map(d.matches.map(([m, pc]) => [Number(m.split("_")[1] ?? 0), pc])) })}>
+                <span className="duo-row__who">
+                  <ProfileIcon version={stats.ddragon} icon={who?.icon ?? null} size={2.5} />
+                  <span><strong>{name}</strong><small>{d.games} partie{d.games > 1 ? "s" : ""} ensemble</small></span>
+                </span>
+                <strong className={`duo-row__wr tone-${tone}`}>{pct(wr)}<Trend tone={tone} /></strong>
+                <span className="duo-row__combo">
+                  {best && <>
+                    <ChampionIcon stats={stats} champ={best[0]} size={2} /><span className="muted">+</span>
+                    <ChampionIcon stats={stats} champ={best[1]} size={2} />
+                    <span><strong>{champName(stats, best[0])} + {champName(stats, best[1])}</strong>
+                      <small>{pct(best[3] / best[2])} · {best[2]} partie{best[2] > 1 ? "s" : ""}</small></span>
+                  </>}
+                </span>
+                <span className="duo-row__go" aria-hidden>{selected === d.key ? "✓" : "›"}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <p className="muted small">Les pseudos sont lus dans le client LoL (le serveur Spec n’en garde aucun) : ouvre le client pour les voir.</p>
+    </section>
   );
 }

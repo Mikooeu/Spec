@@ -10,7 +10,8 @@ import { PoolScreen, type Pools } from "./components/PoolScreen";
 import { TierListScreen } from "./components/TierListScreen";
 import { ChampionScreen } from "./components/ChampionScreen";
 import { useLpTracking } from "./lib/history";
-import { type Stats } from "./lib/score";
+import { recommend, topForRole, type Stats } from "./lib/score";
+import { recordPick } from "./lib/impact";
 import { loadStats, register, usePersonal, useRegionStats, type Region } from "./lib/api";
 import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
 import { importRunes, importSpells, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
@@ -83,6 +84,16 @@ export default function App() {
       });
     }
   }, [phase]);
+  // « Spec t'aide-t-il à gagner ? » : au lock, on note la place du champion dans les recos de Spec
+  useEffect(() => {
+    if (!stats || !live?.myLocked || live.myChamp == null) return;
+    const allies = live.allies.filter((c, i): c is number => c != null && i !== live.role);
+    const enemies = live.enemies.filter((c): c is number => c != null);
+    const r = recommend(stats, live.role, pools[live.role], allies, enemies, live.bans);
+    const list = r.pool.length ? [...r.pool, ...r.discoveries] : topForRole(stats, live.role, allies, enemies, live.bans, 6);
+    const k = list.findIndex((x) => x.champ === live.myChamp);
+    recordPick({ at: Date.now(), champ: live.myChamp, role: live.role, rank: k >= 0 ? k + 1 : null });
+  }, [live?.myLocked, live?.myChamp]); // eslint-disable-line react-hooks/exhaustive-deps
   const account = client.status === "idle" || client.status === "champselect" ? client.account : null;
   // dernier compte vu dans le client : les stats perso restent visibles client fermé
   const [savedAccount, setSavedAccount] = usePersistent<Account | null>("spec.account", null);

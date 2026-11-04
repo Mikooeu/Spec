@@ -3,6 +3,7 @@ import { ROLE_LABELS, TIER_MIN_PICKRATE, tierList, type Stats, type TierRow } fr
 import { champName, int, patchLabel, pct, wrTone } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { Segmented } from "./Segmented";
+import { Trend } from "./Trend";
 
 type SortKey = "score" | "winrate" | "pickrate" | "banrate";
 const SORTS: [SortKey, string][] = [["score", "Score"], ["winrate", "Winrate"], ["pickrate", "Pickrate"], ["banrate", "Banrate"]];
@@ -88,7 +89,7 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
               <span className="tier-row__name">{champName(stats, r.champ)}</span>
             </span>
             <span className="tier-row__num tier-row__score">{(r.score * 100).toFixed(1).replace(".", ",")}</span>
-            <span className={`tier-row__num tier-row__wr tone-${wrTone(r.winrate)}`}>{pct(r.winrate)}</span>
+            <span className={`tier-row__num tier-row__wr tone-${wrTone(r.winrate)}`}>{pct(r.winrate)}<Trend tone={wrTone(r.winrate)} /></span>
             <span className="tier-row__num">{pct(r.pickrate)}</span>
             <span className="tier-row__num">{r.banrate == null ? "—" : pct(r.banrate)}</span>
           </button>

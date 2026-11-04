@@ -35,6 +35,7 @@ export interface Game {
 export interface PlayerLine {
   puuid: string | null;
   name: string;             // « Pseudo#TAG »
+  icon: number | null;      // icône d'invocateur
   champ: number;
   role: number | null;
   spells: number[]; keystone: number; subStyle: number;
@@ -132,7 +133,7 @@ type RawParticipant = {
 type RawGame = {
   gameId: number; queueId: number; gameCreation: number; gameDuration: number; mapId?: number;
   participants: RawParticipant[];
-  participantIdentities?: { participantId: number; player?: { gameName?: string; tagLine?: string; puuid?: string; summonerName?: string } }[];
+  participantIdentities?: { participantId: number; player?: { gameName?: string; tagLine?: string; puuid?: string; summonerName?: string; profileIcon?: number } }[];
   teams?: { teamId: number; win?: string | boolean }[];
 };
 type RawHistory = { games?: { games?: RawGame[] } };
@@ -178,10 +179,11 @@ type ServerMatch = [string, number, number, number, number | null, number, numbe
  * Parties classées solo de la saison gardées par le serveur Spec (stats perso activées) : l'historique
  * reste complet même quand celui du client ne montre que quelques parties. `before` : page suivante.
  */
-export async function loadServerHistory(client: string, before?: number, limit = 20): Promise<Game[]> {
+export async function loadServerHistory(client: string, before?: number, limit = 20, withKey?: string): Promise<Game[]> {
   if (!API_URL) return [];
   const q = new URLSearchParams({ limit: String(limit) });
   if (before) q.set("before", String(before));
+  if (withKey) q.set("with", withKey);
   const r = await fetch(`${API_URL}/v1/players/${encodeURIComponent(client)}/matches?${q}`);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const { matches } = (await r.json()) as { matches: ServerMatch[] };
@@ -231,7 +233,7 @@ async function fetchGameDetail(gameId: number, guess?: Guess): Promise<GameDetai
     const name = who?.gameName ? `${who.gameName}#${who.tagLine ?? ""}` : who?.summonerName ?? "Joueur";
     const s = p.stats;
     const line: PlayerLine = {
-      puuid: who?.puuid || null, name, champ: p.championId, role: roleOf(p, guess),
+      puuid: who?.puuid || null, name, icon: who?.profileIcon ?? null, champ: p.championId, role: roleOf(p, guess),
       spells: [n(p.spell1Id), n(p.spell2Id)], keystone: n(s.perk0), subStyle: n(s.perkSubStyle), items: itemsOf(s),
       kills: s.kills, deaths: s.deaths, assists: s.assists,
       cs: (s.totalMinionsKilled ?? 0) + (s.neutralMinionsKilled ?? 0), gold: n(s.goldEarned), damage: n(s.totalDamageDealtToChampions),
@@ -327,4 +329,31 @@ export function useLpTracking(client: ClientState): number {
     }
   }, [phase]);
   return version;
+}
+
+/** Duo vu par le serveur Spec : clé opaque du partenaire, bilan, combos de champions, parties ensemble. */
+export interface Duo {
+  key: string; games: number; wins: number;
+  combos: [number, number, number, number][];      // ton champion, le sien, parties, victoires
+  matches: [string, number, number][];             // partie, son champion, ton champion
+}
+
+export async function loadDuos(client: string): Promise<Duo[]> {
+  if (!API_URL) return [];
+  const r = await fetch(`${API_URL}/v1/players/${encodeURIComponent(client)}/duos`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return ((await r.json()) as { duos: Duo[] }).duos;
+}
+
+/** Nom, icône et identifiant client du partenaire, lus dans le détail d'une partie jouée ensemble. */
+export async function duoPartner(d: Duo, me: string | null): Promise<{ name: string; icon: number | null; puuid: string | null } | null> {
+  for (const [matchId, partnerChamp] of d.matches.slice(0, 3)) {
+    try {
+      const detail = await loadGameDetail(Number(matchId.split("_")[1] ?? 0));
+      const team = detail.teams.find((t) => t.players.some((p) => p.puuid === me)) ?? null;
+      const p = (team?.players ?? detail.teams.flatMap((t) => t.players)).find((x) => x.champ === partnerChamp && x.puuid !== me);
+      if (p) return { name: p.name, icon: p.icon, puuid: p.puuid };
+    } catch { /* client fermé ou partie introuvable : on essaie la suivante */ }
+  }
+  return null;
 }

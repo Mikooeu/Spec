@@ -7,6 +7,7 @@ import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
 import { ChampionIcon } from "./ChampionIcon";
 import { RuneTree } from "./Runes";
 import { Segmented } from "./Segmented";
+import { Trend } from "./Trend";
 
 interface Props {
   stats: Stats;
@@ -141,7 +142,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
                 </span>
                 <span className="grow" />
                 <span className="stat-col">
-                  <span className={`stat-col__value tone-${wrTone(bw / bg)}`}>{pct(bw / bg)}</span>
+                  <span className={`stat-col__value tone-${wrTone(bw / bg)}`}>{pct(bw / bg)}<Trend tone={wrTone(bw / bg)} /></span>
                   <span className="stat-col__label">{share(bg, page.tg)} des parties</span>
                 </span>
               </div>
@@ -178,7 +179,7 @@ function groupIcons(ids: string): [number, number][] {
 function Stat({ value, label, tone }: { value: string; label: string; tone?: string }) {
   return (
     <span className="stat-col">
-      <span className={`champ__stat${tone ? ` tone-${tone}` : ""}`}>{value}</span>
+      <span className={`champ__stat${tone ? ` tone-${tone}` : ""}`}>{value}<Trend tone={tone} /></span>
       <span className="stat-col__label">{label}</span>
     </span>
   );
@@ -225,7 +226,7 @@ function Cell({ id, data, wr, pr, tone }: { id: number; data: InfoMap | null; wr
   return (
     <span className={`cell${pr < RARE ? " is-rare" : ""}`}>
       <ItemIcon id={id} data={data} />
-      <span className={`cell__wr tone-${tone ?? wrTone(wr)}`}>{pct(wr)}</span>
+      <span className={`cell__wr tone-${tone ?? wrTone(wr)}`}>{pct(wr)}<Trend tone={tone ?? wrTone(wr)} /></span>
       <span className="cell__pr">{pct(pr)}</span>
     </span>
   );
@@ -243,7 +244,7 @@ function Combo({ icons, data, wr, pr }: { icons: [number, number][]; data: InfoM
         ))}
       </span>
       <span className="stat-col stat-col--left">
-        <span className={`stat-col__value tone-${wrTone(wr)}`}>{pct(wr)}</span>
+        <span className={`stat-col__value tone-${wrTone(wr)}`}>{pct(wr)}<Trend tone={wrTone(wr)} /></span>
         <span className="stat-col__label">{pct(pr)} des parties</span>
       </span>
     </span>

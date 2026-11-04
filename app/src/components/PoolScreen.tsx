@@ -4,6 +4,7 @@ import { champName, normalize, pct, wrTone } from "../lib/ui";
 import { PREFILL_MIN_GAMES, topChampions, type PersonalState } from "../lib/api";
 import { ChampionIcon } from "./ChampionIcon";
 import { Segmented } from "./Segmented";
+import { Trend } from "./Trend";
 
 export type Pools = number[][]; // un pool par rôle (index dans ROLES)
 
@@ -86,7 +87,7 @@ export function PoolScreen({ stats, pools, onChange, perso }: Props) {
             <button key={c} className="chip" onClick={() => toggle(c)} aria-label={`Retirer ${champName(stats, c)}`}>
               <ChampionIcon stats={stats} champ={c} size={1.75} />
               {champName(stats, c)}
-              {roleWr(c) != null && <span className={`chip__wr tone-${wrTone(roleWr(c)!)}`}>{pct(roleWr(c)!)}</span>}
+              {roleWr(c) != null && <span className={`chip__wr tone-${wrTone(roleWr(c)!)}`}>{pct(roleWr(c)!)}<Trend tone={wrTone(roleWr(c)!)} /></span>}
               <span className="chip__x" aria-hidden>×</span>
             </button>
           ))}
@@ -114,7 +115,7 @@ export function PoolScreen({ stats, pools, onChange, perso }: Props) {
                       title={wr == null ? `Pas assez de parties ${ROLE_LABELS[role]}` : `${pct(wr)} de winrate en ${ROLE_LABELS[role]} (Master+)`}>
                 <ChampionIcon stats={stats} champ={c.id} size={3} />
                 <span>{c.name}</span>
-                <span className={`tile__wr tone-${wr == null ? "neutral" : wrTone(wr)}`}>{wr == null ? "—" : pct(wr)}</span>
+                <span className={`tile__wr tone-${wr == null ? "neutral" : wrTone(wr)}`}>{wr == null ? "—" : pct(wr)}{wr != null && <Trend tone={wrTone(wr)} />}</span>
               </button>
             );
           })}
