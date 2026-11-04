@@ -7,6 +7,7 @@ import { BanPanel, MyPick, RecoRow, makeBanSelect, makePreselect, persoCell, use
 import { explain } from "../lib/score";
 import type { PersonalState } from "../lib/api";
 import { Segmented } from "./Segmented";
+import { t } from "../lib/i18n";
 
 interface Props {
   stats: Stats;
@@ -35,21 +36,21 @@ export function CompactScreen(props: Props) {
       <header className="compact__bar">
         <Logo className="brand__mark brand__mark--small" />
         <span className="compact__title">
-          {draft ? `Tu joues ${ROLE_LABELS[draft.role]}` : "Spec"}
+          {draft ? t("Tu joues {v}", { v: ROLE_LABELS[draft.role] }) : t("Spec")}
         </span>
-        {draft && <span className={`compact__state${live ? " is-live" : ""}`}>{live ? "En direct" : "Démo"}</span>}
+        {draft && <span className={`compact__state${live ? " is-live" : ""}`}>{live ? t("En direct") : t("Démo")}</span>}
         <span className="grow" />
         <button className={`icon-btn${onTop ? " is-active" : ""}`} onClick={onToggleTop}
-                title={onTop ? "Ne plus garder au premier plan" : "Garder au premier plan"}
-                aria-label="Garder au premier plan" aria-pressed={onTop}>
+                title={onTop ? t("Ne plus garder au premier plan") : t("Garder au premier plan")}
+                aria-label={t("Garder au premier plan")} aria-pressed={onTop}>
           <PinIcon />
         </button>
-        <button className="icon-btn" onClick={onExpand} title="Agrandir la fenêtre" aria-label="Agrandir la fenêtre">
+        <button className="icon-btn" onClick={onExpand} title={t("Agrandir la fenêtre")} aria-label={t("Agrandir la fenêtre")}>
           <ExpandIcon />
         </button>
       </header>
       {draft ? <CompactDraft {...props} draft={draft} /> : <CompactWaiting {...props} />}
-      <p className="compact__legal">Spec n’est pas approuvé par Riot Games.</p>
+      <p className="compact__legal">{t("Spec n’est pas approuvé par Riot Games.")}</p>
     </div>
   );
 }
@@ -58,10 +59,10 @@ function CompactWaiting({ clientText, clientOn, onDemo }: Props) {
   return (
     <div className="compact__body compact__waiting">
       <div className="spinner" />
-      <h2>En attente de la draft</h2>
-      <p className="muted small">Tes recommandations s’affichent dès la sélection des champions.</p>
+      <h2>{t("En attente de la draft")}</h2>
+      <p className="muted small">{t("Tes recommandations s’affichent dès la sélection des champions.")}</p>
       <p className="compact__client"><span className={clientOn ? "dot" : "dot dot--off"} />{clientText}</p>
-      {onDemo && <button className="btn btn--secondary" onClick={onDemo}>Simuler une draft</button>}
+      {onDemo && <button className="btn btn--secondary" onClick={onDemo}>{t("Simuler une draft")}</button>}
     </div>
   );
 }
@@ -77,7 +78,7 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
 
   return (
     <div className="compact__body">
-      <Segmented className="segmented segmented--full" role="tablist" aria-label="Rôle assigné">
+      <Segmented className="segmented segmented--full" role="tablist" aria-label={t("Rôle assigné")}>
         {ROLE_SHORT.map((label, i) => (
           <button key={label} role="tab" aria-selected={draft.role === i} title={ROLE_LABELS[i]}
                   className={draft.role === i ? "is-active" : ""}
@@ -86,22 +87,22 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
       </Segmented>
 
       <div className="mini-teams">
-        <MiniTeam stats={stats} label="Alliés" champs={draft.allies} me={draft.role} locked={draft.allyLocked}
+        <MiniTeam stats={stats} label={t("Alliés")} champs={draft.allies} me={draft.role} locked={draft.allyLocked}
                   mine={draft.myChamp ?? null} />
-        <MiniTeam stats={stats} label="Adversaires" champs={draft.enemies} />
+        <MiniTeam stats={stats} label={t("Adversaires")} champs={draft.enemies} />
       </div>
 
       {draft.banPhase && <BanPanel stats={stats} draft={draft} compact onSelect={makeBanSelect(stats, live ? onBan : undefined, setNotice)} />}
       {draft.myChamp != null && (draft.myLocked || !myInList) && <MyPick stats={stats} draft={draft} compact />}
 
       {draft.myLocked ? (
-        <p className="hint">Champion verrouillé : importe tes runes et tes sorts ci-dessus.</p>
+        <p className="hint">{t("Champion verrouillé : importe tes runes et tes sorts ci-dessus.")}</p>
       ) : (
       <div className="compact__recos">
-        <p className="compact__section">{autofill ? `Autofill en ${ROLE_LABELS[draft.role]}` : "Recommandés pour toi"}</p>
+        <p className="compact__section">{autofill ? t("Autofill en {v}", { v: ROLE_LABELS[draft.role] }) : t("Recommandés pour toi")}</p>
         {rows.map(({ res, kind }, i) => (
           <div key={res.champ}>
-            {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">Envie de tester ?</p>}
+            {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">{t("Envie de tester ?")}</p>}
             <RecoRow stats={stats} res={res} rank={kind === "pool" ? String(i + 1) : "—"} compact
                      discovery={kind === "discovery"} open={open === res.champ}
                      onToggle={() => setOpen(open === res.champ ? null : res.champ)}
@@ -110,11 +111,11 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
                      why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies) : undefined} />
           </div>
         ))}
-        {rows.length === 0 && <p className="hint">Pas encore assez de parties pour ce rôle.</p>}
+        {rows.length === 0 && <p className="hint">{t("Pas encore assez de parties pour ce rôle.")}</p>}
       </div>
       )}
 
-      {!live && <button className="btn btn--secondary btn--small" onClick={onEndDemo}>Terminer la démo</button>}
+      {!live && <button className="btn btn--secondary btn--small" onClick={onEndDemo}>{t("Terminer la démo")}</button>}
       {notice && <div className="toast toast--compact" role="status">{notice}</div>}
     </div>
   );
@@ -130,7 +131,7 @@ function MiniTeam({ stats, label, champs, me, locked, mine = null }: {
         {champs.map((c, i) => {
           const isMe = i === me;
           const hover = locked != null && c != null && !locked[i];
-          const title = isMe ? (mine != null ? `Toi · ${champName(stats, mine)}` : "Toi") : c == null ? "Pas encore choisi" : `${champName(stats, c)}${hover ? " (survol)" : ""}`;
+          const title = isMe ? (mine != null ? t("Toi · {champName}", { champName: champName(stats, mine) }) : t("Toi")) : c == null ? t("Pas encore choisi") : `${champName(stats, c)}${hover ? t(" (survol)") : ""}`;
           return (
             <span key={i} className={`mini-slot${isMe ? " is-me" : ""}${hover ? " is-hover" : ""}`} title={title}>
               <ChampionIcon stats={stats} champ={isMe ? mine : c} size={1.875} tone={isMe ? "accent" : "default"} />

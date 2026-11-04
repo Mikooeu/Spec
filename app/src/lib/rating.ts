@@ -6,6 +6,7 @@
 // 10 = joueur moyen de la partie, petit bonus pour la victoire. MVP : meilleure note des gagnants,
 // ACE : meilleure note des perdants.
 import type { GameDetail, PlayerLine } from "./history";
+import { dec1 } from "./ui";
 
 export interface Rating { note: number; rank: number; badge: "MVP" | "ACE" | null }
 
@@ -68,4 +69,4 @@ export function rateGame(detail: GameDetail): Map<PlayerLine, Rating> {
 
 /** Couleur d'une note : verte à partir de 13, rouge sous 8. */
 export const noteTone = (n: number) => (n >= 13 ? "good" : n < 8 ? "bad" : "neutral");
-export const noteText = (n: number) => n.toFixed(1).replace(".", ",");
+export const noteText = (n: number) => dec1(n);

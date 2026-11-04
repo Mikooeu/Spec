@@ -8,6 +8,7 @@ import { ChampionIcon } from "./ChampionIcon";
 import { RuneTree } from "./Runes";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
+import { t } from "../lib/i18n";
 
 interface Props {
   stats: Stats;
@@ -42,27 +43,27 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
   return (
     <div className="content champ">
       <div className="champ__top">
-        <button className="link-back" onClick={onBack}>← {inGame ? "Draft" : `Tier list · ${ROLE_LABELS[role]}`}</button>
+        <button className="link-back" onClick={onBack}>← {inGame ? t("Draft") : t("Tier list · {v}", { v: ROLE_LABELS[role] })}</button>
         {region}
       </div>
       <header className="champ__head">
         <ChampionIcon stats={stats} champ={champ} size={3.5} />
         <div>
           <p className="overline">
-            {inGame ? "En partie · " : ""}{ROLE_LABELS[role]} · Tier {tier} · Master+ {regionLabel} · patch {patchLabel(stats.meta.patch)}
+            {inGame ? t("En partie · ") : ""}{t("{role} · Tier {tier} · Master+ {region} · patch {patch}", { role: ROLE_LABELS[role], tier, region: regionLabel, patch: patchLabel(stats.meta.patch) })}
           </p>
           <h1>{champName(stats, champ)}</h1>
         </div>
         <span className="grow" />
         <div className="champ__stats">
-          <Stat value={pct(winrate)} label="Winrate" tone={wrTone(winrate)} />
-          <Stat value={pct(pickrate)} label="Pickrate" />
-          <Stat value={banrate == null ? "—" : pct(banrate)} label="Banrate" />
-          <Stat value={int(g)} label="Parties" />
+          <Stat value={pct(winrate)} label={t("Winrate")} tone={wrTone(winrate)} />
+          <Stat value={pct(pickrate)} label={t("Pickrate")} />
+          <Stat value={banrate == null ? "—" : pct(banrate)} label={t("Banrate")} />
+          <Stat value={int(g)} label={t("Parties")} />
         </div>
       </header>
       {roles.length > 1 && (
-        <Segmented className="segmented" role="tablist" aria-label="Rôle">
+        <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
           {roles.map((r) => (
             <button key={r} role="tab" aria-selected={r === role} className={r === role ? "is-active" : ""}
                     onClick={() => onRole(r)}>{ROLE_LABELS[r]}</button>
@@ -70,17 +71,17 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
         </Segmented>
       )}
 
-      <Card title="Ordre des sorts"
-            sub={page?.skills ? `Priorité ${page.skills[1].replace(/ > /g, " › ")} · ${share(page.skills[2], page.tg)} des parties` : undefined}>
+      <Card title={t("Ordre des sorts")}
+            sub={page?.skills ? t("Priorité {replace} · {share} des parties", { replace: page.skills[1].replace(/ > /g, " › "), share: share(page.skills[2], page.tg) }) : undefined}>
         {page?.skills ? <SkillGrid order={page.skills[0]} /> : <Empty page={page} timeline />}
       </Card>
 
-      <Card title="Runes" sub={runeSub(stats, champ, role)}>
+      <Card title={t("Runes")} sub={runeSub(stats, champ, role)}>
         <RuneTree stats={stats} champ={champ} role={role} />
       </Card>
 
       <div className="champ__row champ__row--3">
-        <Card title="Objets de départ" sub="Les 3 combinaisons les plus jouées">
+        <Card title={t("Objets de départ")} sub={t("Les 3 combinaisons les plus jouées")}>
           {page?.start.length ? (
             <div className="combos combos--stack">
               {page.start.map(([ids, cg, cw]) => (
@@ -89,7 +90,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
             </div>
           ) : <Empty page={page} timeline />}
         </Card>
-        <Card title="Sorts d’invocateur" sub="Les 2 combinaisons les plus jouées">
+        <Card title={t("Sorts d’invocateur")} sub={t("Les 2 combinaisons les plus jouées")}>
           {page?.spells.length ? (
             <div className="combos combos--stack">
               {page.spells.map(([a, b, cg, cw]) => (
@@ -98,7 +99,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
             </div>
           ) : <Empty page={page} />}
         </Card>
-        <Card title="Bottes" sub="Les 3 plus jouées">
+        <Card title={t("Bottes")} sub={t("Les 3 plus jouées")}>
           {page?.boots.length ? (
             <div className="cells">
               {page.boots.map(([id, bg, bw]) => <Cell key={id} id={id} data={items} wr={bw / bg} pr={bg / page.g} />)}
@@ -107,7 +108,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
         </Card>
       </div>
 
-      <Card title="Objets" sub="Winrate et pickrate selon l’objet acheté en 1er, 2e, 3e… Couleur : par rapport aux autres choix au même rang.">
+      <Card title={t("Objets")} sub={t("Winrate et pickrate selon l’objet acheté en 1er, 2e, 3e… Couleur : par rapport aux autres choix au même rang.")}>
         {page?.items.length ? (
           <div className="item-ranks">
             {page.items.slice(0, ranks).map(([rankGames, list], k) => {
@@ -115,7 +116,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
               const avg = total ? list.reduce((a, [, , iw]) => a + iw, 0) / total : 0;
               return (
                 <div key={k} className="item-rank">
-                  <span className="item-rank__label">Objet {k + 1}<span>moy. {pct(avg)}</span></span>
+                  <span className="item-rank__label">{t("Objet ")}{k + 1}<span>{t("moy. ")}{pct(avg)}</span></span>
                   {list.map(([id, ig, iw]) => (
                     <Cell key={id} id={id} data={items} wr={iw / ig} pr={ig / rankGames}
                           tone={relTone(iw / ig, avg)} />
@@ -127,7 +128,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
         ) : <Empty page={page} timeline />}
       </Card>
 
-      <Card title="Builds complets" sub={`Les 3 enchaînements de ${ranks} objets avec le meilleur winrate`}>
+      <Card title={t("Builds complets")} sub={t("Les 3 enchaînements de {ranks} objets avec le meilleur winrate", { ranks: ranks })}>
         {page?.builds.length ? (
           <div className="builds">
             {page.builds.map(([seq, bg, bw]) => (
@@ -143,12 +144,12 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
                 <span className="grow" />
                 <span className="stat-col">
                   <span className={`stat-col__value tone-${wrTone(bw / bg)}`}>{pct(bw / bg)}<Trend tone={wrTone(bw / bg)} /></span>
-                  <span className="stat-col__label">{share(bg, page.tg)} des parties</span>
+                  <span className="stat-col__label">{t("{n} des parties", { n: share(bg, page.tg) })}</span>
                 </span>
               </div>
             ))}
           </div>
-        ) : <Empty page={page} timeline note={`Il faut assez de parties avec les ${ranks} mêmes objets dans le même ordre.`} />}
+        ) : <Empty page={page} timeline note={t("Il faut assez de parties avec les {ranks} mêmes objets dans le même ordre.", { ranks: ranks })} />}
       </Card>
     </div>
   );
@@ -163,7 +164,7 @@ function relTone(wr: number, avg: number): "good" | "bad" | "neutral" {
 function runeSub(stats: Stats, champ: number, role: number): string | undefined {
   const p = stats.runes.get(`${champ}|${role}`)?.[0];
   if (!p || !p.games) return undefined;
-  return `Meilleure page · ${pct(p.wins / p.games)} de winrate · ${int(p.games)} parties`;
+  return t("Meilleure page · {pct} de winrate · {int} parties", { pct: pct(p.wins / p.games), int: int(p.games) });
 }
 
 /** « 1056,2003,2003 » -> [[1056, 1], [2003, 2]] */
@@ -200,8 +201,7 @@ function Card({ title, sub, children }: { title: string; sub?: string; children:
 function Empty({ page, timeline = false, note }: { page: ChampPage | null; timeline?: boolean; note?: string }) {
   const n = page ? (timeline ? page.tg : page.g) : 0;
   return (
-    <p className="runes__empty">
-      Collecte en cours{n ? ` (${int(n)} parties analysées pour l’instant)` : ""}. {note ?? ""}
+    <p className="runes__empty">{t("Collecte en cours")}{n ? t(" ({int} parties analysées pour l’instant)", { int: int(n) }) : ""}. {note ?? ""}
     </p>
   );
 }
@@ -210,7 +210,7 @@ export function ItemIcon({ id, data, size = "md" }: { id: number; data: InfoMap 
   const info = data?.get(id);
   const [failed, setFailed] = useState(false);
   return (
-    <span className={`item-ic item-ic--${size}`} tabIndex={0} aria-label={info?.name ?? `Objet ${id}`}>
+    <span className={`item-ic item-ic--${size}`} tabIndex={0} aria-label={info?.name ?? t("Objet {id}", { id: id })}>
       {info && !failed ? <img src={info.icon} alt="" draggable={false} onError={() => setFailed(true)} /> : null}
       {info && (
         <span className="rune__tip" role="tooltip">
@@ -245,7 +245,7 @@ function Combo({ icons, data, wr, pr }: { icons: [number, number][]; data: InfoM
       </span>
       <span className="stat-col stat-col--left">
         <span className={`stat-col__value tone-${wrTone(wr)}`}>{pct(wr)}<Trend tone={wrTone(wr)} /></span>
-        <span className="stat-col__label">{pct(pr)} des parties</span>
+        <span className="stat-col__label">{t("{n} des parties", { n: pct(pr) })}</span>
       </span>
     </span>
   );
@@ -254,7 +254,7 @@ function Combo({ icons, data, wr, pr }: { icons: [number, number][]; data: InfoM
 /** Grille niveaux × sorts : la case du sort monté à chaque niveau est remplie. */
 function SkillGrid({ order }: { order: string }) {
   return (
-    <div className="skills" role="table" aria-label="Ordre des sorts">
+    <div className="skills" role="table" aria-label={t("Ordre des sorts")}>
       {["Q", "W", "E", "R"].map((s) => (
         <div key={s} className="skills__row" role="row">
           <span className="skills__key">{s}</span>

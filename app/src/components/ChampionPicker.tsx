@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Stats } from "../lib/score";
 import { normalize } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
+import { t } from "../lib/i18n";
 
 interface Props {
   stats: Stats;
@@ -26,7 +27,7 @@ export function ChampionPicker({ stats, title, taken, canClear, onPick, onClose 
     const q = normalize(query);
     return [...stats.champions.values()]
       .filter((c) => !taken.has(c.id) && (!q || normalize(c.name).includes(q)))
-      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [stats, query, taken]);
 
   return (
@@ -34,9 +35,9 @@ export function ChampionPicker({ stats, title, taken, canClear, onPick, onClose 
       <div className="picker" role="dialog" aria-label={title} onMouseDown={(e) => e.stopPropagation()}>
         <div className="picker__head">
           <h2>{title}</h2>
-          {canClear && <button className="btn btn--secondary" onClick={() => onPick(null)}>Vider</button>}
+          {canClear && <button className="btn btn--secondary" onClick={() => onPick(null)}>{t("Vider")}</button>}
         </div>
-        <input ref={input} className="search" placeholder="Rechercher un champion" value={query}
+        <input ref={input} className="search" placeholder={t("Rechercher un champion")} value={query}
                onChange={(e) => setQuery(e.target.value)}
                onKeyDown={(e) => e.key === "Enter" && list[0] && onPick(list[0].id)} />
         <div className="picker__grid">
@@ -46,7 +47,7 @@ export function ChampionPicker({ stats, title, taken, canClear, onPick, onClose 
               <span>{c.name}</span>
             </button>
           ))}
-          {list.length === 0 && <p className="muted">Aucun champion ne correspond.</p>}
+          {list.length === 0 && <p className="muted">{t("Aucun champion ne correspond.")}</p>}
         </div>
       </div>
     </div>

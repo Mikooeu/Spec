@@ -1,12 +1,14 @@
 // Serveur Spec (Cloudflare) : stats Master+ et stats perso de la saison.
+import { localizeChampions } from "./ddragon";
 import { useCallback, useEffect, useState } from "react";
 import { parseStats, type Stats } from "./score";
+import { t } from "./i18n";
 
 export const API_URL = ((import.meta.env.VITE_SPEC_API_URL as string | undefined) ?? "").replace(/\/+$/, "");
 
 export type Region = "world" | "euw" | "kr" | "na";
 /** Ordre du sélecteur ; l'EUW est la région par défaut (et celle de la draft). */
-export const REGIONS: [Region, string][] = [["world", "World"], ["euw", "EUW"], ["kr", "KR"], ["na", "NA"]];
+export const REGIONS: [Region, string][] = [["world", t("World")], ["euw", "EUW"], ["kr", "KR"], ["na", "NA"]];
 
 /** Stats Master+ : depuis le serveur si configuré, sinon le fichier exporté localement (EUW seulement). */
 export async function loadStats(region: Region = "euw"): Promise<Stats> {
@@ -38,6 +40,7 @@ export function useRegionStats(euw: Stats | null, region: Region): RegionStats {
     }
     setState({ kind: "loading" });
     regionCache.get(region)!
+      .then(localizeChampions)
       .then((stats) => alive && setState({ kind: "ready", stats }))
       .catch(() => alive && setState({ kind: "missing" }));
     return () => { alive = false; };
@@ -129,15 +132,15 @@ export async function register(client: string, riotId: string, invite: string): 
     });
     if (r.ok) return null;
     const code = ((await r.json().catch(() => ({}))) as { error?: string }).error;
-    if (code === "bad_invite") return "Code d’invitation incorrect.";
-    if (code === "full") return "Le serveur est complet : demande à la personne qui gère Spec de faire de la place.";
-    if (code === "already_linked") return "Ce compte est déjà activé sur un autre PC. Demande à la personne qui gère Spec d’autoriser ce PC, puis réessaie dans les 15 minutes.";
-    if (code === "unknown_riot_id") return "Riot ne trouve pas ce compte. Relance le client LoL puis réessaie.";
-    if (code === "bad_riot_id") return "Riot ID non reconnu : relance le client LoL puis réessaie.";
-    if (code === "riot_unavailable") return "Riot ne répond pas pour l’instant. Réessaie dans une minute.";
-    return "Le serveur n’a pas accepté l’inscription. Réessaie dans un instant.";
+    if (code === "bad_invite") return t("Code d’invitation incorrect.");
+    if (code === "full") return t("Le serveur est complet : demande à la personne qui gère Spec de faire de la place.");
+    if (code === "already_linked") return t("Ce compte est déjà activé sur un autre PC. Demande à la personne qui gère Spec d’autoriser ce PC, puis réessaie dans les 15 minutes.");
+    if (code === "unknown_riot_id") return t("Riot ne trouve pas ce compte. Relance le client LoL puis réessaie.");
+    if (code === "bad_riot_id") return t("Riot ID non reconnu : relance le client LoL puis réessaie.");
+    if (code === "riot_unavailable") return t("Riot ne répond pas pour l’instant. Réessaie dans une minute.");
+    return t("Le serveur n’a pas accepté l’inscription. Réessaie dans un instant.");
   } catch {
-    return "Serveur injoignable. Vérifie ta connexion.";
+    return t("Serveur injoignable. Vérifie ta connexion.");
   }
 }
 

@@ -5,9 +5,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import type { ClientState } from "./lcu";
 import { API_URL } from "./api";
+import { t } from "./i18n";
 
 export type QueueKind = "solo" | "flex" | "5c5" | "other";
-export const QUEUE_LABELS: Record<QueueKind, string> = { solo: "Solo/Duo", flex: "Flex", "5c5": "5c5", other: "Autre" };
+export const QUEUE_LABELS: Record<QueueKind, string> = { solo: "Solo/Duo", flex: t("Flex"), "5c5": "5c5", other: t("Autre") };
 
 export interface Game {
   id: number;
@@ -80,9 +81,9 @@ export function noteSoloLp(r: RankedStats | null) {
 /** « Émeraude II · 47 LP » à partir de LP absolus. */
 export function lpLabel(total: number, short = false): string {
   const apex = TIERS.length * 400;
-  if (total >= apex) return short ? "Maître+" : `Maître+ · ${total - apex} LP`;
-  const t = Math.max(0, Math.floor(total / 400)), d = Math.min(3, Math.floor((total % 400) / 100));
-  const name = `${TIER_FR[TIERS[t]]} ${DIVISIONS[d]}`;
+  if (total >= apex) return short ? t("Maître+") : t("Maître+ · {v} LP", { v: total - apex });
+  const tier = Math.max(0, Math.floor(total / 400)), d = Math.min(3, Math.floor((total % 400) / 100));
+  const name = `${TIER_FR[TIERS[tier]]} ${DIVISIONS[d]}`;
   return short ? name : `${name} · ${total % 100} LP`;
 }
 
@@ -90,8 +91,8 @@ const get = <T,>(path: string) => invoke<T>("lcu_get", { path });
 
 /** Rang Solo/Duo : « Émeraude II · 47 LP », ou null si non classé. */
 const TIER_FR: Record<string, string> = {
-  IRON: "Fer", BRONZE: "Bronze", SILVER: "Argent", GOLD: "Or", PLATINUM: "Platine", EMERALD: "Émeraude",
-  DIAMOND: "Diamant", MASTER: "Maître", GRANDMASTER: "Grand Maître", CHALLENGER: "Challenger",
+  IRON: t("Fer"), BRONZE: t("Bronze"), SILVER: t("Argent"), GOLD: t("Or"), PLATINUM: t("Platine"), EMERALD: t("Émeraude"),
+  DIAMOND: t("Diamant"), MASTER: t("Maître"), GRANDMASTER: t("Grand Maître"), CHALLENGER: t("Challenger"),
 };
 export function rankText(r: Ranked | undefined): string | null {
   if (!r || !r.tier || r.tier === "NONE" || r.tier === "") return null;
@@ -185,7 +186,7 @@ async function parseHistory(raw: RawHistory, guess?: Guess): Promise<Game[]> {
     const s = p.stats;
     const duration = seconds(g.gameDuration);
     out.push({
-      id: g.gameId, queue: kindOf(g.queueId, q), queueName: q?.shortName || q?.description || "Partie",
+      id: g.gameId, queue: kindOf(g.queueId, q), queueName: q?.shortName || q?.description || t("Partie"),
       queueType: q?.type ?? QUEUE_TYPE[kindOf(g.queueId, q)],
       champ: p.championId, role: roleOf(p, guess), win: !!s.win,
       remake: duration < 300 || !!s.gameEndedInEarlySurrender,
@@ -262,7 +263,7 @@ async function fetchGameDetail(gameId: number, guess?: Guess): Promise<GameDetai
   const teams = new Map<number, PlayerLine[]>();
   for (const p of g.participants ?? []) {
     const who = ids.get(p.participantId ?? -1);
-    const name = who?.gameName ? `${who.gameName}#${who.tagLine ?? ""}` : who?.summonerName ?? "Joueur";
+    const name = who?.gameName ? `${who.gameName}#${who.tagLine ?? ""}` : who?.summonerName ?? t("Joueur");
     const s = p.stats;
     const line: PlayerLine = {
       puuid: who?.puuid || null, name, icon: who?.profileIcon ?? null, champ: p.championId, role: roleOf(p, guess),
@@ -293,13 +294,13 @@ export interface OtherPlayer {
 /** Riot ID « Pseudo#TAG » → identifiant du joueur dans le client, ou un message d'erreur. */
 export async function findPlayer(riotId: string): Promise<{ puuid: string } | { error: string }> {
   const m = /^\s*([^#]{3,16})#([A-Za-z0-9]{2,5})\s*$/u.exec(riotId);
-  if (!m) return { error: "Écris le Riot ID complet, par exemple Pseudo#EUW." };
+  if (!m) return { error: t("Écris le Riot ID complet, par exemple Pseudo#EUW.") };
   try {
     const s = await invoke<{ puuid?: string }>("lcu_find_player", { gameName: m[1].trim(), tagLine: m[2] });
-    return s.puuid ? { puuid: s.puuid } : { error: "Joueur introuvable sur ce serveur." };
+    return s.puuid ? { puuid: s.puuid } : { error: t("Joueur introuvable sur ce serveur.") };
   } catch (e) {
-    if (e === "not_running") return { error: "Lance le client LoL pour chercher un joueur." };
-    return { error: "Joueur introuvable sur ce serveur." };
+    if (e === "not_running") return { error: t("Lance le client LoL pour chercher un joueur.") };
+    return { error: t("Joueur introuvable sur ce serveur.") };
   }
 }
 
@@ -311,7 +312,7 @@ export async function loadPlayer(puuid: string, guess?: Guess): Promise<OtherPla
   }>("lcu_player", { puuid, count: 20 });
   const s = raw.summoner ?? {};
   return {
-    puuid, name: s.gameName ? `${s.gameName}#${s.tagLine ?? ""}` : s.displayName ?? "Joueur",
+    puuid, name: s.gameName ? `${s.gameName}#${s.tagLine ?? ""}` : s.displayName ?? t("Joueur"),
     icon: s.profileIconId ?? null, level: s.summonerLevel ?? null,
     rank: rankText(raw.ranked?.queueMap?.RANKED_SOLO_5x5),
     games: raw.history ? await parseHistory(raw.history, guess) : [],

@@ -5,6 +5,7 @@ import { PREFILL_MIN_GAMES, topChampions, type PersonalState } from "../lib/api"
 import { ChampionIcon } from "./ChampionIcon";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
+import { t } from "../lib/i18n";
 
 export type Pools = number[][]; // un pool par rôle (index dans ROLES)
 
@@ -39,7 +40,7 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
     return [...stats.champions.values()]
       .filter((c) => !q || normalize(c.name).includes(q))
       // les champions les plus joués dans ce rôle en Master+ d'abord
-      .sort((a, b) => gamesIn(stats, b.id, role) - gamesIn(stats, a.id, role) || a.name.localeCompare(b.name, "fr"));
+      .sort((a, b) => gamesIn(stats, b.id, role) - gamesIn(stats, a.id, role) || a.name.localeCompare(b.name));
   }, [stats, query, role]);
 
   // winrate Master+ du champion dans le rôle choisi (Ambessa n'a pas le même en top et en jungle)
@@ -58,14 +59,14 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
     <div className="content">
       <header className="page-head">
         <div>
-          <p className="overline">Champion pool</p>
-          <h1>Ton champion pool</h1>
+          <p className="overline">{t("Champion pool")}</p>
+          <h1>{t("Ton champion pool")}</h1>
         </div>
       </header>
-      <p className="muted page-intro">Choisis les champions que tu joues dans chaque rôle : Spec te les recommande en priorité pendant la draft. Le pourcentage est leur winrate Master+ dans le rôle choisi.</p>
+      <p className="muted page-intro">{t("Choisis les champions que tu joues dans chaque rôle : Spec te les recommande en priorité pendant la draft. Le pourcentage est leur winrate Master+ dans le rôle choisi.")}</p>
 
       <section className="pool">
-        <Segmented className="segmented" role="tablist" aria-label="Rôle">
+        <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
           {ROLE_LABELS.map((label, i) => (
             <button key={label} role="tab" aria-selected={role === i} className={role === i ? "is-active" : ""}
                     onClick={() => setRole(i)}>
@@ -77,16 +78,15 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
         <div className="banner">
           <span className="grow">{prefillText(perso, ready ? suggested.length : 0, missing.length, ROLE_LABELS[role])}</span>
           <button className="btn btn--secondary" disabled={missing.length === 0} onClick={prefill}
-                  title={missing.length ? `Ajouter ${missing.map((c) => champName(stats, c)).join(", ")}` : undefined}>
-            Préremplir
+                  title={missing.length ? t("Ajouter {join}", { join: missing.map((c) => champName(stats, c)).join(", ") }) : undefined}>{t("Préremplir")}
           </button>
         </div>
 
-        <p className="label">Dans ton pool {ROLE_LABELS[role]}</p>
+        <p className="label">{t("Dans ton pool ")}{ROLE_LABELS[role]}</p>
         <div className="chips">
-          {pool.length === 0 && <p className="muted small">Aucun champion pour l’instant : en autofill, Spec proposera les meilleurs choix du rôle.</p>}
+          {pool.length === 0 && <p className="muted small">{t("Aucun champion pour l’instant : en autofill, Spec proposera les meilleurs choix du rôle.")}</p>}
           {pool.map((c) => (
-            <button key={c} className="chip" onClick={() => toggle(c)} aria-label={`Retirer ${champName(stats, c)}`}>
+            <button key={c} className="chip" onClick={() => toggle(c)} aria-label={t("Retirer {champName}", { champName: champName(stats, c) })}>
               <ChampionIcon stats={stats} champ={c} size={1.75} />
               {champName(stats, c)}
               {roleWr(c) != null && <span className={`chip__wr tone-${wrTone(roleWr(c)!)}`}>{pct(roleWr(c)!)}<Trend tone={wrTone(roleWr(c)!)} /></span>}
@@ -96,11 +96,11 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
         </div>
 
         <div className="search-wrap">
-          <input className="search" placeholder="Rechercher un champion" value={query}
+          <input className="search" placeholder={t("Rechercher un champion")} value={query}
                  onChange={(e) => setQuery(e.target.value)}
                  onKeyDown={(e) => { if (e.key === "Escape") setQuery(""); }} />
           {query && (
-            <button className="search__clear" onClick={() => setQuery("")} aria-label="Effacer la recherche" title="Effacer">
+            <button className="search__clear" onClick={() => setQuery("")} aria-label={t("Effacer la recherche")} title={t("Effacer")}>
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
                 <circle cx="8" cy="8" r="7" fill="currentColor" opacity="0.25" />
                 <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -114,14 +114,14 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
             return (
               <button key={c.id} className={`tile${pool.includes(c.id) ? " is-selected" : ""}`}
                       aria-pressed={pool.includes(c.id)} onClick={() => toggle(c.id)}
-                      title={wr == null ? `Pas assez de parties ${ROLE_LABELS[role]}` : `${pct(wr)} de winrate en ${ROLE_LABELS[role]} (Master+)`}>
+                      title={wr == null ? t("Pas assez de parties {v}", { v: ROLE_LABELS[role] }) : t("{pct} de winrate en {v} (Master+)", { pct: pct(wr), v: ROLE_LABELS[role] })}>
                 <ChampionIcon stats={stats} champ={c.id} size={3} />
                 <span>{c.name}</span>
                 <span className={`tile__wr tone-${wr == null ? "neutral" : wrTone(wr)}`}>{wr == null ? "—" : pct(wr)}{wr != null && <Trend tone={wrTone(wr)} />}</span>
               </button>
             );
           })}
-          {list.length === 0 && <p className="muted small">Aucun champion ne correspond à « {query} ».</p>}
+          {list.length === 0 && <p className="muted small">{t("Aucun champion ne correspond à « ")}{query} ».</p>}
         </div>
       </section>
     </div>
@@ -129,10 +129,10 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
 }
 
 function prefillText(perso: PersonalState, found: number, missing: number, role: string): string {
-  if (perso.kind !== "ready") return `Avec tes stats perso (à activer dans Profil), ajoute tes champions joués ${PREFILL_MIN_GAMES} fois ou plus en ${role} cette saison.`;
+  if (perso.kind !== "ready") return t("Avec tes stats perso (à activer dans Profil), ajoute tes champions joués {PREFILL_MIN_GAMES} fois ou plus en {role} cette saison.", { PREFILL_MIN_GAMES: PREFILL_MIN_GAMES, role: role });
   if (found === 0) return perso.data.syncing
-    ? `Synchro en cours : tes champions ${role} apparaîtront ici.`
-    : `Aucun champion avec ${PREFILL_MIN_GAMES} parties ou plus en ${role} cette saison.`;
-  if (missing === 0) return `Tes champions les plus joués en ${role} sont déjà dans ton pool.`;
-  return `Ajoute tes ${missing} champion${missing > 1 ? "s" : ""} avec ${PREFILL_MIN_GAMES} parties ou plus en ${role} cette saison.`;
+    ? t("Synchro en cours : tes champions {role} apparaîtront ici.", { role: role })
+    : t("Aucun champion avec {PREFILL_MIN_GAMES} parties ou plus en {role} cette saison.", { PREFILL_MIN_GAMES: PREFILL_MIN_GAMES, role: role });
+  if (missing === 0) return t("Tes champions les plus joués en {role} sont déjà dans ton pool.", { role: role });
+  return t("Ajoute tes {missing} champion{v} avec {PREFILL_MIN_GAMES} parties ou plus en {role} cette saison.", { missing: missing, v: missing > 1 ? "s" : "", PREFILL_MIN_GAMES: PREFILL_MIN_GAMES, role: role });
 }

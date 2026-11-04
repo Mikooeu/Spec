@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "./i18n";
 
 export const IN_APP = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -104,12 +105,12 @@ export function myPickAction(s: Session): Action | null {
 /** Survole le champion dans le client. Renvoie un message d'erreur, ou null si c'est fait. */
 export async function preselect(s: Session, champ: number): Promise<string | null> {
   const action = myPickAction(s);
-  if (!action) return "Ton pick est déjà verrouillé ou pas encore disponible.";
+  if (!action) return t("Ton pick est déjà verrouillé ou pas encore disponible.");
   try {
     await invoke("lcu_preselect", { actionId: action.id, championId: champ });
     return null;
   } catch {
-    return "Le client n’a pas accepté la présélection. Réessaie dans un instant.";
+    return t("Le client n’a pas accepté la présélection. Réessaie dans un instant.");
   }
 }
 
@@ -117,13 +118,13 @@ export async function preselect(s: Session, champ: number): Promise<string | nul
 export async function preselectBan(s: Session, champ: number): Promise<string | null> {
   const action = (s.actions ?? []).flat()
     .find((a) => a.actorCellId === s.localPlayerCellId && a.type === "ban" && !a.completed);
-  if (!action) return "Ton ban est déjà fait ou la phase de bans est terminée.";
-  if (action.isInProgress === false) return "Ce n’est pas encore ton tour de bannir.";
+  if (!action) return t("Ton ban est déjà fait ou la phase de bans est terminée.");
+  if (action.isInProgress === false) return t("Ce n’est pas encore ton tour de bannir.");
   try {
     await invoke("lcu_preselect", { actionId: action.id, championId: champ });
     return null;
   } catch {
-    return "Le client n’a pas accepté ce ban. Réessaie dans un instant.";
+    return t("Le client n’a pas accepté ce ban. Réessaie dans un instant.");
   }
 }
 
@@ -189,10 +190,10 @@ export async function importRunes(page: { primaryStyle: number; subStyle: number
     return null;
   } catch (e) {
     if (e === "no_editable_page") {
-      return "Sélectionne une de tes pages de runes dans la draft (pas une page de Riot), puis réessaie.";
+      return t("Sélectionne une de tes pages de runes dans la draft (pas une page de Riot), puis réessaie.");
     }
-    if (e === "not_running") return "Le client LoL ne répond pas.";
-    return "Le client n’a pas accepté les runes. Réessaie dans un instant.";
+    if (e === "not_running") return t("Le client LoL ne répond pas.");
+    return t("Le client n’a pas accepté les runes. Réessaie dans un instant.");
   }
 }
 
@@ -202,7 +203,7 @@ export async function importSpells(spell1: number, spell2: number): Promise<stri
     await invoke("lcu_set_spells", { spell1, spell2 });
     return null;
   } catch (e) {
-    if (e === "not_running") return "le client LoL ne répond pas.";
-    return "le client ne les a pas acceptés (sort pas encore débloqué ?).";
+    if (e === "not_running") return t("le client LoL ne répond pas.");
+    return t("le client ne les a pas acceptés (sort pas encore débloqué ?).");
   }
 }

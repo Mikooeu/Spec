@@ -4,13 +4,14 @@ import {
   scoreChampion, topForRole, type Result, type Stats,
 } from "../lib/score";
 import { RunePage } from "./Runes";
-import { champName, int, patchLabel, pct, pts, wrTone } from "../lib/ui";
+import { champName, int, patchLabel, pct, pctN, pts, wrTone } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import type { PersonalState } from "../lib/api";
 import { ChampionPicker } from "./ChampionPicker";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
 import { GAP_LABEL, analyzeTeam, bumpForComposition, fills, type Gap, type TeamComp } from "../lib/composition";
+import { t, plural } from "../lib/i18n";
 
 export interface Draft {
   role: number;                    // rôle assigné (index dans ROLES)
@@ -77,11 +78,11 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
     <div className="content">
       <header className="page-head">
         <div>
-          <p className="overline">{live ? "Sélection des champions · en direct" : "Sélection des champions · mode démo"}</p>
-          <h1>Tu joues {ROLE_LABELS[draft.role]}</h1>
+          <p className="overline">{live ? t("Sélection des champions · en direct") : t("Sélection des champions · mode démo")}</p>
+          <h1>{t("Tu joues ")}{ROLE_LABELS[draft.role]}</h1>
         </div>
         <div className="head-actions">
-          <Segmented className="segmented" role="tablist" aria-label="Rôle assigné">
+          <Segmented className="segmented" role="tablist" aria-label={t("Rôle assigné")}>
             {ROLE_LABELS.map((label, i) => (
               <button key={label} role="tab" aria-selected={draft.role === i}
                       className={draft.role === i ? "is-active" : ""}
@@ -90,36 +91,36 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
           </Segmented>
           {!live && (
             <button className={`btn btn--secondary${draft.banPhase ? " is-on" : ""}`} aria-pressed={!!draft.banPhase}
-                    onClick={() => onChange({ ...draft, banPhase: !draft.banPhase })}>Phase de bans</button>
+                    onClick={() => onChange({ ...draft, banPhase: !draft.banPhase })}>{t("Phase de bans")}</button>
           )}
-          {!live && onEnd && <button className="btn btn--secondary" onClick={onEnd}>Terminer la démo</button>}
+          {!live && onEnd && <button className="btn btn--secondary" onClick={onEnd}>{t("Terminer la démo")}</button>}
         </div>
       </header>
 
       <div className={wide ? "columns" : "stack"}>
-        <section className={wide ? "teams teams--column" : "teams"} aria-label="Équipes">
-          <TeamCard title="Ton équipe" comp={<CompSummary comp={myComp} mine />}>
+        <section className={wide ? "teams teams--column" : "teams"} aria-label={t("Équipes")}>
+          <TeamCard title={t("Ton équipe")} comp={<CompSummary comp={myComp} mine />}>
             {draft.allies.map((c, i) => {
               const me = i === draft.role;
               const mine = me ? draft.myChamp ?? null : null;
               return (
                 <SlotRow key={i} stats={stats} label={ROLE_SHORT[i]} champ={me ? mine : c}
-                         name={me ? (mine != null ? champName(stats, mine) : "À toi de choisir") : c == null ? "En attente" : champName(stats, c)}
-                         detail={me ? (mine == null ? "Ton tour" : draft.myLocked ? "Lock · toi" : "Présélectionne · toi")
-                                 : c == null ? (live ? "Pas encore choisi" : "Clique pour ajouter un pick")
-                                 : draft.allyLocked && !draft.allyLocked[i] ? "Présélectionne" : "Lock"}
+                         name={me ? (mine != null ? champName(stats, mine) : t("À toi de choisir")) : c == null ? t("En attente") : champName(stats, c)}
+                         detail={me ? (mine == null ? t("Ton tour") : draft.myLocked ? t("Lock · toi") : t("Présélectionne · toi"))
+                                 : c == null ? (live ? t("Pas encore choisi") : t("Clique pour ajouter un pick"))
+                                 : draft.allyLocked && !draft.allyLocked[i] ? t("Présélectionne") : t("Lock")}
                          tone={me ? "me" : c == null ? "empty" : "default"}
                          onClick={me || live ? undefined : () => setPicking({ side: "ally", index: i })} />
               );
             })}
           </TeamCard>
-          <TeamCard title="Équipe adverse" comp={<CompSummary comp={enemyComp} mine={false} />}>
+          <TeamCard title={t("Équipe adverse")} comp={<CompSummary comp={enemyComp} mine={false} />}>
             {draft.enemies.map((c, i) => {
               const role = enemyRole[i];
               return (
                 <SlotRow key={i} stats={stats} label={role != null ? ROLE_SHORT[role] : "—"} champ={c}
-                         name={c == null ? "En attente" : champName(stats, c)}
-                         detail={c == null ? (live ? "Pas encore choisi" : "Clique pour ajouter un pick") : rolesText(stats, c)}
+                         name={c == null ? t("En attente") : champName(stats, c)}
+                         detail={c == null ? (live ? t("Pas encore choisi") : t("Clique pour ajouter un pick")) : rolesText(stats, c)}
                          tone={c == null ? "empty" : "default"}
                          onClick={live ? undefined : () => setPicking({ side: "enemy", index: i })} />
               );
@@ -127,34 +128,34 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
           </TeamCard>
         </section>
 
-        <section className="recos" aria-label="Recommandations">
+        <section className="recos" aria-label={t("Recommandations")}>
           {draft.banPhase && (
             <>
               <div className="section-head">
-                <h2>Bans recommandés</h2>
-                <span className="muted small">Phase de bans · {ROLE_LABELS[draft.role]}</span>
+                <h2>{t("Bans recommandés")}</h2>
+                <span className="muted small">{t("Phase de bans · ")}{ROLE_LABELS[draft.role]}</span>
               </div>
               <BanPanel stats={stats} draft={draft} titled={false} onSelect={banSelect} />
             </>
           )}
           <div className={`section-head${draft.banPhase ? " section-head--spaced" : ""}`}>
-            <h2>{draft.myLocked ? "Ton pick est verrouillé" : autofill ? `Picks recommandés en autofill ${ROLE_LABELS[draft.role]}` : "Picks recommandés pour toi"}</h2>
+            <h2>{draft.myLocked ? t("Ton pick est verrouillé") : autofill ? t("Picks recommandés en autofill {v}", { v: ROLE_LABELS[draft.role] }) : t("Picks recommandés pour toi")}</h2>
             <span className="muted small">
-              {int(Number(stats.meta.matches ?? 0))} parties Master+ · patch {patchLabel(stats.meta.patch)}
+              {t("{n} parties Master+ · patch {patch}", { n: int(Number(stats.meta.matches ?? 0)), patch: patchLabel(stats.meta.patch) })}
             </span>
           </div>
           {draft.myChamp != null && (draft.myLocked || !myInList) && <MyPick stats={stats} draft={draft} />}
           {draft.myLocked && (
-            <p className="hint">Plus de présélection à faire : importe tes runes et tes sorts ci-dessus.</p>
+            <p className="hint">{t("Plus de présélection à faire : importe tes runes et tes sorts ci-dessus.")}</p>
           )}
           {!draft.myLocked && autofill && (
-            <p className="hint">Ton pool est vide pour ce rôle : voici les meilleurs choix de cette draft.</p>
+            <p className="hint">{t("Ton pool est vide pour ce rôle : voici les meilleurs choix de cette draft.")}</p>
           )}
           {!draft.myLocked && (
             <div className="recos__list stagger" key={draft.role}>
               {rows.map(({ res, kind }, i) => (
                 <div key={res.champ}>
-                  {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">Envie de tester ?</p>}
+                  {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">{t("Envie de tester ?")}</p>}
                   <RecoRow stats={stats} res={res} rank={kind === "pool" ? String(i + 1) : "—"}
                            discovery={kind === "discovery"} open={openChamp === res.champ}
                            onToggle={() => setOpenChamp(openChamp === res.champ ? null : res.champ)}
@@ -167,7 +168,7 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
             </div>
           )}
           {!draft.myLocked && rows.length === 0 && (
-            <p className="hint">Pas encore assez de parties pour ce rôle. Laisse tourner le collecteur.</p>
+            <p className="hint">{t("Pas encore assez de parties pour ce rôle. Laisse tourner le collecteur.")}</p>
           )}
           {wide && selected && !draft.myLocked && <MatchupPanel stats={stats} res={selected} perso={perso} role={draft.role} />}
         </section>
@@ -175,7 +176,7 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
 
       {picking && (
         <ChampionPicker stats={stats} taken={taken}
-                        title={picking.side === "ally" ? `Pick allié · ${ROLE_LABELS[picking.index]}` : "Pick adverse"}
+                        title={picking.side === "ally" ? t("Pick allié · {v}", { v: ROLE_LABELS[picking.index] }) : t("Pick adverse")}
                         canClear={(picking.side === "ally" ? draft.allies : draft.enemies)[picking.index] != null}
                         onPick={(c) => setSlot(picking, c)} onClose={() => setPicking(null)} />
       )}
@@ -189,9 +190,9 @@ const ROLE_WORDS = ["top", "jungle", "mid", "ADC", "support"];
 /** « Probabilité d'être mid : 46 % · top : 38 % » (deuxième rôle affiché s'il dépasse 15 %). */
 function rolesText(stats: Stats, champ: number): string {
   const [first, second] = roleDistribution(stats, champ);
-  if (!first) return "Rôle inconnu";
-  const head = `Probabilité d’être ${ROLE_WORDS[first.role]} : ${Math.round(first.p * 100)} %`;
-  return second && second.p >= 0.15 ? `${head} · ${ROLE_WORDS[second.role]} : ${Math.round(second.p * 100)} %` : head;
+  if (!first) return t("Rôle inconnu");
+  const head = t("Probabilité d’être {v} : {round} %", { v: ROLE_WORDS[first.role], round: Math.round(first.p * 100) });
+  return second && second.p >= 0.15 ? `${head} · ${ROLE_WORDS[second.role]} ${pctN(Math.round(second.p * 100))}` : head;
 }
 
 function TeamCard({ title, children, comp }: { title: string; children: React.ReactNode; comp?: React.ReactNode }) {
@@ -240,24 +241,24 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
         <span className="reco__info">
           <span className="reco__name">{champName(stats, res.champ)}</span>
           <span className="reco__meta">
-            {mine && <span className="badge badge--mine">Présélectionné</span>}
-            {discovery && <span className="badge">Découverte</span>}
+            {mine && <span className="badge badge--mine">{t("Présélectionné")}</span>}
+            {discovery && <span className="badge">{t("Découverte")}</span>}
             {!compact && (fill.length
-              ? <span className="reco__fill" title="Ce champion comble ce qui manque à ton équipe">Comble : {fill.map((g) => GAP_LABEL[g]).join(" · ")}</span>
-              : <span>{discovery ? "Hors de ton pool" : "Dans ton pool"}</span>)}
-            {res.games < LOW_DATA_GAMES && <span className="warn">Peu de données</span>}
+              ? <span className="reco__fill" title={t("Ce champion comble ce qui manque à ton équipe")}>{t("Comble : ")}{fill.map((g) => GAP_LABEL[g]).join(" · ")}</span>
+              : <span>{discovery ? t("Hors de ton pool") : t("Dans ton pool")}</span>)}
+            {res.games < LOW_DATA_GAMES && <span className="warn">{t("Peu de données")}</span>}
             {compact && perso?.short && <span className={`tone-${perso.tone}`}>{perso.short} <Trend tone={perso.tone} /></span>}
           </span>
         </span>
         <span className="reco__stat">
           <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}<Trend tone={wrTone(res.score)} /></span>
-          <span className="reco__label">Dans cette draft</span>
+          <span className="reco__label">{t("Dans cette draft")}</span>
         </span>
         {!compact && <>
           <span className="reco__sep" />
           <span className="reco__perso">
             <span className={`reco__perso-value tone-${perso?.tone ?? "neutral"}`}>{perso?.value ?? "—"}<Trend tone={perso?.tone} /></span>
-            <span className="reco__label">{perso?.label ?? "Stats perso indisponibles"}</span>
+            <span className="reco__label">{perso?.label ?? t("Stats perso indisponibles")}</span>
           </span>
         </>}
       </button>
@@ -266,14 +267,14 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
           {why && <p className="mypick__why">{why}</p>}
           <div className="reco__factors">
           {laner && laner.p >= 0.15 && (
-            <Factor label={`Face à ${champName(stats, laner.enemy)} · ${Math.round(laner.p * 100)} % d’être ton vis-à-vis`}
+            <Factor label={t("Face à {champName} · {round} % d’être ton vis-à-vis", { champName: champName(stats, laner.enemy), round: Math.round(laner.p * 100) })}
                     value={res.lane} />
           )}
-          <Factor label="Contre le reste de l’équipe" value={res.counters} />
-          <Factor label="Avec tes alliés" value={res.synergies} />
+          <Factor label={t("Contre le reste de l’équipe")} value={res.counters} />
+          <Factor label={t("Avec tes alliés")} value={res.synergies} />
           </div>
           <RunePage stats={stats} champ={res.champ} role={role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
-          {!mine && <button className="btn btn--primary" onClick={onPreselect}>Présélectionner dans le client</button>}
+          {!mine && <button className="btn btn--primary" onClick={onPreselect}>{t("Présélectionner dans le client")}</button>}
         </div>
       )}
     </div>
@@ -297,21 +298,21 @@ function MatchupPanel({ stats, res, perso, role }: { stats: Stats; res: Result; 
         <ChampionIcon stats={stats} champ={res.champ} size={2.5} />
         {laner && <><span className="muted">vs</span><ChampionIcon stats={stats} champ={laner.enemy} size={2.5} /></>}
         <div>
-          <h3>{champName(stats, res.champ)}{laner ? ` face à ${champName(stats, laner.enemy)}` : ""}</h3>
+          <h3>{champName(stats, res.champ)}{laner ? t(" face à {champName}", { champName: champName(stats, laner.enemy) }) : ""}</h3>
           <p className="muted small">
-            {laner ? `Matchup de la ligne sélectionnée · ${Math.round(laner.p * 100)} % d’être ton vis-à-vis`
-                   : "Aucun ennemi visible pour l’instant"}
+            {laner ? t("Matchup de la ligne sélectionnée · {round} % d’être ton vis-à-vis", { round: Math.round(laner.p * 100) })
+                   : t("Aucun ennemi visible pour l’instant")}
           </p>
         </div>
       </div>
       <div className="tiles">
-        <Tile label="Master+ sur ce matchup"
+        <Tile label={t("Master+ sur ce matchup")}
               value={laner && laner.games > 0 ? pct(laner.wins / laner.games) : "—"}
-              detail={laner ? `${int(laner.games)} parties ce patch` : "En attente du vis-à-vis"} />
-        <Tile label="Ton bilan face à ce champion" {...matchupTile(stats, perso, res.champ, role, laner?.enemy)} />
-        <Tile label="Plus gros risque de la draft"
-              value={risk && risk.counterDelta < -0.0005 ? champName(stats, risk.enemy) : "Aucun"}
-              detail={risk && risk.counterDelta < -0.0005 ? pts(risk.counterDelta) : "Pas d’ennemi défavorable"}
+              detail={laner ? t("{int} parties ce patch", { int: int(laner.games) }) : t("En attente du vis-à-vis")} />
+        <Tile label={t("Ton bilan face à ce champion")} {...matchupTile(stats, perso, res.champ, role, laner?.enemy)} />
+        <Tile label={t("Plus gros risque de la draft")}
+              value={risk && risk.counterDelta < -0.0005 ? champName(stats, risk.enemy) : t("Aucun")}
+              detail={risk && risk.counterDelta < -0.0005 ? pts(risk.counterDelta) : t("Pas d’ennemi défavorable")}
               tone={risk && risk.counterDelta < -0.0005 ? "warn" : undefined} />
       </div>
     </div>
@@ -362,11 +363,11 @@ export function makePreselect(
   return async (champ: number) => {
     if (!onPreselect) {
       onDemoPick?.(champ);
-      flash(`Démo : ${champName(stats, champ)} est survolé comme dans le client.`);
+      flash(t("Démo : {champName} est survolé comme dans le client.", { champName: champName(stats, champ) }));
       return;
     }
     const error = await onPreselect(champ);
-    flash(error ?? `${champName(stats, champ)} présélectionné dans le client. À toi de le verrouiller.`);
+    flash(error ?? t("{champName} présélectionné dans le client. À toi de le verrouiller.", { champName: champName(stats, champ) }));
   };
 }
 
@@ -382,46 +383,46 @@ export function makeBanSelect(
   };
   return async (champ: number) => {
     if (!onBan) {
-      flash(`Démo : en partie, ${champName(stats, champ)} serait survolé pour ton ban.`);
+      flash(t("Démo : en partie, {champName} serait survolé pour ton ban.", { champName: champName(stats, champ) }));
       return;
     }
     const error = await onBan(champ);
-    flash(error ?? `${champName(stats, champ)} survolé pour ton ban. À toi de valider dans le client.`);
+    flash(error ?? t("{champName} survolé pour ton ban. À toi de valider dans le client.", { champName: champName(stats, champ) }));
   };
 }
 
 type Tone = "good" | "bad" | "neutral";
 export interface PersoCell { value: string; label: string; tone: Tone; short?: string }
 
-const games = (n: number) => `${int(n)} partie${n > 1 ? "s" : ""}`;
+const games = (n: number) => plural(n, "{n} partie", "{n} parties").replace(String(n), int(n));
 const persoTone = (g: number, w: number): Tone => (g >= 5 ? wrTone(w / g) : "neutral");
 
 /** Colonne « toi » d'une recommandation : winrate de la saison dans ce rôle (ou toutes lanes). */
 export function persoCell(perso: PersonalState | undefined, champ: number, role: number): PersoCell {
-  if (!perso || perso.kind === "off") return { value: "—", label: "Stats perso indisponibles", tone: "neutral" };
-  if (perso.kind === "no-account") return { value: "—", label: "Lance le client LoL", tone: "neutral" };
-  if (perso.kind === "unregistered") return { value: "—", label: "À activer dans ton profil", tone: "neutral" };
-  if (perso.kind === "loading") return { value: "—", label: "Chargement…", tone: "neutral" };
-  if (perso.kind === "error") return { value: "—", label: "Serveur injoignable", tone: "neutral" };
+  if (!perso || perso.kind === "off") return { value: "—", label: t("Stats perso indisponibles"), tone: "neutral" };
+  if (perso.kind === "no-account") return { value: "—", label: t("Lance le client LoL"), tone: "neutral" };
+  if (perso.kind === "unregistered") return { value: "—", label: t("À activer dans ton profil"), tone: "neutral" };
+  if (perso.kind === "loading") return { value: "—", label: t("Chargement…"), tone: "neutral" };
+  if (perso.kind === "error") return { value: "—", label: t("Serveur injoignable"), tone: "neutral" };
   const d = perso.data;
   const [g, w] = d.byRole.get(`${champ}:${role}`) ?? [0, 0];
-  if (g > 0) return { value: pct(w / g), label: `Toi · ${games(g)}`, tone: persoTone(g, w), short: `Toi ${pct(w / g)} · ${g}` };
+  if (g > 0) return { value: pct(w / g), label: t("Toi · {games}", { games: games(g) }), tone: persoTone(g, w), short: t("Toi {pct} · {g}", { pct: pct(w / g), g: g }) };
   const [ga, wa] = d.byChamp.get(champ) ?? [0, 0];
-  if (ga > 0) return { value: pct(wa / ga), label: `Toi, autres lanes · ${games(ga)}`, tone: persoTone(ga, wa) };
-  if (d.syncing && d.matches === 0) return { value: "—", label: "Synchro en cours", tone: "neutral" };
-  return { value: "—", label: "Jamais joué cette saison", tone: "neutral" };
+  if (ga > 0) return { value: pct(wa / ga), label: t("Toi, autres lanes · {games}", { games: games(ga) }), tone: persoTone(ga, wa) };
+  if (d.syncing && d.matches === 0) return { value: "—", label: t("Synchro en cours"), tone: "neutral" };
+  return { value: "—", label: t("Jamais joué cette saison"), tone: "neutral" };
 }
 
 function matchupTile(stats: Stats, perso: PersonalState | undefined, champ: number, role: number, enemy: number | undefined) {
-  if (enemy == null) return { value: "—", detail: "En attente du vis-à-vis" };
+  if (enemy == null) return { value: "—", detail: t("En attente du vis-à-vis") };
   if (!perso || perso.kind !== "ready") {
-    const why = perso?.kind === "unregistered" ? "Active tes stats perso dans ton profil"
-      : perso?.kind === "no-account" ? "Lance le client LoL" : "Stats perso indisponibles";
+    const why = perso?.kind === "unregistered" ? t("Active tes stats perso dans ton profil")
+      : perso?.kind === "no-account" ? t("Lance le client LoL") : t("Stats perso indisponibles");
     return { value: "—", detail: why };
   }
   const [g, w] = perso.data.matchups.get(`${champ}:${role}:${enemy}`) ?? [0, 0];
-  if (g === 0) return { value: "—", detail: `Jamais affronté ${champName(stats, enemy)} avec ce champion cette saison` };
-  return { value: `${w} V – ${g - w} D`, detail: `${pct(w / g)} sur ${games(g)} cette saison` };
+  if (g === 0) return { value: "—", detail: t("Jamais affronté {champName} avec ce champion cette saison", { champName: champName(stats, enemy) }) };
+  return { value: `${w} V – ${g - w} D`, detail: t("{pct} sur {games} cette saison", { pct: pct(w / g), games: games(g) }) };
 }
 
 /** Ton champion survolé ou verrouillé : son score dans la draft, pourquoi, et ses runes. */
@@ -436,12 +437,12 @@ export function MyPick({ stats, draft, compact = false }: { stats: Stats; draft:
       <div className="mypick__head">
         <ChampionIcon stats={stats} champ={champ} size={compact ? 2.125 : 2.5} />
         <div className="grow">
-          <p className="overline">{draft.myLocked ? "Ton pick" : "Ta présélection"}</p>
+          <p className="overline">{draft.myLocked ? t("Ton pick") : t("Ta présélection")}</p>
           <p className="mypick__name">{champName(stats, champ)}</p>
         </div>
         <span className="reco__stat">
           <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}<Trend tone={wrTone(res.score)} /></span>
-          <span className="reco__label">Dans cette draft</span>
+          <span className="reco__label">{t("Dans cette draft")}</span>
         </span>
       </div>
       <p className="mypick__why">{explain(stats, res, draft.role, allies)}</p>
@@ -459,25 +460,25 @@ export function BanPanel({ stats, draft, compact = false, titled = true, onSelec
   const counters = list.filter((b) => b.against).length;
   const me = champName(stats, draft.myChamp ?? null);
   const role = ROLE_LABELS[draft.role];
-  const intro = draft.myChamp == null ? `Pas de présélection : les meilleurs winrates en ${role}`
-    : counters === list.length ? `Les matchups que ${me} perd le plus en ${role}`
-    : counters > 0 ? `Les matchups que ${me} perd, puis les plus forts en ${role}`
-    : `${me} n’a pas de matchup nettement perdant : les meilleurs winrates en ${role}`;
+  const intro = draft.myChamp == null ? t("Pas de présélection : les meilleurs winrates en {role}", { role: role })
+    : counters === list.length ? t("Les matchups que {me} perd le plus en {role}", { me: me, role: role })
+    : counters > 0 ? t("Les matchups que {me} perd, puis les plus forts en {role}", { me: me, role: role })
+    : t("{me} n’a pas de matchup nettement perdant : les meilleurs winrates en {role}", { me: me, role: role });
   return (
     <div className={`card bans${compact ? " bans--compact" : ""}`}>
-      {titled && <p className="bans__title">Bans recommandés</p>}
+      {titled && <p className="bans__title">{t("Bans recommandés")}</p>}
       <p className="muted small">
         {intro}
       </p>
       <div className="bans__list">
         {list.map((b) => (
           <button key={b.champ} className="bans__item" onClick={() => onSelect?.(b.champ)} disabled={!onSelect}
-                  title={`Survoler ${champName(stats, b.champ)} pour ton ban`}>
+                  title={t("Survoler {champName} pour ton ban", { champName: champName(stats, b.champ) })}>
             <ChampionIcon stats={stats} champ={b.champ} size={compact ? 1.75 : 2} />
             <span className="bans__text">
               <span className="bans__name">{champName(stats, b.champ)}</span>
               <span className="muted small">
-                {b.against ? `Tu gagnes ${pct(b.winrate)} contre lui` : `${pct(b.winrate)} de winrate en ${role}`} · {int(b.games)} parties
+                {b.against ? t("Tu gagnes {pct} contre lui", { pct: pct(b.winrate) }) : t("{pct} de winrate en {role}", { pct: pct(b.winrate), role: role })} · {t("{n} parties", { n: int(b.games) })}
               </span>
             </span>
           </button>
@@ -493,21 +494,21 @@ function CompSummary({ comp, mine }: { comp: TeamComp; mine: boolean }) {
   const ad = Math.round(comp.ad * 100), ap = 100 - ad;
   const dmgIssue = comp.issues.find((i) => i.gap === "ap" || i.gap === "ad");
   const others = comp.issues.filter((i) => i !== dmgIssue && (mine || i.level === "bad"));
-  const dmgText = dmgIssue ? dmgIssue.short : ad >= 60 ? `${ad} % AD` : ap >= 60 ? `${ap} % AP` : "AD / AP équilibré";
+  const dmgText = dmgIssue ? dmgIssue.short : ad >= 60 ? `${pctN(ad)} AD` : ap >= 60 ? `${pctN(ap)} AP` : t("AD / AP équilibré");
   return (
-    <span className="comp" tabIndex={0} aria-label={`Composition : ${dmgText}${others.length ? `, manque : ${others.map((i) => i.short).join(", ")}` : ""}`}>
+    <span className="comp" tabIndex={0} aria-label={t("Composition : {dmgText}{v}", { dmgText: dmgText, v: others.length ? t(", manque : {list}", { list: others.map((i) => i.short).join(", ") }) : "" })}>
       <span className="comp__bar" aria-hidden><span className="comp__ad" style={{ width: `${ad}%` }} /><span className="comp__ap" /></span>
       <span className={`comp__dmg${dmgIssue ? " tone-bad" : ""}`}>{dmgText}</span>
       {mine && others.slice(0, 2).map((i) => (
         <span key={i.gap} className={`comp__chip comp__chip--${i.level}`}>✕ {i.short}</span>
       ))}
       <span className="comp__pop" role="tooltip">
-        <strong>{mine ? "Composition de ton équipe" : "Composition adverse"}</strong>
-        {comp.issues.length === 0 && <span className="comp__line"><b className="tone-good">✓</b>Rien ne manque pour l’instant.</span>}
+        <strong>{mine ? t("Composition de ton équipe") : t("Composition adverse")}</strong>
+        {comp.issues.length === 0 && <span className="comp__line"><b className="tone-good">✓</b>{t("Rien ne manque pour l’instant.")}</span>}
         {comp.issues.map((i) => (
           <span key={i.gap} className="comp__line"><b className={i.level === "bad" ? "tone-bad" : "tone-warn"}>{i.level === "bad" ? "✕" : "~"}</b>{i.text}</span>
         ))}
-        {mine && comp.issues.length > 0 && <small>Les picks qui comblent ces manques sont marqués « Comble : … ».</small>}
+        {mine && comp.issues.length > 0 && <small>{t("Les picks qui comblent ces manques sont marqués « Comble : … ».")}</small>}
       </span>
     </span>
   );

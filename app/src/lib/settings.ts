@@ -3,12 +3,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { IN_APP } from "./lcu";
 import { usePersistent } from "./ui";
 import type { Region } from "./api";
+import { t, setLang as applyLang, type Lang } from "./i18n";
 
-export type Lang = "fr" | "en";
+export type { Lang };
+
 /** Rôles choisis à l'accueil : principal puis secondaire (index dans ROLES). */
 export interface Roles { main: number | null; second: number | null }
 
-export const useLang = () => usePersistent<Lang>("spec.lang", "fr");
+/** Langue de l'interface : la changer recharge l'appli (tous les textes, même les listes fixes, sont retraduits). */
+export function useLang(): [Lang, (l: Lang) => void] {
+  const [lang, save] = usePersistent<Lang>("spec.lang", "fr");
+  return [lang, (l: Lang) => { if (l === lang) return; applyLang(l); save(l); window.location.reload(); }];
+}
 export const useDefaultRegion = () => usePersistent<Region>("spec.region.default", "euw");
 export const useRoles = () => usePersistent<Roles>("spec.roles", { main: null, second: null });
 export const useOnboarded = () => usePersistent<boolean>("spec.onboarded", false);
@@ -19,13 +25,13 @@ export async function autostartEnabled(): Promise<boolean | null> {
   try { const { isEnabled } = await import("@tauri-apps/plugin-autostart"); return await isEnabled(); } catch { return null; }
 }
 export async function setAutostart(on: boolean): Promise<string | null> {
-  if (!IN_APP) return "Disponible dans l’appli installée.";
+  if (!IN_APP) return t("Disponible dans l’appli installée.");
   try {
     const m = await import("@tauri-apps/plugin-autostart");
     if (on) await m.enable(); else await m.disable();
     return null;
   } catch {
-    return "Windows a refusé le changement. Réessaie, ou lance Spec en administrateur une fois.";
+    return t("Windows a refusé le changement. Réessaie, ou lance Spec en administrateur une fois.");
   }
 }
 

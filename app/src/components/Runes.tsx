@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { orderSpells, runePageFor, spellsFor, type RunePage as Page, type Stats } from "../lib/score";
-import { champName, usePersistent } from "../lib/ui";
+import { champName, pct, usePersistent } from "../lib/ui";
 import { loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
+import { t, ddragonLocale } from "../lib/i18n";
 
 // Noms, descriptions et icônes officiels des runes (Data Dragon, en français).
 interface RuneInfo { name: string; icon: string; desc: string }
@@ -19,15 +20,15 @@ export function useFlashKey(): ["D" | "F", (k: "D" | "F") => void] {
   return usePersistent<"D" | "F">("spec.flashKey", "F");
 }
 const SHARDS: Record<number, [string, string]> = {
-  5008: ["Force adaptative", "StatModsAdaptiveForceIcon"],
-  5005: ["Vitesse d’attaque", "StatModsAttackSpeedIcon"],
-  5007: ["Accélération de compétence", "StatModsCDRScalingIcon"],
-  5010: ["Vitesse de déplacement", "StatModsMovementSpeedIcon"],
-  5001: ["PV croissants avec le niveau", "StatModsHealthPlusIcon"],
+  5008: [t("Force adaptative"), "StatModsAdaptiveForceIcon"],
+  5005: [t("Vitesse d’attaque"), "StatModsAttackSpeedIcon"],
+  5007: [t("Accélération de compétence"), "StatModsCDRScalingIcon"],
+  5010: [t("Vitesse de déplacement"), "StatModsMovementSpeedIcon"],
+  5001: [t("PV croissants avec le niveau"), "StatModsHealthPlusIcon"],
   5011: ["PV", "StatModsHealthScalingIcon"],
-  5013: ["Ténacité et résistance aux ralentissements", "StatModsTenacityIcon"],
-  5002: ["Armure", "StatModsArmorIcon"],
-  5003: ["Résistance magique", "StatModsMagicResIcon"],
+  5013: [t("Ténacité et résistance aux ralentissements"), "StatModsTenacityIcon"],
+  5002: [t("Armure"), "StatModsArmorIcon"],
+  5003: [t("Résistance magique"), "StatModsMagicResIcon"],
 };
 
 /** Texte brut d'une description Data Dragon (balises retirées sans jamais les interpréter). */
@@ -39,7 +40,7 @@ const cache = new Map<string, Promise<RuneData>>();
 
 function loadRunes(version: string): Promise<RuneData> {
   if (!cache.has(version)) {
-    cache.set(version, fetch(`${CDN}/${version}/data/fr_FR/runesReforged.json`)
+    cache.set(version, fetch(`${CDN}/${version}/data/${ddragonLocale()}/runesReforged.json`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((trees: { id: number; name: string; icon: string; slots: { runes: { id: number; name: string; icon: string; shortDesc: string }[] }[] }[]) => {
         const map: RuneData = new Map();
@@ -50,7 +51,7 @@ function loadRunes(version: string): Promise<RuneData> {
           }
         }
         for (const [id, [name, file]] of Object.entries(SHARDS)) {
-          map.set(Number(id), { name, icon: `${CDN}/img/perk-images/StatMods/${file}.png`, desc: "Fragment de statistiques" });
+          map.set(Number(id), { name, icon: `${CDN}/img/perk-images/StatMods/${file}.png`, desc: t("Fragment de statistiques") });
         }
         return map;
       })
@@ -73,7 +74,7 @@ export function Rune({ data, id, size }: { data: RuneData | null; id: number; si
   const info = data?.get(id);
   const [failed, setFailed] = useState(false);
   return (
-    <span className={`rune rune--${size}`} tabIndex={0} aria-label={info?.name ?? `Rune ${id}`}>
+    <span className={`rune rune--${size}`} tabIndex={0} aria-label={info?.name ?? t("Rune {id}", { id: id })}>
       {info && !failed
         ? <img src={info.icon} alt="" draggable={false} onError={() => setFailed(true)} />
         : <span className="rune__fallback" aria-hidden>{info?.name.slice(0, 1) ?? "?"}</span>}
@@ -93,8 +94,8 @@ export function RunePage({ stats, champ, role, laner }: { stats: Stats; champ: n
   const found = runePageFor(stats, champ, role, laner);
   if (!found) {
     return stats.runes.size === 0
-      ? <p className="runes__empty">Runes conseillées : collecte des pages en cours.</p>
-      : <p className="runes__empty">Pas encore assez de parties pour conseiller des runes.</p>;
+      ? <p className="runes__empty">{t("Runes conseillées : collecte des pages en cours.")}</p>
+      : <p className="runes__empty">{t("Pas encore assez de parties pour conseiller des runes.")}</p>;
   }
   const { page, vs } = found;
   return <RunePageView stats={stats} champ={champ} page={page} vs={vs} data={data}
@@ -113,7 +114,7 @@ function RunePageView({ stats, champ, page, vs, data, spells }:
   const ordered = spells ? orderSpells(spells.spells, flashKey) : null;
   const run = async () => {
     if (!importer) {
-      setStatus({ ok: true, text: `Démo : en partie, ces runes remplacent la page sélectionnée dans ta draft${ordered ? " et les sorts sont choisis" : ""}.` });
+      setStatus({ ok: true, text: t("Démo : en partie, ces runes remplacent la page sélectionnée dans ta draft{v}.", { v: ordered ? t(" et les sorts sont choisis") : "" }) });
       return;
     }
     setBusy(true);
@@ -122,15 +123,14 @@ function RunePageView({ stats, champ, page, vs, data, spells }:
     const spellError = !error && ordered && spellImporter ? await spellImporter(ordered[0], ordered[1]) : null;
     setBusy(false);
     setStatus(error ? { ok: false, text: error }
-      : spellError ? { ok: false, text: `Runes importées, mais pas les sorts : ${spellError}` }
-      : { ok: true, text: `Runes importées dans ta page « Spec : ${name} runes »${ordered && spellImporter ? ", sorts choisis" : ""}.` });
+      : spellError ? { ok: false, text: t("Runes importées, mais pas les sorts : {spellError}", { spellError: spellError }) }
+      : { ok: true, text: t("Runes importées dans ta page « Spec : {name} runes »{v}.", { name: name, v: ordered && spellImporter ? t(", sorts choisis") : "" }) });
   };
-  const wr = page.games ? `${((page.wins / page.games) * 100).toFixed(1).replace(".", ",")} %` : "";
+  const wr = page.games ? pct(page.wins / page.games) : "";
   return (
     <div className="runes">
-      <span className="runes__label">
-        Runes conseillées{vs != null ? ` face à ${champName(stats, vs)}` : ""}
-        <span className="muted"> · {wr} sur {Math.round(page.games)} parties</span>
+      <span className="runes__label">{t("Runes conseillées")}{vs != null ? t(" face à {champName}", { champName: champName(stats, vs) }) : ""}
+        <span className="muted"> · {t("{wr} sur {n} parties", { wr, n: Math.round(page.games) })}</span>
       </span>
       <div className="runes__row">
         <Rune data={data} id={page.keystone} size="key" />
@@ -140,17 +140,17 @@ function RunePageView({ stats, champ, page, vs, data, spells }:
         <span className="runes__sep" />
         {page.shards.map((r, i) => <Rune key={`f${i}`} data={data} id={r} size="shard" />)}
         <button className="btn btn--secondary btn--tiny runes__import" onClick={run} disabled={busy}>
-          {busy ? "Import…" : ordered ? "Importer runes et sorts" : "Importer dans le client"}
+          {busy ? "Import…" : ordered ? t("Importer runes et sorts") : t("Importer dans le client")}
         </button>
       </div>
       {ordered && (
         <div className="spells">
-          <span className="spells__label">Sorts{spells?.vs != null ? ` face à ${champName(stats, spells.vs)}` : ""}</span>
+          <span className="spells__label">{t("Sorts")}{spells?.vs != null ? t(" face à {champName}", { champName: champName(stats, spells.vs) }) : ""}</span>
           <SpellKey data={spellInfo} id={ordered[0]} k="D" />
           <button className="spells__swap" onClick={() => setFlashKey(flashKey === "F" ? "D" : "F")}
-                  title={`Flash sur ${flashKey === "F" ? "D" : "F"} plutôt`} aria-label="Inverser les touches des sorts">⇄</button>
+                  title={t("Flash sur {v} plutôt", { v: flashKey === "F" ? "D" : "F" })} aria-label={t("Inverser les touches des sorts")}>⇄</button>
           <SpellKey data={spellInfo} id={ordered[1]} k="F" />
-          <span className="muted small">Flash sur {flashKey}, gardé pour tes prochaines parties</span>
+          <span className="muted small">{t("Flash sur {key}, gardé pour tes prochaines parties", { key: flashKey })}</span>
         </div>
       )}
       {status && <p className={`runes__status${status.ok ? "" : " tone-bad"}`} role="status">{status.text}</p>}
@@ -161,7 +161,7 @@ function RunePageView({ stats, champ, page, vs, data, spells }:
 function SpellKey({ data, id, k }: { data: InfoMap | null; id: number; k: "D" | "F" }) {
   const info = data?.get(id);
   return (
-    <span className="spells__key" title={info?.name ?? `Sort ${id}`}>
+    <span className="spells__key" title={info?.name ?? t("Sort {id}", { id: id })}>
       {info ? <img src={info.icon} alt={info.name} draggable={false} /> : <span className="spells__fallback" />}
       <kbd>{k}</kbd>
     </span>
@@ -172,7 +172,7 @@ function SpellKey({ data, id, k }: { data: InfoMap | null; id: number; k: "D" | 
 export function RuneTree({ stats, champ, role }: { stats: Stats; champ: number; role: number }) {
   const data = useRuneData(stats.ddragon);
   const found = runePageFor(stats, champ, role, null);
-  if (!found) return <p className="runes__empty">Pas encore assez de parties pour conseiller des runes.</p>;
+  if (!found) return <p className="runes__empty">{t("Pas encore assez de parties pour conseiller des runes.")}</p>;
   const { page } = found;
   const name = (id: number) => data?.get(id)?.name ?? "";
   // une seule ligne : chaque arbre est un groupe de runes côte à côte, nom sous l'icône
@@ -191,9 +191,9 @@ export function RuneTree({ stats, champ, role }: { stats: Stats; champ: number; 
   );
   return (
     <div className="rtree">
-      {col(name(page.primaryStyle) || "Arbre principal", page.primary, page.keystone)}
-      {col(name(page.subStyle) || "Arbre secondaire", page.sub)}
-      {col("Fragments", page.shards)}
+      {col(name(page.primaryStyle) || t("Arbre principal"), page.primary, page.keystone)}
+      {col(name(page.subStyle) || t("Arbre secondaire"), page.sub)}
+      {col(t("Fragments"), page.shards)}
     </div>
   );
 }

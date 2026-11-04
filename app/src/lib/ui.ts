@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
 import type { Stats } from "./score";
+import { getLang, locale } from "./i18n";
 
-export const pct = (x: number) => `${(x * 100).toFixed(1).replace(".", ",")} %`;
+/** Nombre à une décimale : « 52,7 » en français, « 52.7 » en anglais. */
+export const dec1 = (x: number) => (getLang() === "en" ? x.toFixed(1) : x.toFixed(1).replace(".", ","));
+export const pct = (x: number) => (getLang() === "en" ? `${dec1(x * 100)}%` : `${dec1(x * 100)} %`);
+/** Pourcentage entier déjà calculé : « 86 % » en français, « 86% » en anglais. */
+export const pctN = (n: number) => (getLang() === "en" ? `${n}%` : `${n} %`);
 export const pts = (x: number) =>
-  `${x >= 0 ? "+" : "−"}${Math.abs(x * 100).toFixed(1).replace(".", ",")} pt`;
-export const int = (x: number) => Math.round(x).toLocaleString("fr-FR");
+  `${x >= 0 ? "+" : "−"}${dec1(Math.abs(x * 100))} pt`;
+export const int = (x: number) => Math.round(x).toLocaleString(locale());
 
 /** Couleur d'un winrate : vert dès 51,5 %, rouge sous 49 %. */
 export const wrTone = (x: number) => (x >= 0.515 ? "good" : x < 0.49 ? "bad" : "neutral");

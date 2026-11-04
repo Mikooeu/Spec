@@ -22,13 +22,15 @@ import { applyCompact, setOnTop, watchCompactExpand } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { useUpdate, type UpdateState } from "./lib/updater";
 import { Logo } from "./components/Logo";
+import { localizeChampions } from "./lib/ddragon";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { Onboarding } from "./components/Onboarding";
 import { useDefaultRegion, useOnboarded, useRoles } from "./lib/settings";
+import { t } from "./lib/i18n";
 
 type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "settings";
 interface ChampView { champ: number; role: number; inGame: boolean }
-const SCREENS: [Screen, string][] = [["draft", "Draft"], ["profile", "Profil"], ["tier", "Tier list"], ["pool", "Champion pool"], ["settings", "Réglages"]];
+const SCREENS: [Screen, string][] = [["draft", t("Draft")], ["profile", t("Profil")], ["tier", t("Tier list")], ["pool", t("Champion pool")], ["settings", t("Réglages")]];
 
 /** Draft fictive de démonstration (remplacée plus tard par la lecture du client LoL). */
 function demoDraft(stats: Stats): Draft {
@@ -36,8 +38,8 @@ function demoDraft(stats: Stats): Draft {
     [...stats.champions.values()].find((c) => normalize(c.name) === normalize(name))?.id ?? null;
   return {
     role: 2,
-    allies: [id("Darius"), id("Vi"), null, id("Jinx"), null],
-    enemies: [id("Sylas"), id("Lee Sin"), id("Syndra"), null, id("Nautilus")],
+    allies: [id(t("Darius")), id(t("Vi")), null, id(t("Jinx")), null],
+    enemies: [id(t("Sylas")), id(t("Lee Sin")), id(t("Syndra")), null, id(t("Nautilus"))],
     bans: [],
   };
 }
@@ -46,7 +48,12 @@ export default function App() {
   const wide = useUiScale();
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [screen, setScreen] = useState<Screen>("draft");
+  // après un changement de langue, l'appli se redessine : on rouvre l'écran où l'on était (les réglages)
+  const [screen, setScreen] = useState<Screen>(() => {
+    const back = sessionStorage.getItem("spec.reopen") as Screen | null;
+    sessionStorage.removeItem("spec.reopen");
+    return back ?? "draft";
+  });
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pools, setPools] = usePersistent<Pools>("spec.pools", [[], [], [], [], []]);
   const client = useLolClient();
@@ -84,7 +91,7 @@ export default function App() {
       return;
     }
     // partie terminée : retour sur l'écran d'attente de la draft
-    if (["PreEndOfGame", "EndOfGame", "WaitingForStats", "Lobby", "None", "offline"].includes(phase)) {
+    if (["PreEndOfGame", "EndOfGame", "WaitingForStats", t("Lobby"), t("None"), "offline"].includes(phase)) {
       setChampView((v) => {
         if (v?.inGame) setScreen((sc) => (sc === "champion" ? "draft" : sc));
         return v?.inGame ? { ...v, inGame: false } : v;
@@ -139,8 +146,9 @@ export default function App() {
 
   useEffect(() => {
     loadStats()
+      .then(localizeChampions)   // noms officiels des champions dans la langue de l'interface
       .then(setStats)
-      .catch(() => setError("Stats introuvables : lance `python -m scoring export` dans le dossier Spec."));
+      .catch(() => setError(t("Stats introuvables : lance `python -m scoring export` dans le dossier Spec.")));
   }, []);
 
   // accueil au premier lancement ; ceux qui ont déjà un pool (versions précédentes) ne le voient pas
@@ -157,7 +165,7 @@ export default function App() {
   };
 
   const footer = useMemo(
-    () => (stats ? `Stats Master+ · patch ${patchLabel(stats.meta.patch)} · ${int(Number(stats.meta.matches ?? 0))} parties` : ""),
+    () => (stats ? t("Stats Master+ · patch {patchLabel} · {int} parties", { patchLabel: patchLabel(stats.meta.patch), int: int(Number(stats.meta.matches ?? 0)) }) : ""),
     [stats],
   );
 
@@ -169,7 +177,7 @@ export default function App() {
       <Onboarding stats={stats} roles={roles} onRoles={setRoles} pools={pools} onPools={setPools}
                   clientOn={clientOn} account={me} perso={perso} onDone={finishOnboarding}
                   onRegister={async (code) => {
-                    const err = me?.puuid ? await register(me.puuid, me.name, code) : "Lance le client LoL pour lier ton compte.";
+                    const err = me?.puuid ? await register(me.puuid, me.name, code) : t("Lance le client LoL pour lier ton compte.");
                     if (!err) refreshPerso();
                     return err;
                   }} />
@@ -200,9 +208,9 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">
           <Logo className="brand__mark" />
-          <span className="brand__name">Spec</span>
+          <span className="brand__name">{t("Spec")}</span>
           <button className="icon-btn brand__compact" onClick={() => setCompact(true)} disabled={!stats}
-                  title="Mode compact" aria-label="Passer en mode compact">
+                  title={t("Mode compact")} aria-label={t("Passer en mode compact")}>
             <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
               <path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M9.5 6.5 14 2M6.5 9.5 2 14" fill="none" stroke="currentColor"
                     strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -218,22 +226,22 @@ export default function App() {
         <span className="grow" />
         <UpdateCard state={update} onInstall={installUpdate} />
         {account && (
-          <p className="sidebar__account" title="Compte connecté au client LoL">
+          <p className="sidebar__account" title={t("Compte connecté au client LoL")}>
             <span className="dot" />{account.name}{account.region ? ` · ${account.region}` : ""}
           </p>
         )}
         <p className="sidebar__foot">{footer}</p>
-        <p className="sidebar__legal">Spec n’est pas approuvé par Riot Games.</p>
+        <p className="sidebar__legal">{t("Spec n’est pas approuvé par Riot Games.")}</p>
       </aside>
 
       <main className="main">
-        {error && <div className="content"><div className="empty-state"><h1>Impossible de démarrer</h1><p className="muted">{error}</p></div></div>}
-        {!error && !stats && <div className="content"><div className="empty-state"><div className="spinner" /><p className="muted">Chargement des stats…</p></div></div>}
+        {error && <div className="content"><div className="empty-state"><h1>{t("Impossible de démarrer")}</h1><p className="muted">{error}</p></div></div>}
+        {!error && !stats && <div className="content"><div className="empty-state"><div className="spinner" /><p className="muted">{t("Chargement des stats…")}</p></div></div>}
         {stats && screen === "profile" && (
           <ProfileScreen stats={stats} account={me} clientOn={clientOn} lpVersion={lpVersion}
                          perso={perso}
                          onRegister={async (code) => {
-                           const err = me?.puuid ? await register(me.puuid, me.name, code) : "Lance le client LoL pour lier ton compte.";
+                           const err = me?.puuid ? await register(me.puuid, me.name, code) : t("Lance le client LoL pour lier ton compte.");
                            if (!err) refreshPerso();
                            return err;
                          }} />
@@ -266,14 +274,14 @@ export default function App() {
           <div className="content">
             <div className="empty-state">
               <div className="spinner" />
-              <h1>En attente de la draft</h1>
-              <p className="muted">Lance une partie classée : tes recommandations s’affichent dès la sélection des champions.</p>
+              <h1>{t("En attente de la draft")}</h1>
+              <p className="muted">{t("Lance une partie classée : tes recommandations s’affichent dès la sélection des champions.")}</p>
               <div className="card status-list">
-                <div><span>Client LoL</span><span className="muted"><span className={clientOn ? "dot" : "dot dot--off"} />{clientText}</span></div>
-                <div><span>Stats Master+</span><span className="muted"><span className="dot" />Patch {patchLabel(stats.meta.patch)}</span></div>
+                <div><span>{t("Client LoL")}</span><span className="muted"><span className={clientOn ? "dot" : "dot dot--off"} />{clientText}</span></div>
+                <div><span>{t("Stats Master+")}</span><span className="muted"><span className="dot" />{t("Patch ")}{patchLabel(stats.meta.patch)}</span></div>
               </div>
               {!clientOn && (
-                <button className="btn btn--primary" onClick={() => setDraft(demoDraft(stats))}>Simuler une draft</button>
+                <button className="btn btn--primary" onClick={() => setDraft(demoDraft(stats))}>{t("Simuler une draft")}</button>
               )}
             </div>
           </div>
@@ -293,16 +301,16 @@ export default function App() {
 function RegionWait({ region, missing, select }: { region: Region; missing: boolean; select: React.ReactNode }) {
   return (
     <div className="content">
-      <header className="page-head"><div><p className="overline">Stats Master+ {REGION_LABEL[region]}</p><h1>Tier list</h1></div>
+      <header className="page-head"><div><p className="overline">{t("Stats Master+ ")}{REGION_LABEL[region]}</p><h1>{t("Tier list")}</h1></div>
         <div className="head-actions">{select}</div></header>
       <div className="empty-state">
         {missing ? (
           <>
-            <h1>Pas encore de stats {REGION_LABEL[region]}</h1>
-            <p className="muted">La collecte de cette région vient de commencer : les stats arrivent au prochain calcul (toutes les 6 h).</p>
+            <h1>{t("Pas encore de stats ")}{REGION_LABEL[region]}</h1>
+            <p className="muted">{t("La collecte de cette région vient de commencer : les stats arrivent au prochain calcul (toutes les 6 h).")}</p>
           </>
         ) : (
-          <><div className="spinner" /><p className="muted">Chargement des stats {REGION_LABEL[region]}…</p></>
+          <><div className="spinner" /><p className="muted">{t("Chargement des stats ")}{REGION_LABEL[region]}…</p></>
         )}
       </div>
     </div>
@@ -310,26 +318,26 @@ function RegionWait({ region, missing, select }: { region: Region; missing: bool
 }
 
 function clientStatus(client: ClientState): [boolean, string] {
-  if (client.status === "browser") return [false, "Disponible dans l’appli Spec"];
-  if (client.status === "offline") return [false, "Lance le client LoL"];
-  return [true, client.account ? `Connecté · ${client.account.name}` : "Connecté"];
+  if (client.status === "browser") return [false, t("Disponible dans l’appli Spec")];
+  if (client.status === "offline") return [false, t("Lance le client LoL")];
+  return [true, client.account ? t("Connecté · {name}", { name: client.account.name }) : t("Connecté")];
 }
 
 function UpdateCard({ state, onInstall }: { state: UpdateState; onInstall: () => void }) {
   if (state.kind === "none") return null;
   return (
     <div className="update" role="status">
-      <p className="update__title">Spec {state.version} est disponible</p>
+      <p className="update__title">{t("Spec {version} est disponible", { version: state.version })}</p>
       {state.kind === "available" && (
-        <button className="btn btn--primary btn--small update__btn" onClick={onInstall}>Installer et redémarrer</button>
+        <button className="btn btn--primary btn--small update__btn" onClick={onInstall}>{t("Installer et redémarrer")}</button>
       )}
       {state.kind === "installing" && (
-        <p className="muted small">Téléchargement{state.percent != null ? ` · ${state.percent} %` : "…"}</p>
+        <p className="muted small">{t("Téléchargement")}{state.percent != null ? ` · ${state.percent}%` : "…"}</p>
       )}
       {state.kind === "error" && (
         <>
-          <p className="small tone-bad">La mise à jour a échoué.</p>
-          <button className="btn btn--secondary btn--small update__btn" onClick={onInstall}>Réessayer</button>
+          <p className="small tone-bad">{t("La mise à jour a échoué.")}</p>
+          <button className="btn btn--secondary btn--small update__btn" onClick={onInstall}>{t("Réessayer")}</button>
         </>
       )}
     </div>

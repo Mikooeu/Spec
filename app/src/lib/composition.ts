@@ -9,6 +9,8 @@
 //   4. contrôle : 0 peu, 1 un peu, 2 beaucoup (étourdissements, projections, ralentissements de zone).
 // Un champion absent de la table (sorti après la table) n'est simplement pas compté.
 import type { Stats } from "./score";
+import { pctN } from "./ui";
+import { t } from "./i18n";
 
 const TABLE: Record<string, string> = {
   Aatrox: "A111", Ahri: "P001", Akali: "P000", Akshan: "A000", Alistar: "p222", Ambessa: "A111", Amumu: "p222",
@@ -60,7 +62,7 @@ export function traitsOf(stats: Stats, champ: number): Traits | null {
 }
 
 export type Gap = "ap" | "ad" | "front" | "engage" | "cc";
-export const GAP_LABEL: Record<Gap, string> = { ap: "AP", ad: "AD", front: "frontline", engage: "engage", cc: "contrôle" };
+export const GAP_LABEL: Record<Gap, string> = { ap: "AP", ad: "AD", front: t("frontline"), engage: t("engage"), cc: t("contrôle") };
 
 export interface TeamComp {
   known: number;                      // champions présents dans la table
@@ -79,16 +81,16 @@ export function analyzeTeam(stats: Stats, champs: number[]): TeamComp {
   const issues: TeamComp["issues"] = [];
   if (ts.length >= 3) {
     const pctAd = Math.round(ad * 100);
-    if (ad >= 0.75) issues.push({ gap: "ap", level: "bad", short: `${pctAd} % AD`,
-      text: `${pctAd} % de dégâts physiques : l’adversaire n’a qu’à acheter de l’armure. Un pick AP équilibrerait.` });
-    if (ad <= 0.25) issues.push({ gap: "ad", level: "bad", short: `${100 - pctAd} % AP`,
-      text: `${100 - pctAd} % de dégâts magiques : l’adversaire n’a qu’à acheter de la résistance magique. Un pick AD équilibrerait.` });
-    if (front < 2) issues.push({ gap: "front", level: front === 0 ? "bad" : "warn", short: "Frontline",
-      text: front === 0 ? "Pas de frontline : personne pour encaisser en combat." : "Frontline légère : un seul champion peut encaisser un peu." });
-    if (engage < 2) issues.push({ gap: "engage", level: engage === 0 ? "bad" : "warn", short: "Engage",
-      text: engage === 0 ? "Pas d’engage : personne pour lancer les combats." : "Engage faible : un seul champion peut lancer un combat, et pas toujours." });
-    if (cc < 3) issues.push({ gap: "cc", level: "warn", short: "Contrôle",
-      text: "Peu de contrôle : difficile d’attraper ou de bloquer l’adversaire." });
+    if (ad >= 0.75) issues.push({ gap: "ap", level: "bad", short: `${pctN(pctAd)} AD`,
+      text: t("{pctAd} % de dégâts physiques : l’adversaire n’a qu’à acheter de l’armure. Un pick AP équilibrerait.", { pctAd: pctAd }) });
+    if (ad <= 0.25) issues.push({ gap: "ad", level: "bad", short: `${pctN(100 - pctAd)} AP`,
+      text: t("{v} % de dégâts magiques : l’adversaire n’a qu’à acheter de la résistance magique. Un pick AD équilibrerait.", { v: 100 - pctAd }) });
+    if (front < 2) issues.push({ gap: "front", level: front === 0 ? "bad" : "warn", short: t("Frontline"),
+      text: front === 0 ? t("Pas de frontline : personne pour encaisser en combat.") : t("Frontline légère : un seul champion peut encaisser un peu.") });
+    if (engage < 2) issues.push({ gap: "engage", level: engage === 0 ? "bad" : "warn", short: t("Engage"),
+      text: engage === 0 ? t("Pas d’engage : personne pour lancer les combats.") : t("Engage faible : un seul champion peut lancer un combat, et pas toujours.") });
+    if (cc < 3) issues.push({ gap: "cc", level: "warn", short: t("Contrôle"),
+      text: t("Peu de contrôle : difficile d’attraper ou de bloquer l’adversaire.") });
   }
   return { known: ts.length, ad, ap: 1 - ad, front, engage, cc, issues };
 }

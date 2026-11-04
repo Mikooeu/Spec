@@ -5,9 +5,11 @@
 //
 // Seul écart avec scoring/score.py : en botlane (ADC et support), l'autre joueur bot d'en face compte
 // comme un vis-à-vis (poids 1 au lieu de α) et la synergie avec ton partenaire de lane compte double.
+import { dec1, pct } from "./ui";
+import { t } from "./i18n";
 
 export const ROLES = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"] as const;
-export const ROLE_LABELS = ["Top", "Jungle", "Mid", "ADC", "Support"];
+export const ROLE_LABELS = [t("Top"), t("Jungle"), t("Mid"), "ADC", t("Support")];
 export const ROLE_SHORT = ["TOP", "JGL", "MID", "ADC", "SUP"];
 export const DISCOVERY_MIN_GAMES = 200;
 /** Découvertes : champions joués dans au moins 3 % des parties de ce rôle (pas de top proposé en mid). */
@@ -387,19 +389,19 @@ const NOTABLE = 0.003; // écart mentionné à partir de 0,3 point (les écarts 
 
 export function explain(stats: Stats, res: Result, role: number, allies: number[],
                         params: Params = stats.params): string {
-  const name = (c: number) => stats.champions.get(c)?.name ?? "ce champion";
-  const pt = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x * 100).toFixed(1).replace(".", ",")} pt`;
+  const name = (c: number) => stats.champions.get(c)?.name ?? t("ce champion");
+  const pt = (x: number) => `${x >= 0 ? "+" : "−"}${dec1(Math.abs(x * 100))} pt`;
   const good: string[] = [], bad: string[] = [];
   const laner = res.details[0];
   // même valeur que l'étiquette « Face à … » (effet de la ligne, pondéré par la probabilité du vis-à-vis)
   if (laner && laner.p >= 0.3 && Math.abs(res.lane) >= NOTABLE) {
     (res.lane > 0 ? good : bad).push(
-      `${res.lane > 0 ? "gagne" : "perd"} face à ${name(laner.enemy)} (${pt(res.lane)})`);
+      t("{v} face à {name} ({pt})", { v: res.lane > 0 ? t("gagne") : t("perd"), name: name(laner.enemy), pt: pt(res.lane) }));
   }
   if (Math.abs(res.counters) >= NOTABLE) {
     (res.counters > 0 ? good : bad).push(res.counters > 0
-      ? `tient bien face au reste de leur équipe (${pt(res.counters)})`
-      : `est gêné par le reste de leur équipe (${pt(res.counters)})`);
+      ? t("tient bien face au reste de leur équipe ({pt})", { pt: pt(res.counters) })
+      : t("est gêné par le reste de leur équipe ({pt})", { pt: pt(res.counters) }));
   }
   let best: { ally: number; d: number } | null = null;
   for (const a of allies) {
@@ -408,18 +410,18 @@ export function explain(stats: Stats, res: Result, role: number, allies: number[
     if (!best || Math.abs(d) > Math.abs(best.d)) best = { ally: a, d };
   }
   if (best && Math.abs(best.d) >= NOTABLE) {
-    (best.d > 0 ? good : bad).push(best.d > 0 ? `s'accorde bien avec ${name(best.ally)}`
-                                              : `s'accorde mal avec ${name(best.ally)}`);
+    (best.d > 0 ? good : bad).push(best.d > 0 ? t("s'accorde bien avec {name}", { name: name(best.ally) })
+                                              : t("s'accorde mal avec {name}", { name: name(best.ally) }));
   }
-  const join = (xs: string[]) => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} et ${xs[xs.length - 1]}` : xs[0];
-  const verdict = res.score >= 0.51 ? "Bon choix" : res.score <= 0.49 ? "Choix risqué" : "Choix correct";
+  const join = (xs: string[]) => xs.length > 1 ? t("{a} et {b}", { a: xs.slice(0, -1).join(", "), b: xs[xs.length - 1] }) : xs[0];
+  const verdict = res.score >= 0.51 ? t("Bon choix") : res.score <= 0.49 ? t("Choix risqué") : t("Choix correct");
   const champ = name(res.champ);
-  const base = `${(res.base * 100).toFixed(1).replace(".", ",")} %`;
+  const base = pct(res.base);
   if (!good.length && !bad.length) {
-    return `${verdict} : pas d'avantage ni de handicap marqué pour ${champ} ici, son score vient surtout de sa force ce patch (${base} de base).`;
+    return t("{verdict} : pas d'avantage ni de handicap marqué pour {champ} ici, son score vient surtout de sa force ce patch ({base} de base).", { verdict: verdict, champ: champ, base: base });
   }
-  if (good.length && bad.length) return `${verdict} : ${champ} ${join(good)}, mais ${join(bad)}.`;
-  return `${verdict} : ${champ} ${join(good.length ? good : bad)}.`;
+  if (good.length && bad.length) return t("{verdict} : {champ} {join}, mais {join2}.", { verdict: verdict, champ: champ, join: join(good), join2: join(bad) });
+  return t("{verdict} : {champ} {join}.", { verdict, champ, join: join(good.length ? good : bad) });
 }
 
 /**
