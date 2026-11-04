@@ -1,7 +1,7 @@
 // Note sur 20 de chaque joueur d'une partie, calculée par rapport aux 9 autres.
 //
 // Pour chaque joueur : participation aux kills, part des dégâts et de l'or de son équipe, CS par minute
-// comparés à l'autre joueur du même rôle, et morts (en négatif). Chaque mesure est centrée et réduite
+// et score de vision par minute comparés aux joueurs du même rôle, et morts (en négatif). Chaque mesure est centrée et réduite
 // sur les 10 joueurs, puis pondérée ; un support compte surtout sur la participation et les morts.
 // 10 = joueur moyen de la partie, petit bonus pour la victoire. MVP : meilleure note des gagnants,
 // ACE : meilleure note des perdants.
@@ -10,8 +10,8 @@ import type { GameDetail, PlayerLine } from "./history";
 export interface Rating { note: number; rank: number; badge: "MVP" | "ACE" | null }
 
 const SUPPORT = 4;
-const WEIGHTS = { kp: 0.25, dmg: 0.25, gold: 0.15, cs: 0.15, deaths: 0.2 };
-const SUPPORT_WEIGHTS = { kp: 0.45, dmg: 0.1, gold: 0.05, cs: 0, deaths: 0.3 };
+const WEIGHTS = { kp: 0.22, dmg: 0.22, gold: 0.13, cs: 0.13, deaths: 0.18, vision: 0.12 };
+const SUPPORT_WEIGHTS = { kp: 0.38, dmg: 0.08, gold: 0.04, cs: 0, deaths: 0.25, vision: 0.25 };
 
 function standardize(xs: number[]): number[] {
   const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -40,10 +40,23 @@ export function rateGame(detail: GameDetail): Map<PlayerLine, Rating> {
     return ref > 0 ? p.cs / ref : 1;
   }));
   const deaths = standardize(players.map(({ p }) => p.deaths / minutes));
+  // vision : rapportée à la moyenne du même rôle (un support pose toujours plus de balises qu'un mid)
+  const hasVision = players.every(({ p }) => p.vision != null);
+  const roleVision = new Map<number, number[]>();
+  if (hasVision) for (const { p } of players) if (p.role != null) roleVision.set(p.role, [...(roleVision.get(p.role) ?? []), p.vision!]);
+  const allVision = hasVision ? players.reduce((a, { p }) => a + p.vision!, 0) / players.length : 0;
+  const vision = hasVision ? standardize(players.map(({ p }) => {
+    const same = p.role != null ? roleVision.get(p.role) ?? [] : [];
+    const ref = same.length ? same.reduce((a, b) => a + b, 0) / same.length : allVision;
+    return ref > 0 ? p.vision! / ref : 1;
+  })) : players.map(() => 0);
 
   const notes = players.map(({ p, team }, i) => {
     const w = p.role === SUPPORT ? SUPPORT_WEIGHTS : WEIGHTS;
-    const raw = w.kp * kp[i] + w.dmg * dmg[i] + w.gold * gold[i] + w.cs * cs[i] - w.deaths * deaths[i];
+    // sans score de vision (vieille partie), on répartit son poids sur le reste
+    const scale = hasVision ? 1 : 1 / (1 - w.vision);
+    const raw = scale * (w.kp * kp[i] + w.dmg * dmg[i] + w.gold * gold[i] + w.cs * cs[i] - w.deaths * deaths[i])
+      + w.vision * vision[i];
     const note = Math.min(20, Math.max(0, 10 + 4 * raw + (team.win ? 0.8 : -0.8)));
     return { p, win: team.win, note: Math.round(note * 10) / 10 };
   });

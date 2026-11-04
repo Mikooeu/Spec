@@ -654,7 +654,7 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onTogg
         </span>
       </span>
       <span className="game__sep" aria-hidden />
-      <span className="stat-col">
+      <span className="stat-col game__kda">
         <span className="stat-col__value">{g.kills} / {g.deaths} / {g.assists}</span>
         <span className="stat-col__label">KDA {kda.toFixed(1).replace(".", ",")} · {int(g.cs)} CS</span>
       </span>
@@ -717,6 +717,7 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
               <span>CS</span>
               <span>Dégâts</span>
               <span>Or</span>
+              <span>Vision</span>
               <span>Objets</span>
             </div>
             {t.players.map((p, i) => (
@@ -728,7 +729,7 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
         );
       })}
       <p className="muted small">
-        Note sur 20 calculée par rapport aux 9 autres joueurs. MVP : meilleure note de l’équipe gagnante · ACE : meilleure note de l’équipe perdante. Clique sur un joueur pour ouvrir son profil.
+        Note sur 20 calculée par rapport aux 9 autres joueurs (participation, dégâts, or, CS, vision et morts). MVP : meilleure note de l’équipe gagnante · ACE : meilleure note de l’équipe perdante. Clique sur un joueur pour ouvrir son profil.
       </p>
     </div>
   );
@@ -754,7 +755,7 @@ function PlayerRow({ stats, p, duration, assets, maxDamage, rating, isMe, onOpen
         {rating?.badge && <span className={`badge-note badge-note--${rating.badge.toLowerCase()}`}>{rating.badge}</span>}
       </span>
       <span className="pline__note">
-        {rating ? <span className="note-pill"><strong className={`tone-${noteTone(rating.note)}`}>{noteText(rating.note)}</strong><small>/20</small></span> : "—"}
+        {rating ? <span className="note-pill"><strong className={`tone-${noteTone(rating.note)}`}>{noteText(rating.note)}</strong><small>/20</small><Trend tone={noteTone(rating.note)} /></span> : "—"}
       </span>
       <span className="pline__num"><strong>{p.kills} / {p.deaths} / {p.assists}</strong><small>KDA {one(kda)}</small></span>
       <span className="pline__num"><strong>{int(p.cs)}</strong><small>{one(perMin(p.cs, duration))} / min</small></span>
@@ -766,6 +767,9 @@ function PlayerRow({ stats, p, duration, assets, maxDamage, rating, isMe, onOpen
         <small>{int(perMin(p.damage, duration))} / min</small>
       </span>
       <span className="pline__num"><strong>{kGold(p.gold)}</strong><small>{int(perMin(p.gold, duration))} / min</small></span>
+      <span className="pline__num">
+        {p.vision != null ? <><strong>{int(p.vision)}</strong><small>{one(perMin(p.vision, duration))} / min</small></> : <strong>—</strong>}
+      </span>
       <ItemRow items={p.items} role={p.role} assets={assets} size="sm" />
     </div>
   );

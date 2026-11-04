@@ -1,3 +1,4 @@
+import { EloBadge } from "./EloBadge";
 import { useMemo, useState, type ReactNode } from "react";
 import { ROLE_LABELS, TIER_MIN_PICKRATE, tierList, type Stats, type TierRow } from "../lib/score";
 import { champName, int, patchLabel, pct, wrTone } from "../lib/ui";
@@ -34,7 +35,7 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
           <p className="overline">Tier list · solo/duo Master+ {regionLabel} · patch {patchLabel(stats.meta.patch)}</p>
           <h1>Tier list</h1>
         </div>
-        {region && <div className="head-actions">{region}</div>}
+        <div className="head-actions"><EloBadge />{region}</div>
       </header>
 
       <div className="tier-controls">

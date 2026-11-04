@@ -102,9 +102,9 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
               return (
                 <SlotRow key={i} stats={stats} label={ROLE_SHORT[i]} champ={me ? mine : c}
                          name={me ? (mine != null ? champName(stats, mine) : "À toi de choisir") : c == null ? "En attente" : champName(stats, c)}
-                         detail={me ? (mine == null ? "Ton tour" : draft.myLocked ? "Lock · toi" : "Survole · toi")
+                         detail={me ? (mine == null ? "Ton tour" : draft.myLocked ? "Lock · toi" : "Présélectionne · toi")
                                  : c == null ? (live ? "Pas encore choisi" : "Clique pour ajouter un pick")
-                                 : draft.allyLocked && !draft.allyLocked[i] ? "Survole" : "Lock"}
+                                 : draft.allyLocked && !draft.allyLocked[i] ? "Présélectionne" : "Lock"}
                          tone={me ? "me" : c == null ? "empty" : "default"}
                          onClick={me || live ? undefined : () => setPicking({ side: "ally", index: i })} />
               );

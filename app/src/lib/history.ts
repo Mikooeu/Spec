@@ -42,6 +42,7 @@ export interface PlayerLine {
   items: number[];
   kills: number; deaths: number; assists: number;
   cs: number; gold: number; damage: number;
+  vision: number | null;    // score de vision (absent des vieilles parties)
 }
 export interface GameDetail { duration: number; teams: { teamId: number; win: boolean; players: PlayerLine[] }[] }
 
@@ -125,6 +126,7 @@ type RawStats = {
   neutralMinionsKilled?: number; gameEndedInEarlySurrender?: boolean;
   item0?: number; item1?: number; item2?: number; item3?: number; item4?: number; item5?: number; item6?: number;
   roleBoundItem?: number; perk0?: number; perkSubStyle?: number; goldEarned?: number; totalDamageDealtToChampions?: number;
+  visionScore?: number;
 };
 type RawParticipant = {
   participantId?: number; teamId?: number; championId: number; teamPosition?: string; individualPosition?: string;
@@ -237,6 +239,7 @@ async function fetchGameDetail(gameId: number, guess?: Guess): Promise<GameDetai
       spells: [n(p.spell1Id), n(p.spell2Id)], keystone: n(s.perk0), subStyle: n(s.perkSubStyle), items: itemsOf(s),
       kills: s.kills, deaths: s.deaths, assists: s.assists,
       cs: (s.totalMinionsKilled ?? 0) + (s.neutralMinionsKilled ?? 0), gold: n(s.goldEarned), damage: n(s.totalDamageDealtToChampions),
+      vision: Number.isFinite(s.visionScore) ? n(s.visionScore) : null,
     };
     const team = p.teamId ?? 100;
     teams.set(team, [...(teams.get(team) ?? []), line]);
