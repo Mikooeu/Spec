@@ -3,6 +3,7 @@ import { ROLE_LABELS, gamesIn, type Stats } from "../lib/score";
 import { champName, normalize, pct, wrTone } from "../lib/ui";
 import { PREFILL_MIN_GAMES, topChampions, type PersonalState } from "../lib/api";
 import { ChampionIcon } from "./ChampionIcon";
+import { Segmented } from "./Segmented";
 
 export type Pools = number[][]; // un pool par rôle (index dans ROLES)
 
@@ -61,14 +62,14 @@ export function PoolScreen({ stats, pools, onChange, perso }: Props) {
       <p className="muted page-intro">Choisis les champions que tu joues dans chaque rôle : Spec te les recommande en priorité pendant la draft. Le pourcentage est leur winrate Master+ dans le rôle choisi.</p>
 
       <section className="pool">
-        <div className="segmented" role="tablist" aria-label="Rôle">
+        <Segmented className="segmented" role="tablist" aria-label="Rôle">
           {ROLE_LABELS.map((label, i) => (
             <button key={label} role="tab" aria-selected={role === i} className={role === i ? "is-active" : ""}
                     onClick={() => setRole(i)}>
               {label} <span className="count">{pools[i].length}</span>
             </button>
           ))}
-        </div>
+        </Segmented>
 
         <div className="banner">
           <span className="grow">{prefillText(perso, ready ? suggested.length : 0, missing.length, ROLE_LABELS[role])}</span>

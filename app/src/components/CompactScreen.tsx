@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ROLE_LABELS, ROLE_SHORT, type Stats } from "../lib/score";
 import { champName } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { Logo } from "./Logo";
 import { BanPanel, MyPick, RecoRow, makeBanSelect, makePreselect, persoCell, useRecos, type Draft } from "./DraftScreen";
+import { explain } from "../lib/score";
 import type { PersonalState } from "../lib/api";
+import { Segmented } from "./Segmented";
 
 interface Props {
   stats: Stats;
@@ -67,19 +69,21 @@ function CompactWaiting({ clientText, clientOn, onDemo }: Props) {
 function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect, onBan, perso, onDemoPick }: Props & { draft: Draft }) {
   const [open, setOpen] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const { autofill, rows } = useRecos(stats, draft, pool);
+  const { allies, autofill, rows } = useRecos(stats, draft, pool);
+  const myInList = draft.myChamp != null && rows.some((r) => r.res.champ === draft.myChamp);
+  useEffect(() => { if (draft.myChamp != null) setOpen(draft.myChamp); }, [draft.myChamp]);
   const preselect = makePreselect(stats, onPreselect, setNotice,
     live ? undefined : (champ) => onDemoPick?.(champ));
 
   return (
     <div className="compact__body">
-      <div className="segmented segmented--full" role="tablist" aria-label="Rôle assigné">
+      <Segmented className="segmented segmented--full" role="tablist" aria-label="Rôle assigné">
         {ROLE_SHORT.map((label, i) => (
           <button key={label} role="tab" aria-selected={draft.role === i} title={ROLE_LABELS[i]}
                   className={draft.role === i ? "is-active" : ""}
                   onClick={() => { onRole(i); setOpen(null); }}>{label}</button>
         ))}
-      </div>
+      </Segmented>
 
       <div className="mini-teams">
         <MiniTeam stats={stats} label="Alliés" champs={draft.allies} me={draft.role} locked={draft.allyLocked}
@@ -88,7 +92,7 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
       </div>
 
       {draft.banPhase && <BanPanel stats={stats} draft={draft} compact onSelect={makeBanSelect(stats, live ? onBan : undefined, setNotice)} />}
-      {draft.myChamp != null && <MyPick stats={stats} draft={draft} compact />}
+      {draft.myChamp != null && (draft.myLocked || !myInList) && <MyPick stats={stats} draft={draft} compact />}
 
       {draft.myLocked ? (
         <p className="hint">Champion verrouillé : importe tes runes et tes sorts ci-dessus.</p>
@@ -102,7 +106,8 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
                      discovery={kind === "discovery"} open={open === res.champ}
                      onToggle={() => setOpen(open === res.champ ? null : res.champ)}
                      onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
-                     role={draft.role} />
+                     role={draft.role} mine={res.champ === draft.myChamp}
+                     why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies) : undefined} />
           </div>
         ))}
         {rows.length === 0 && <p className="hint">Pas encore assez de parties pour ce rôle.</p>}

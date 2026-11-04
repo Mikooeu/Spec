@@ -422,12 +422,30 @@ export function explain(stats: Stats, res: Result, role: number, allies: number[
   return `${verdict} : ${champ} ${join(good.length ? good : bad)}.`;
 }
 
-/** Tier list : champions d'un rôle joués dans plus de `minPick` des parties. */
-export interface TierRow { champ: number; winrate: number; pickrate: number; banrate: number | null; games: number; tier: string }
+/**
+ * Tier list : champions d'un rôle joués dans plus de `minPick` des parties, classés par score.
+ * Score = winrate rapproché de 50 % d'autant plus que le champion a peu de parties (un 56 % sur 300 parties
+ * pèse moins qu'un 52 % sur 5 000), plus un petit bonus de pick rate et de ban rate (champion fort et stable
+ * dans la méta Master+). La lettre de tier vient de ce score.
+ */
+export interface TierRow {
+  champ: number; winrate: number; pickrate: number; banrate: number | null; games: number; score: number; tier: string;
+}
 export const TIER_MIN_PICKRATE = 0.02;
+const TIER_K = 1000;          // parties « fictives » à 50 % ajoutées pour lisser le winrate
+const PICK_BONUS = 0.05;      // +0,5 point pour 10 % de pick rate
+const BAN_BONUS = 0.02;       // +0,2 point pour 10 % de ban rate
+const BONUS_CAP = 0.15;       // au-delà de 15 % de pick (ou de ban) rate, plus de bonus : le winrate reste décisif
 
-export function tierLetter(winrate: number): string {
-  return winrate >= 0.52 ? "S" : winrate >= 0.51 ? "A" : winrate >= 0.5 ? "B" : winrate >= 0.49 ? "C" : "D";
+export function tierScore(stats: Stats, champ: number, role: number): number {
+  const [g, w] = stats.base.get(k2(champ, role)) ?? [0, 0];
+  const pickrate = stats.matchesWeighted ? g / stats.matchesWeighted : 0;
+  const banrate = stats.banMatches > 0 ? (stats.bans.get(champ) ?? 0) / stats.banMatches : 0;
+  return smoothed(g, w, 0.5, TIER_K) + PICK_BONUS * Math.min(pickrate, BONUS_CAP) + BAN_BONUS * Math.min(banrate, BONUS_CAP);
+}
+
+export function tierLetter(score: number): string {
+  return score >= 0.515 ? "S" : score >= 0.507 ? "A" : score >= 0.5 ? "B" : score >= 0.493 ? "C" : "D";
 }
 
 export function tierList(stats: Stats, role: number, minPick = TIER_MIN_PICKRATE): TierRow[] {
@@ -439,8 +457,8 @@ export function tierList(stats: Stats, role: number, minPick = TIER_MIN_PICKRATE
     const pickrate = g / stats.matchesWeighted;
     if (pickrate < minPick) continue;
     const c = Number(cs);
-    const smoothedWr = smoothed(g, w, 0.5, stats.params.k_base);
-    out.push({ champ: c, winrate: w / g, pickrate, games: g, tier: tierLetter(smoothedWr),
+    const score = tierScore(stats, c, role);
+    out.push({ champ: c, winrate: w / g, pickrate, games: g, score, tier: tierLetter(score),
                banrate: stats.banMatches > 0 ? (stats.bans.get(c) ?? 0) / stats.banMatches : null });
   }
   return out;

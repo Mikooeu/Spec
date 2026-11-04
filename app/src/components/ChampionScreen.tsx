@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from "react";
 import {
-  ROLE_LABELS, gamesIn, smoothed, tierLetter, type ChampPage, type Stats,
+  ROLE_LABELS, gamesIn, tierLetter, tierScore, type ChampPage, type Stats,
 } from "../lib/score";
 import { champName, int, patchLabel, pct, wrTone } from "../lib/ui";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
 import { ChampionIcon } from "./ChampionIcon";
 import { RuneTree } from "./Runes";
+import { Segmented } from "./Segmented";
 
 interface Props {
   stats: Stats;
@@ -33,7 +34,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
   const winrate = g ? w / g : 0;
   const pickrate = stats.matchesWeighted ? g / stats.matchesWeighted : 0;
   const banrate = stats.banMatches > 0 ? (stats.bans.get(champ) ?? 0) / stats.banMatches : null;
-  const tier = g ? tierLetter(smoothed(g, w, 0.5, stats.params.k_base)) : "—";
+  const tier = g ? tierLetter(tierScore(stats, champ, role)) : "—";
   const roles = [0, 1, 2, 3, 4].filter((r) => r === role || gamesIn(stats, champ, r) >= ROLE_MIN_GAMES);
   const ranks = role === 3 ? 6 : 5;
 
@@ -60,12 +61,12 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
         </div>
       </header>
       {roles.length > 1 && (
-        <div className="segmented" role="tablist" aria-label="Rôle">
+        <Segmented className="segmented" role="tablist" aria-label="Rôle">
           {roles.map((r) => (
             <button key={r} role="tab" aria-selected={r === role} className={r === role ? "is-active" : ""}
                     onClick={() => onRole(r)}>{ROLE_LABELS[r]}</button>
           ))}
-        </div>
+        </Segmented>
       )}
 
       <Card title="Ordre des sorts"

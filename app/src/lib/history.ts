@@ -211,8 +211,18 @@ export function mergeHistory(client: Game[], server: Game[]): Game[] {
   return [...byId.values()].sort((a, b) => b.created - a.created);
 }
 
-/** Détail d'une partie terminée : les 10 joueurs, comme dans le client. */
-export async function loadGameDetail(gameId: number, guess?: Guess): Promise<GameDetail> {
+const detailCache = new Map<number, Promise<GameDetail>>();
+
+/** Détail d'une partie terminée : les 10 joueurs, comme dans le client (gardé en mémoire : une partie ne change plus). */
+export function loadGameDetail(gameId: number, guess?: Guess): Promise<GameDetail> {
+  if (!detailCache.has(gameId)) {
+    if (detailCache.size > 200) detailCache.clear();
+    detailCache.set(gameId, fetchGameDetail(gameId, guess).catch((e) => { detailCache.delete(gameId); throw e; }));
+  }
+  return detailCache.get(gameId)!;
+}
+
+async function fetchGameDetail(gameId: number, guess?: Guess): Promise<GameDetail> {
   const g = await invoke<RawGame>("lcu_game", { gameId });
   const ids = new Map((g.participantIdentities ?? []).map((x) => [x.participantId, x.player]));
   const teams = new Map<number, PlayerLine[]>();

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   LOW_DATA_GAMES, ROLE_LABELS, ROLE_SHORT, banSuggestions, enemyRoles, explain, recommend, roleDistribution,
   scoreChampion, topForRole, type Result, type Stats,
@@ -8,6 +8,7 @@ import { champName, int, patchLabel, pct, pts, wrTone } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import type { PersonalState } from "../lib/api";
 import { ChampionPicker } from "./ChampionPicker";
+import { Segmented } from "./Segmented";
 
 export interface Draft {
   role: number;                    // rôle assigné (index dans ROLES)
@@ -46,6 +47,9 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
   const { allies, enemies, autofill, rows } = useRecos(stats, draft, pool);
 
   const selected = rows.find((r) => r.res.champ === openChamp)?.res ?? null;
+  // ton champion présélectionné : sa ligne s'ouvre, avec l'explication (pas de carte en double au-dessus)
+  const myInList = draft.myChamp != null && rows.some((r) => r.res.champ === draft.myChamp);
+  useEffect(() => { if (draft.myChamp != null) setOpenChamp(draft.myChamp); }, [draft.myChamp]);
   const taken = new Set([...allies, ...enemies, ...draft.bans]);
   // rôle affiché pour chaque adversaire : un seul par rôle, comme dans une vraie équipe
   const enemyRole = useMemo(() => {
@@ -73,13 +77,13 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
           <h1>Tu joues {ROLE_LABELS[draft.role]}</h1>
         </div>
         <div className="head-actions">
-          <div className="segmented" role="tablist" aria-label="Rôle assigné">
+          <Segmented className="segmented" role="tablist" aria-label="Rôle assigné">
             {ROLE_LABELS.map((label, i) => (
               <button key={label} role="tab" aria-selected={draft.role === i}
                       className={draft.role === i ? "is-active" : ""}
                       onClick={() => { onChange({ ...draft, role: i }); setOpenChamp(null); }}>{label}</button>
             ))}
-          </div>
+          </Segmented>
           {!live && (
             <button className={`btn btn--secondary${draft.banPhase ? " is-on" : ""}`} aria-pressed={!!draft.banPhase}
                     onClick={() => onChange({ ...draft, banPhase: !draft.banPhase })}>Phase de bans</button>
@@ -135,23 +139,28 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
               {int(Number(stats.meta.matches ?? 0))} parties Master+ · patch {patchLabel(stats.meta.patch)}
             </span>
           </div>
-          {draft.myChamp != null && <MyPick stats={stats} draft={draft} />}
+          {draft.myChamp != null && (draft.myLocked || !myInList) && <MyPick stats={stats} draft={draft} />}
           {draft.myLocked && (
             <p className="hint">Plus de présélection à faire : importe tes runes et tes sorts ci-dessus.</p>
           )}
           {!draft.myLocked && autofill && (
             <p className="hint">Ton pool est vide pour ce rôle : voici les meilleurs choix de cette draft.</p>
           )}
-          {!draft.myLocked && rows.map(({ res, kind }, i) => (
-            <div key={res.champ}>
-              {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">Envie de tester ?</p>}
-              <RecoRow stats={stats} res={res} rank={kind === "pool" ? String(i + 1) : "—"}
-                       discovery={kind === "discovery"} open={openChamp === res.champ}
-                       onToggle={() => setOpenChamp(openChamp === res.champ ? null : res.champ)}
-                       onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
-                       role={draft.role} />
+          {!draft.myLocked && (
+            <div className="recos__list stagger" key={draft.role}>
+              {rows.map(({ res, kind }, i) => (
+                <div key={res.champ}>
+                  {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">Envie de tester ?</p>}
+                  <RecoRow stats={stats} res={res} rank={kind === "pool" ? String(i + 1) : "—"}
+                           discovery={kind === "discovery"} open={openChamp === res.champ}
+                           onToggle={() => setOpenChamp(openChamp === res.champ ? null : res.champ)}
+                           onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
+                           role={draft.role} mine={res.champ === draft.myChamp}
+                           why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies) : undefined} />
+                </div>
+              ))}
             </div>
-          ))}
+          )}
           {!draft.myLocked && rows.length === 0 && (
             <p className="hint">Pas encore assez de parties pour ce rôle. Laisse tourner le collecteur.</p>
           )}
@@ -210,9 +219,11 @@ function SlotRow({ stats, label, champ, name, detail, tone, onClick }: SlotRowPr
 interface RecoRowProps {
   stats: Stats; res: Result; rank: string; discovery: boolean; open: boolean;
   onToggle: () => void; onPreselect: () => void; compact?: boolean; perso?: PersoCell; role: number;
+  /** Ton champion présélectionné : badge et explication dans la ligne. */
+  mine?: boolean; why?: string;
 }
 
-export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role }: RecoRowProps) {
+export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why }: RecoRowProps) {
   const laner = res.details[0];
   return (
     <div className={`reco${open ? " is-open" : ""}`}>
@@ -222,6 +233,7 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
         <span className="reco__info">
           <span className="reco__name">{champName(stats, res.champ)}</span>
           <span className="reco__meta">
+            {mine && <span className="badge badge--mine">Présélectionné</span>}
             {discovery && <span className="badge">Découverte</span>}
             {!compact && <span>{discovery ? "Hors de ton pool" : "Dans ton pool"}</span>}
             {res.games < LOW_DATA_GAMES && <span className="warn">Peu de données</span>}
@@ -242,6 +254,7 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
       </button>
       {open && (
         <div className="reco__detail">
+          {why && <p className="mypick__why">{why}</p>}
           <div className="reco__factors">
           {laner && laner.p >= 0.15 && (
             <Factor label={`Face à ${champName(stats, laner.enemy)} · ${Math.round(laner.p * 100)} % d’être ton vis-à-vis`}
@@ -251,7 +264,7 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
           <Factor label="Avec tes alliés" value={res.synergies} />
           </div>
           <RunePage stats={stats} champ={res.champ} role={role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
-          <button className="btn btn--primary" onClick={onPreselect}>Présélectionner dans le client</button>
+          {!mine && <button className="btn btn--primary" onClick={onPreselect}>Présélectionner dans le client</button>}
         </div>
       )}
     </div>

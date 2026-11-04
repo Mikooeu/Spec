@@ -10,6 +10,8 @@ import {
   QUEUE_LABELS, findPlayer, loadGameDetail, loadHistory, loadPlayer, loadServerHistory, mergeHistory, rankText,
   readRanked, type Game, type GameDetail, type OtherPlayer, type PlayerLine, type QueueKind,
 } from "../lib/history";
+import { noteText, noteTone, rateGame, type Rating } from "../lib/rating";
+import { Segmented } from "./Segmented";
 
 export type { Pools } from "./PoolScreen";
 
@@ -53,11 +55,13 @@ export function ProfileScreen({ stats, account, clientOn, perso, onRegister, lpV
   return (
     <div className="content">
       <PlayerSearch region={account?.region ?? null} clientOn={clientOn} onFound={open} />
+      <div key={viewing ?? "me"} className="profile-view fade-in">
       {viewing
         ? <OtherProfile key={viewing} stats={stats} puuid={viewing} me={account?.puuid ?? null} assets={assets}
                         onBack={() => setViewing(null)} onOpenPlayer={open} />
         : <OwnProfile stats={stats} account={account} clientOn={clientOn} perso={perso} onRegister={onRegister}
                       lpVersion={lpVersion} assets={assets} onOpenPlayer={open} />}
+      </div>
     </div>
   );
 }
@@ -412,6 +416,7 @@ function History({ stats, games, assets, role, onRole, me, subject, title = "His
                    showLp = false, onOpenPlayer }: HistoryProps) {
   const [queue, setQueue] = useState<"all" | QueueKind>("all");
   const [open, setOpen] = useState<number | null>(null);
+  const ratings = useRatings(stats, games, subject ?? me);
   const inQueue = useMemo(() => (games ?? []).filter((g) => queue === "all" ? g.queue !== "other" : g.queue === queue), [games, queue]);
   const shown = role == null ? inQueue : inQueue.filter((g) => g.role === role);
   const count = (q: "all" | QueueKind) => (games ?? []).filter((g) => q === "all" ? g.queue !== "other" : g.queue === q).length;
@@ -427,15 +432,15 @@ function History({ stats, games, assets, role, onRole, me, subject, title = "His
       {games && (
         <>
           <div className="history__filters">
-            <div className="segmented" role="tablist" aria-label="File">
+            <Segmented className="segmented" role="tablist" aria-label="File">
               {QUEUES.map((q) => (
                 <button key={q} role="tab" aria-selected={queue === q} className={queue === q ? "is-active" : ""}
                         onClick={() => setQueue(q)}>
                   {q === "all" ? "Toutes" : QUEUE_LABELS[q]} <span className="count">{count(q)}</span>
                 </button>
               ))}
-            </div>
-            <div className="segmented" role="tablist" aria-label="Poste (meilleurs picks et historique)">
+            </Segmented>
+            <Segmented className="segmented" role="tablist" aria-label="Poste (meilleurs picks et historique)">
               {[null, 0, 1, 2, 3, 4].map((r) => (
                 <button key={String(r)} role="tab" aria-selected={role === r} className={role === r ? "is-active" : ""}
                         onClick={() => onRole(r)}>
@@ -443,26 +448,63 @@ function History({ stats, games, assets, role, onRole, me, subject, title = "His
                   <span className="count">{r == null ? inQueue.length : inQueue.filter((g) => g.role === r).length}</span>
                 </button>
               ))}
-            </div>
+            </Segmented>
           </div>
+          <div className="history__list stagger" key={`${queue}-${role}`}>
           {shown.map((g) => (
             <Fragment key={g.id}>
               {open === g.id ? (
                 <div className="game-open">
-                  <GameRow stats={stats} game={g} assets={assets} open showLp={showLp} onToggle={() => setOpen(null)} />
+                  <GameRow stats={stats} game={g} assets={assets} open showLp={showLp} rating={ratings.get(g.id)}
+                           onToggle={() => setOpen(null)} />
                   <GameDetailPanel stats={stats} game={g} assets={assets} me={subject ?? me} onOpenPlayer={onOpenPlayer} />
                 </div>
               ) : (
-                <GameRow stats={stats} game={g} assets={assets} open={false} showLp={showLp} onToggle={() => setOpen(g.id)} />
+                <GameRow stats={stats} game={g} assets={assets} open={false} showLp={showLp} rating={ratings.get(g.id)}
+                         onToggle={() => setOpen(g.id)} />
               )}
             </Fragment>
           ))}
           {shown.length === 0 && <p className="hint">Aucune partie pour ce filtre.</p>}
+          </div>
           {footer}
         </>
       )}
     </section>
   );
+}
+
+/**
+ * Note de chaque partie de la liste pour le joueur suivi, sans ouvrir le détail : le détail des 10 joueurs
+ * est lu dans le client LoL, une partie après l'autre (les plus récentes d'abord, 40 au plus).
+ * undefined = en cours, null = indisponible (remake, client fermé).
+ */
+function useRatings(stats: Stats, games: Game[] | null, subject: string | null): Map<number, Rating | null> {
+  const guess = useGuess(stats);
+  const [ratings, setRatings] = useState<Map<number, Rating | null>>(new Map());
+  const ids = (games ?? []).slice(0, 40).map((g) => g.id).join(",");
+  useEffect(() => {
+    if (!games?.length) return;
+    let alive = true;
+    (async () => {
+      for (const g of games.slice(0, 40)) {
+        if (!alive) return;
+        if (g.remake) { setRatings((m) => new Map(m).set(g.id, null)); continue; }
+        try {
+          const detail = await loadGameDetail(g.id, guess);
+          const notes = rateGame(detail);
+          const lines = detail.teams.flatMap((t) => t.players);
+          const mine = lines.find((p) => subject != null && p.puuid === subject)
+            ?? lines.find((p) => p.champ === g.champ && p.kills === g.kills && p.deaths === g.deaths && p.assists === g.assists);
+          if (alive) setRatings((m) => new Map(m).set(g.id, mine ? notes.get(mine) ?? null : null));
+        } catch {
+          if (alive) setRatings((m) => new Map(m).set(g.id, null));
+        }
+      }
+    })();
+    return () => { alive = false; };
+  }, [ids, subject, guess]); // eslint-disable-line react-hooks/exhaustive-deps
+  return ratings;
 }
 
 /** Bottes à part, puis 5 objets (6 pour un ADC : la quête de rôle libère une place), puis la balise. */
@@ -520,8 +562,8 @@ function Loadout({ spells, keystone, subStyle, assets, size }:
   );
 }
 
-function GameRow({ stats, game: g, assets, open, showLp, onToggle }:
-  { stats: Stats; game: Game; assets: Assets; open: boolean; showLp: boolean; onToggle: () => void }) {
+function GameRow({ stats, game: g, assets, open, showLp, rating, onToggle }:
+  { stats: Stats; game: Game; assets: Assets; open: boolean; showLp: boolean; rating: Rating | null | undefined; onToggle: () => void }) {
   const result = g.remake ? "remake" : g.win ? "win" : "loss";
   const kda = g.deaths ? (g.kills + g.assists) / g.deaths : g.kills + g.assists;
   const min = Math.round(g.duration / 60);
@@ -538,6 +580,17 @@ function GameRow({ stats, game: g, assets, open, showLp, onToggle }:
       </span>
       <ItemRow items={g.items} role={g.role} assets={assets} size="md" />
       <span className="grow" />
+      <span className="stat-col game__note">
+        <span className="stat-col__value">
+          <span className={`tone-${rating ? noteTone(rating.note) : "neutral"}`}>{rating ? noteText(rating.note) : "—"}</span>
+          <small> /20</small>
+        </span>
+        <span className="stat-col__label">
+          {rating ? `${rating.rank}${rating.rank === 1 ? "er" : "e"} sur 10${rating.badge ? ` · ${rating.badge}` : ""}`
+            : rating === null ? (g.remake ? "Remake" : "Note") : "Calcul…"}
+        </span>
+      </span>
+      <span className="game__sep" aria-hidden />
       <span className="stat-col">
         <span className="stat-col__value">{g.kills} / {g.deaths} / {g.assists}</span>
         <span className="stat-col__label">KDA {kda.toFixed(1).replace(".", ",")} · {int(g.cs)} CS</span>
@@ -578,44 +631,48 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
   }, [game.id, guess]);
 
   if (error) return <p className="game-detail__msg">Le détail de cette partie passe par le client LoL : ouvre-le, puis réessaie.</p>;
-  if (!detail) return <p className="game-detail__msg">Chargement du détail…</p>;
+  if (!detail) return <div className="skeleton" aria-label="Chargement du détail">{[0, 1, 2, 3, 4].map((i) => <span key={i} />)}</div>;
   const all = detail.teams.flatMap((t) => t.players);
   const maxDamage = Math.max(1, ...all.map((p) => p.damage));
+  const notes = rateGame(detail);
   // ton équipe d'abord
   const teams = [...detail.teams].sort((a, b) => Number(b.players.some((p) => p.puuid === me)) - Number(a.players.some((p) => p.puuid === me)));
   return (
     <div className="game-detail">
-      <div className="pline pline--head">
-        <span className="pline__who">Joueur</span>
-        <span className="pline__num">KDA</span>
-        <span className="pline__num">CS</span>
-        <span className="pline__dmg">Dégâts</span>
-        <span className="pline__num">Or</span>
-        <span>Objets</span>
-      </div>
       {teams.map((t) => {
         const k = t.players.reduce((a, p) => a + p.kills, 0), d = t.players.reduce((a, p) => a + p.deaths, 0);
         const a = t.players.reduce((x, p) => x + p.assists, 0), gold = t.players.reduce((x, p) => x + p.gold, 0);
         return (
           <div key={t.teamId} className="game-detail__team">
-            <p className="game-detail__head">
-              <strong className={`tone-${t.win ? "good" : "bad"}`}>{t.win ? "Victoire" : "Défaite"} · Équipe {t.teamId === 100 ? "bleue" : "rouge"}</strong>
-              <span className="muted small">{k} / {d} / {a} · {kGold(gold)} or</span>
-            </p>
+            <div className="pline pline--head">
+              <span className="pline__who pline__team">
+                <strong className={`tone-${t.win ? "good" : "bad"}`}>{t.win ? "Victoire" : "Défaite"} · Équipe {t.teamId === 100 ? "bleue" : "rouge"}</strong>
+                <small>{k} / {d} / {a} · {kGold(gold)} or</small>
+              </span>
+              <span>Note</span>
+              <span>KDA</span>
+              <span>CS</span>
+              <span>Dégâts</span>
+              <span>Or</span>
+              <span>Objets</span>
+            </div>
             {t.players.map((p, i) => (
               <PlayerRow key={`${p.puuid ?? p.name}-${i}`} stats={stats} p={p} duration={detail.duration} assets={assets}
-                         maxDamage={maxDamage} isMe={p.puuid != null && p.puuid === me} onOpen={() => onOpenPlayer(p.puuid)} />
+                         maxDamage={maxDamage} rating={notes.get(p) ?? null}
+                         isMe={p.puuid != null && p.puuid === me} onOpen={() => onOpenPlayer(p.puuid)} />
             ))}
           </div>
         );
       })}
-      <p className="muted small">Clique sur un joueur pour ouvrir son profil.</p>
+      <p className="muted small">
+        Note sur 20 calculée par rapport aux 9 autres joueurs. MVP : meilleure note de l’équipe gagnante · ACE : meilleure note de l’équipe perdante. Clique sur un joueur pour ouvrir son profil.
+      </p>
     </div>
   );
 }
 
-function PlayerRow({ stats, p, duration, assets, maxDamage, isMe, onOpen }:
-  { stats: Stats; p: PlayerLine; duration: number; assets: Assets; maxDamage: number; isMe: boolean; onOpen: () => void }) {
+function PlayerRow({ stats, p, duration, assets, maxDamage, rating, isMe, onOpen }:
+  { stats: Stats; p: PlayerLine; duration: number; assets: Assets; maxDamage: number; rating: Rating | null; isMe: boolean; onOpen: () => void }) {
   const kda = p.deaths ? (p.kills + p.assists) / p.deaths : p.kills + p.assists;
   const one = (x: number) => x.toFixed(1).replace(".", ",");
   return (
@@ -631,6 +688,10 @@ function PlayerRow({ stats, p, duration, assets, maxDamage, isMe, onOpen }:
             {p.name}<span aria-hidden> ↗</span>
           </button>
         )}
+        {rating?.badge && <span className={`badge-note badge-note--${rating.badge.toLowerCase()}`}>{rating.badge}</span>}
+      </span>
+      <span className="pline__note">
+        {rating ? <span className="note-pill"><strong className={`tone-${noteTone(rating.note)}`}>{noteText(rating.note)}</strong><small>/20</small></span> : "—"}
       </span>
       <span className="pline__num"><strong>{p.kills} / {p.deaths} / {p.assists}</strong><small>KDA {one(kda)}</small></span>
       <span className="pline__num"><strong>{int(p.cs)}</strong><small>{one(perMin(p.cs, duration))} / min</small></span>
