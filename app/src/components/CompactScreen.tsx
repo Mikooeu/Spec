@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ROLE_LABELS, ROLE_SHORT, type Stats } from "../lib/score";
+import { ROLE_LABELS, ROLE_SHORT, type Stats, enemyDisplay } from "../lib/score";
 import { champName } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { Logo } from "./Logo";
@@ -89,7 +89,7 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
       <div className="mini-teams">
         <MiniTeam stats={stats} label={t("Alliés")} champs={draft.allies} me={draft.role} locked={draft.allyLocked}
                   mine={draft.myChamp ?? null} />
-        <MiniTeam stats={stats} label={t("Adversaires")} champs={draft.enemies} />
+        <MiniTeam stats={stats} label={t("Adversaires")} champs={enemyDisplay(stats, draft.enemies).map((r) => draft.enemies[r.index])} />
       </div>
 
       {draft.banPhase && <BanPanel stats={stats} draft={draft} compact onSelect={makeBanSelect(stats, live ? onBan : undefined, setNotice)} />}

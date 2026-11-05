@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  LOW_DATA_GAMES, ROLE_LABELS, ROLE_SHORT, banSuggestions, enemyRoles, explain, recommend, roleDistribution,
+  LOW_DATA_GAMES, ROLE_LABELS, ROLE_SHORT, banSuggestions, enemyDisplay, explain, recommend, roleDistribution,
   scoreChampion, topForRole, type Result, type Stats,
 } from "../lib/score";
 import { RunePage } from "./Runes";
@@ -56,12 +56,8 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
   const myInList = draft.myChamp != null && rows.some((r) => r.res.champ === draft.myChamp);
   useEffect(() => { if (draft.myChamp != null) setOpenChamp(draft.myChamp); }, [draft.myChamp]);
   const taken = new Set([...allies, ...enemies, ...draft.bans]);
-  // rôle affiché pour chaque adversaire : un seul par rôle, comme dans une vraie équipe
-  const enemyRole = useMemo(() => {
-    const { best } = enemyRoles(stats, enemies);
-    let j = 0;
-    return draft.enemies.map((c) => (c == null ? null : best[j++] ?? null));
-  }, [stats, draft.enemies]); // eslint-disable-line react-hooks/exhaustive-deps
+  // adversaires rangés par rôle le plus probable (Top en haut, Support en bas), un seul par rôle
+  const enemyRows = useMemo(() => enemyDisplay(stats, draft.enemies), [stats, draft.enemies]);
 
   const setSlot = (slot: NonNullable<Slot>, champ: number | null) => {
     const next = { ...draft, allies: [...draft.allies], enemies: [...draft.enemies] };
@@ -115,8 +111,8 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
             })}
           </TeamCard>
           <TeamCard title={t("Équipe adverse")} comp={<CompSummary comp={enemyComp} mine={false} />}>
-            {draft.enemies.map((c, i) => {
-              const role = enemyRole[i];
+            {enemyRows.map(({ index: i, role }) => {
+              const c = draft.enemies[i];
               return (
                 <SlotRow key={i} stats={stats} label={role != null ? ROLE_SHORT[role] : "—"} champ={c}
                          name={c == null ? t("En attente") : champName(stats, c)}

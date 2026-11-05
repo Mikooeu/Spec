@@ -174,6 +174,24 @@ export function likelyRole(stats: Stats, champ: number): { role: number; p: numb
 const ROLE_FLOOR = 0.005; // un rôle jamais vu reste possible (picks hors méta, doublons en partie perso)
 const roleCaches = new WeakMap<Stats, Map<string, { best: number[]; marginal: number[][] }>>();
 
+/** Équipe adverse affichée comme la tienne : une ligne par rôle (Top en haut, Support en bas), chaque adversaire
+ *  sur le rôle qu'il a le plus de chances de jouer. Renvoie l'index d'origine de chaque ligne (le mode démo modifie
+ *  l'emplacement cliqué : pour une ligne vide, le premier emplacement libre). */
+export function enemyDisplay(stats: Stats, slots: (number | null)[]): { index: number; role: number | null }[] {
+  const picked = slots.map((c, index) => ({ c, index })).filter((x): x is { c: number; index: number } => x.c != null);
+  const { best } = enemyRoles(stats, picked.map((x) => x.c));
+  const byRole = new Map<number, number>();
+  const extra: number[] = [];
+  picked.forEach((x, j) => { const r = best[j]; if (r != null && !byRole.has(r)) byRole.set(r, x.index); else extra.push(x.index); });
+  const free = slots.map((c, index) => (c == null ? index : -1)).filter((i) => i >= 0);
+  const rows: { index: number; role: number | null }[] = [];
+  for (let r = 0; r < 5; r++) {
+    const i = byRole.get(r) ?? extra.shift() ?? free.shift();
+    if (i != null) rows.push({ index: i, role: byRole.has(r) ? r : slots[i] == null ? r : null });
+  }
+  return rows;
+}
+
 export function enemyRoles(stats: Stats, enemies: number[]): { best: number[]; marginal: number[][] } {
   const key = enemies.join(",");
   let roleCache = roleCaches.get(stats);
