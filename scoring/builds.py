@@ -87,7 +87,7 @@ def compute_builds(rows, items: Items) -> list:
     Lues une seule fois (un générateur suffit). Renvoie [[champ, role, {...}], ...] pour l'export JSON."""
     per: dict = defaultdict(lambda: {"g": 0.0, "tg": 0.0, "spells": {}, "boots": {}, "start": {},
                                      "skills": {}, "ranks": defaultdict(dict), "rank_g": Counter(), "seq": {},
-                                     "vs": defaultdict(dict)})
+                                     "vs": defaultdict(dict), "support": {}})
     for row in rows:
         champ, role, win, w, s1, s2, final, skills, purchases = row[:9]
         opp = row[9] if len(row) > 9 else None
@@ -96,9 +96,14 @@ def compute_builds(rows, items: Items) -> list:
         _add(d["spells"], (s1, s2), win, w)
         if opp is not None:
             _add(d["vs"][opp], (s1, s2), win, w)
-        boots = [int(x) for x in (final or "").split(",") if x and int(x) in items.boots]
+        inventory = [int(x) for x in (final or "").split(",") if x]
+        boots = [x for x in inventory if x in items.boots]
         if boots:
             _add(d["boots"], boots[0], win, w)
+        if role == "UTILITY":   # évolution choisie à la fin de la quête de support
+            evo = [x for x in inventory if x in items.support_final]
+            if evo:
+                _add(d["support"], evo[0], win, w)
         if purchases is None:
             continue
         d["tg"] += w
@@ -134,6 +139,8 @@ def compute_builds(rows, items: Items) -> list:
                       for k in sorted(d["ranks"])],
             "builds": [[list(k), _r(g), _r(w)] for k, (g, w) in seqs[:3]],
         }
+        if d["support"]:
+            entry["support"] = [[i, _r(g), _r(w)] for i, (g, w) in _top(d["support"], 5)]
         top_spells = _top(d["spells"], 1)
         vs = spells_vs(top_spells[0][0], d["vs"]) if top_spells else []
         if vs:

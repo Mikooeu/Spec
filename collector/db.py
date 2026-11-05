@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS builds (
     team_position VARCHAR,
     win BOOLEAN,
     spell1 INTEGER, spell2 INTEGER,  -- triés : Flash/Ignite = Ignite/Flash
-    items VARCHAR,                   -- inventaire final « 3089,3020,… » (sans le bijou)
+    items VARCHAR,                   -- inventaire final « 3089,3020,… » (avec la case de quête de rôle, sans le bijou)
     skills VARCHAR,                  -- ordre des sorts « QEWQQR… » (déroulé uniquement)
     purchases VARCHAR                -- achats « 1056@14,2003@14,… » en secondes (déroulé uniquement)
 );

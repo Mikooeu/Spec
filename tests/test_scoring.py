@@ -255,6 +255,27 @@ def test_champion_builds_from_details():
     assert e["builds"] == []   # 3 objets finis seulement, il en faut 5 pour un build complet
 
 
+def test_support_item_evolution_per_champion():
+    from scoring.builds import compute_builds
+    from scoring.items import Items
+    items = Items({"items": {
+        "3865": {"name": "World Atlas", "gold": 400, "purchasable": True, "tags": [], "into": ["3866"], "rift": True},
+        "3866": {"name": "Runic Compass", "gold": 400, "purchasable": False, "tags": [], "into": ["3867"], "rift": True},
+        "3867": {"name": "Bounty of Worlds", "gold": 400, "purchasable": False, "tags": [], "into": ["3869", "3877"], "rift": True},
+        "3869": {"name": "Celestial Opposition", "gold": 400, "purchasable": False, "tags": [], "into": [], "rift": True},
+        "3877": {"name": "Bloodsong", "gold": 400, "purchasable": False, "tags": [], "into": [], "rift": True},
+    }})
+    assert items.support_final == {3869, 3877}
+    rows = ([(412, "UTILITY", 1, 1.0, 4, 14, "3869,3117", None, None)] * 7
+            + [(412, "UTILITY", 0, 1.0, 4, 14, "3877", None, None)] * 3
+            + [(412, "UTILITY", 0, 1.0, 4, 14, "3867", None, None)] * 2      # quête pas finie : non comptée
+            + [(51, "BOTTOM", 1, 1.0, 4, 7, "3869", None, None)] * 2)        # hors support : ignoré
+    out = {(c, r): e for c, r, e in compute_builds(iter(rows), items)}
+    assert out[(412, "UTILITY")]["support"] == [[3869, 7.0, 7.0], [3877, 3.0, 0.0]]
+    assert "support" not in out[(51, "BOTTOM")]
+    assert Items(None).support_final   # valeurs de secours sans catalogue
+
+
 def test_export_includes_champion_pages(tmp_path, champions):
     from scoring.export import export_json
     from scoring.score import Params

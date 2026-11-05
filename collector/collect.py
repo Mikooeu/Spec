@@ -50,7 +50,9 @@ def parse_match(data: dict, platform: str) -> tuple[dict, list[tuple]] | None:
 def build_row(match_id: str, p: dict, skills: str | None = None, purchases: str | None = None) -> tuple:
     """Sorts d'invocateur et objets d'un participant (aucune donnée d'identité)."""
     spells = sorted(int(p.get(k) or 0) for k in ("summoner1Id", "summoner2Id"))
-    items = ",".join(str(int(p.get(f"item{i}") or 0)) for i in range(6) if int(p.get(f"item{i}") or 0) > 0)
+    # 6 emplacements + celui de la quête de rôle (depuis 2026 : les bottes des ADC) ; le bijou (item6) reste exclu
+    slots = [p.get(f"item{i}") for i in range(6)] + [p.get("roleBoundItem")]
+    items = ",".join(str(int(x)) for x in slots if int(x or 0) > 0)
     return (match_id, int(p["teamId"]), int(p["championId"]), p.get("teamPosition") or "",
             bool(p["win"]), spells[0], spells[1], items, skills, purchases)
 

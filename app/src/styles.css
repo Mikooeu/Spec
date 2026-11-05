@@ -815,3 +815,12 @@ button.game:hover { border-color: var(--separator); }
 .role-card__icon { width: 2rem; height: 2rem; object-fit: contain; opacity: 0.55; transition: opacity 0.15s; }
 .role-card__icon--empty { display: block; }
 .role-card:hover .role-card__icon, .role-card.is-main .role-card__icon, .role-card.is-second .role-card__icon { opacity: 1; }
+
+/* page champion : évolution de l'objet de support (bande pleine largeur) */
+.evolutions { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; }
+.evolution { display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.875rem 0.625rem 0.625rem; border-radius: 0.625rem; background: var(--bg-surface-2); }
+.evolution.is-rare { opacity: 0.6; }
+.evolution__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.125rem; }
+.evolution__text strong { font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evolution__text small { font-size: 0.6875rem; color: var(--text-3); }
+.evolution__wr { font-size: 0.9375rem; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }

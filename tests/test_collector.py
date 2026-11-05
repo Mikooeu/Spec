@@ -201,6 +201,10 @@ def test_parse_match_keeps_bans_spells_and_items():
     assert b[5:8] == (4, 14, "3089,3020")   # sorts triés, bijou et cases vides exclus
     assert b[8] is None and b[9] is None    # pas de déroulé
     assert all("secret" not in str(r) and "Joueur" not in str(r) for r in match["builds"])
+    data = _with_details(make_match())
+    data["info"]["participants"][0]["roleBoundItem"] = 3006   # bottes des ADC dans la case de quête
+    match, _ = parse_match(data, "euw1")
+    assert match["builds"][0][7] == "3089,3020,3006"
 
 
 def test_timeline_gives_skill_order_and_purchases_without_undone_items():

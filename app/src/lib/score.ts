@@ -59,6 +59,7 @@ export interface ChampPage {
   spellsVs?: [number, number, number, number, number][]; // vis-à-vis, sort 1, sort 2, parties, victoires
   spells: [number, number, number, number][];          // sort 1, sort 2, parties, victoires
   boots: [number, number, number][];                   // objet, parties, victoires
+  support?: [number, number, number][];                // supports : évolution finale de l’objet de quête, parties, victoires
   start: [string, number, number][];                   // « 1056,2003,2003 », parties, victoires
   skills: [string, string, number, number] | null;     // ordre, priorité, parties, victoires
   items: [number, [number, number, number][]][];       // par rang : parties à ce rang, [objet, parties, victoires]

@@ -1,6 +1,9 @@
 // Traductions anglaises : texte français (tel qu'écrit dans le code, avec ses {variables}) → anglais.
 // Un texte absent reste en français. Les noms de champions, objets, sorts et runes viennent de Riot (Data Dragon).
 export const EN: Record<string, string> = {
+  "Évolution de l’objet de support": "Support item evolution",
+  "Le choix à faire à la fin de ta quête de support · part des parties où il est choisi": "The choice to make when your support quest completes · share of games where it’s picked",
+  "Pas encore assez de parties : les évolutions s’affichent avec les prochaines stats (calcul toutes les 6 h).": "Not enough games yet: evolutions show up with the next stats update (every 6 h).",
   " (survol)": " (hover)",
   " ({int} parties analysées pour l’instant)": " ({int} games analyzed so far)",
   " en {role}": " in {role}",

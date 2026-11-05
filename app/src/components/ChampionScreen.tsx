@@ -106,7 +106,33 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
             </div>
           ) : <Empty page={page} />}
         </Card>
+
       </div>
+
+      {role === 4 && (
+        <Card title={t("Évolution de l’objet de support")} sub={t("Le choix à faire à la fin de ta quête de support · part des parties où il est choisi")}>
+          {page?.support?.length ? (() => {
+            const total = page.support.reduce((a, [, g]) => a + g, 0);
+            return (
+              <div className="evolutions">
+                {page.support.map(([id, sg, sw]) => {
+                  const tone = wrTone(sw / sg);
+                  return (
+                    <span key={id} className={`evolution${sg / total < RARE ? " is-rare" : ""}`}>
+                      <ItemIcon id={id} data={items} />
+                      <span className="evolution__text">
+                        <strong>{items?.get(id)?.name ?? t("Objet {id}", { id })}</strong>
+                        <small>{t("{n} des parties", { n: pct(sg / total) })}</small>
+                      </span>
+                      <span className={`evolution__wr tone-${tone}`}>{pct(sw / sg)}<Trend tone={tone} /></span>
+                    </span>
+                  );
+                })}
+              </div>
+            );
+          })() : <p className="muted small">{t("Pas encore assez de parties : les évolutions s’affichent avec les prochaines stats (calcul toutes les 6 h).")}</p>}
+        </Card>
+      )}
 
       <Card title={t("Objets")} sub={t("Winrate et pickrate selon l’objet acheté en 1er, 2e, 3e… Couleur : par rapport aux autres choix au même rang.")}>
         {page?.items.length ? (
