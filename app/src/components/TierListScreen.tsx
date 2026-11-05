@@ -92,6 +92,11 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
                   {t("Pick atypique")}
                 </span>
               )}
+              {!r.offRole && r.niche && (
+                <span className="badge badge--muted" title={t("Champion peu joué : son winrate vient souvent de joueurs spécialistes. Limité au tier A.")}>
+                  {t("Pick de niche")}
+                </span>
+              )}
             </span>
             <span className="tier-row__num tier-row__score">{dec1(r.score * 100)}</span>
             <span className={`tier-row__num tier-row__wr tone-${wrTone(r.winrate)}`}>{pct(r.winrate)}<Trend tone={wrTone(r.winrate)} /></span>

@@ -452,6 +452,7 @@ export function explain(stats: Stats, res: Result, role: number, allies: number[
 export interface TierRow {
   champ: number; winrate: number; pickrate: number; banrate: number | null; games: number; score: number; tier: string;
   offRole: boolean;   // moins de 30 % des parties du champion dans ce rôle
+  niche: boolean;     // pick rate sous 3 % : pas au-dessus du tier A
 }
 export const TIER_MIN_PICKRATE = 0.02;
 const TIER_K = 1000;          // parties « fictives » à 50 % ajoutées pour lisser le winrate
@@ -462,6 +463,9 @@ const PICK_CENTER = 0.05;
 // Pick hors rôle : moins de 30 % des parties du champion dans ce rôle (Karthus ADC) → pas au-dessus du tier B.
 export const OFF_ROLE_SHARE = 0.3;
 const OFF_ROLE_MAX = 0.5069;
+// Pick de niche : moins de 3 % de pick rate → pas au-dessus du tier A (un gros winrate sur peu de joueurs spécialistes).
+export const NICHE_PICKRATE = 0.03;
+const NICHE_MAX = 0.5149;
 const BAN_BONUS = 0.02;       // +0,2 point pour 10 % de ban rate
 const BONUS_CAP = 0.15;       // au-delà de 15 % de pick (ou de ban) rate, plus de bonus : le winrate reste décisif
 
@@ -471,7 +475,8 @@ export function tierScore(stats: Stats, champ: number, role: number): number {
   const banrate = stats.banMatches > 0 ? (stats.bans.get(champ) ?? 0) / stats.banMatches : 0;
   const score = smoothed(g, w, 0.5, TIER_K) + PICK_BONUS * (Math.min(pickrate, BONUS_CAP) - PICK_CENTER)
     + BAN_BONUS * Math.min(banrate, BONUS_CAP);
-  return roleShare(stats, champ, role) < OFF_ROLE_SHARE ? Math.min(score, OFF_ROLE_MAX) : score;
+  if (roleShare(stats, champ, role) < OFF_ROLE_SHARE) return Math.min(score, OFF_ROLE_MAX);
+  return pickrate < NICHE_PICKRATE ? Math.min(score, NICHE_MAX) : score;
 }
 
 /** Part des parties du champion jouées dans ce rôle (1 = toujours dans ce rôle). */
@@ -496,7 +501,7 @@ export function tierList(stats: Stats, role: number, minPick = TIER_MIN_PICKRATE
     const c = Number(cs);
     const score = tierScore(stats, c, role);
     out.push({ champ: c, winrate: w / g, pickrate, games: g, score, tier: tierLetter(score),
-               offRole: roleShare(stats, c, role) < OFF_ROLE_SHARE,
+               offRole: roleShare(stats, c, role) < OFF_ROLE_SHARE, niche: pickrate < NICHE_PICKRATE,
                banrate: stats.banMatches > 0 ? (stats.bans.get(c) ?? 0) / stats.banMatches : null });
   }
   return out;
