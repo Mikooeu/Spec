@@ -57,8 +57,9 @@ export async function syncRun(db: D1Database, riot: Riot, seasonStart: number, n
   const budget = riot.remaining;
   if (budget <= 0) { report.stopped = "budget"; return report; }
   const { results: pending } = await db.prepare(
-    `SELECT DISTINCT match_id FROM pending
-     ORDER BY CAST(substr(match_id, instr(match_id, '_') + 1) AS INTEGER) DESC LIMIT ?1`,
+    // ordre de l'index (ids de même longueur : les plus récentes d'abord) : D1 ne lit que `budget` lignes,
+    // au lieu de trier toute la file à chaque minute
+    `SELECT DISTINCT match_id FROM pending ORDER BY match_id DESC LIMIT ?1`,
   ).bind(budget).all<{ match_id: string }>();
   if (pending.length === 0) return report;
 

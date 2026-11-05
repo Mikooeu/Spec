@@ -9,7 +9,7 @@ import { syncRun } from "../src/sync.ts";
 // --- D1 et KV en mémoire, avec la même interface que Cloudflare -------------------------------
 function fakeD1() {
   const db = new DatabaseSync(":memory:");
-  for (const f of ["0001_init.sql", "0002_client_id.sql", "0003_devices.sql", "0004_match_detail.sql"]) {
+  for (const f of ["0001_init.sql", "0002_client_id.sql", "0003_devices.sql", "0004_match_detail.sql", "0005_match_index.sql"]) {
     db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url).pathname, "utf8"));
   }
   class Stmt {
@@ -213,14 +213,14 @@ test("synchro : historique, détail des parties, remakes exclus, vis-à-vis", as
 test("synchro : budget respecté, reprise de l'historique, arrêt sur 429", async () => {
   const e = env();
   await reg(e, C1, "MIKO#KCORP");
-  const many = Array.from({ length: 250 }, (_, i) => `EUW1_${1000 - i}`);
+  const many = Array.from({ length: 250 }, (_, i) => `EUW1_${7400001000 - i}`);   // vrais ids : même longueur
   const matches = Object.fromEntries(many.map((id) => [id, match(id)]));
   const log: string[] = [];
   const r1 = await syncRun(e.DB, new Riot("RGAPI-test", "europe", 5, riotFetch({ [P1]: many }, matches, log)), 0, 1_800_000_000_000);
   assert.equal(log.length, 5);
   assert.equal(r1.idCalls, 3);                            // 250 parties = 3 pages
   assert.equal(r1.matchCalls, 2);
-  assert.ok(log[3].endsWith("EUW1_1000"));               // les plus récentes d'abord
+  assert.ok(log[3].endsWith("EUW1_7400001000"));             // les plus récentes d'abord
   const pending = e.DB as unknown as { raw: DatabaseSync };
   assert.equal((pending.raw.prepare("SELECT COUNT(*) AS n FROM pending").get() as { n: number }).n, 248);
 

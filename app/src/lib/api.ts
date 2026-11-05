@@ -86,7 +86,7 @@ function parsePersonal(raw: {
   return { ...raw.status, byRole, byChamp, matchups, champions: raw.champions, weeks: raw.weeks ?? [] };
 }
 
-/** Stats perso du joueur (`client` = identifiant du client LoL), rafraîchies chaque minute pendant la synchro, toutes les 10 min ensuite. */
+/** Stats perso du joueur (`client` = identifiant du client LoL), rafraîchies toutes les 5 min pendant la synchro, toutes les 30 min ensuite (jamais fenêtre cachée). */
 export function usePersonal(client: string | null): [PersonalState, () => void] {
   const [state, setState] = useState<PersonalState>(API_URL ? { kind: "loading" } : { kind: "off" });
   const [tick, setTick] = useState(0);
@@ -97,23 +97,31 @@ export function usePersonal(client: string | null): [PersonalState, () => void] 
     if (!client) { setState({ kind: "no-account" }); return; }
     let stopped = false;
     let timer: number | undefined;
+    let last = 0;
+    // Chaque lecture coûte des lignes D1 (quota gratuit : 5 millions par jour pour tout le monde) :
+    // pas de lecture quand Spec est réduit ou caché, toutes les 5 min pendant la synchro, toutes les 30 min sinon.
     const load = async () => {
-      let delay = 600_000;
+      window.clearTimeout(timer);
+      if (document.hidden) return;   // reprise au retour de la fenêtre (visibilitychange)
+      let delay = 1_800_000;
+      last = Date.now();
       try {
         const r = await fetch(`${API_URL}/v1/players/${encodeURIComponent(client)}`);
         if (r.status === 404) { if (!stopped) setState({ kind: "unregistered" }); return; }
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = parsePersonal(await r.json());
         if (!stopped) setState({ kind: "ready", data });
-        if (data.syncing) delay = 60_000;
+        if (data.syncing) delay = 300_000;
       } catch {
         if (!stopped) setState((s) => (s.kind === "ready" ? s : { kind: "error" }));
-        delay = 120_000;
+        delay = 300_000;
       }
       if (!stopped) timer = window.setTimeout(load, delay);
     };
+    const onVisible = () => { if (!document.hidden && Date.now() - last > 300_000) load(); };
+    document.addEventListener("visibilitychange", onVisible);
     load();
-    return () => { stopped = true; window.clearTimeout(timer); };
+    return () => { stopped = true; window.clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, [client, tick]);
 
   return [state, refresh];

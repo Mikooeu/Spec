@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ROLE_LABELS, type Stats } from "../lib/score";
-import { champName, dec1, int, pct, wrTone } from "../lib/ui";
+import { champName, dec1, int, pct, usePersistent, wrTone } from "../lib/ui";
 import type { PersonalState, Personal } from "../lib/api";
 import type { Account } from "../lib/lcu";
 import { ChampionIcon } from "./ChampionIcon";
@@ -126,6 +126,10 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   const [impactVersion, setImpactVersion] = useState(0);
   const [focus, setFocus] = useState<number | null>(null);   // partie à déplier en ouvrant l’historique
   const registered = perso.kind === "ready";
+  // compte déjà vu lié sur ce PC : l'onglet Duo reste visible même si le serveur ne répond pas pour l'instant
+  const [linked, setLinked] = usePersistent<string | null>("spec.linked", null);
+  useEffect(() => { if (registered && account?.puuid && linked !== account.puuid) setLinked(account.puuid); }, [registered, account?.puuid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const showDuo = registered || (perso.kind === "error" && !!account?.puuid && linked === account.puuid);
 
   useEffect(() => {
     if (!clientOn) return;
@@ -217,7 +221,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
 
       {perso.kind === "ready" && <SeasonTiles stats={stats} data={perso.data} games={games} />}
 
-      <ProfileTabs tab={tab} onTab={setTab} tabs={registered ? ["history", "stats", "progress", "duo"] : ["history", "stats", "progress"]} />
+      <ProfileTabs tab={tab} onTab={setTab} tabs={showDuo ? ["history", "stats", "progress", "duo"] : ["history", "stats", "progress"]} />
 
       <div key={tab} className="profile-view fade-in">
       {tab === "history" && (
