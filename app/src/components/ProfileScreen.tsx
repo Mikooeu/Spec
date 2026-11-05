@@ -651,7 +651,15 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onTogg
       <ChampionIcon stats={stats} champ={g.champ} size={2.5} />
       <Loadout spells={g.spells} keystone={g.keystone} subStyle={g.subStyle} assets={assets} size="md" />
       <span className="game__id">
-        <span className="game__name">{champName(stats, g.champ)}</span>
+        <span className="game__name">
+          {champName(stats, g.champ)}
+          {rating?.badge && (
+            <span className={`badge-note badge-note--lg badge-note--${rating.badge.toLowerCase()}`}
+                  title={rating.badge === "MVP" ? t("Meilleure note de l’équipe gagnante") : t("Meilleure note de l’équipe perdante")}>
+              {rating.badge}
+            </span>
+          )}
+        </span>
         <span className="muted small">
           {partner ?? `${g.queue === "other" ? g.queueName : QUEUE_LABELS[g.queue]}${g.role != null ? ` · ${ROLE_LABELS[g.role]}` : ""}`} · {ago(g.created)}
         </span>
@@ -665,8 +673,8 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onTogg
           <small> /20</small>
         </span>
         <span className="stat-col__label">
-          {rating ? `${t("{rank} sur 10", { rank: ordinal(rating.rank) })}${rating.badge ? ` · ${rating.badge}` : ""}`
-            : rating === null ? (g.remake ? t("Remake") : t("Note")) : "Calcul…"}
+          {rating ? t("{rank} sur 10", { rank: ordinal(rating.rank) })
+            : rating === null ? (g.remake ? t("Remake") : t("Note")) : t("Calcul…")}
         </span>
       </span>
       <span className="game__sep" aria-hidden />

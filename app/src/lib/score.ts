@@ -451,10 +451,17 @@ export function explain(stats: Stats, res: Result, role: number, allies: number[
  */
 export interface TierRow {
   champ: number; winrate: number; pickrate: number; banrate: number | null; games: number; score: number; tier: string;
+  offRole: boolean;   // moins de 30 % des parties du champion dans ce rôle
 }
 export const TIER_MIN_PICKRATE = 0.02;
 const TIER_K = 1000;          // parties « fictives » à 50 % ajoutées pour lisser le winrate
-const PICK_BONUS = 0.05;      // +0,5 point pour 10 % de pick rate
+// Pick rate : centré sur 5 % (un pick courant), +0,15 point par point de pick rate au-dessus, autant en moins en dessous.
+// Un pick de niche à gros winrate (souvent joué par des spécialistes) ne passe plus devant les champions du méta.
+const PICK_BONUS = 0.15;
+const PICK_CENTER = 0.05;
+// Pick hors rôle : moins de 30 % des parties du champion dans ce rôle (Karthus ADC) → pas au-dessus du tier B.
+export const OFF_ROLE_SHARE = 0.3;
+const OFF_ROLE_MAX = 0.5069;
 const BAN_BONUS = 0.02;       // +0,2 point pour 10 % de ban rate
 const BONUS_CAP = 0.15;       // au-delà de 15 % de pick (ou de ban) rate, plus de bonus : le winrate reste décisif
 
@@ -462,7 +469,16 @@ export function tierScore(stats: Stats, champ: number, role: number): number {
   const [g, w] = stats.base.get(k2(champ, role)) ?? [0, 0];
   const pickrate = stats.matchesWeighted ? g / stats.matchesWeighted : 0;
   const banrate = stats.banMatches > 0 ? (stats.bans.get(champ) ?? 0) / stats.banMatches : 0;
-  return smoothed(g, w, 0.5, TIER_K) + PICK_BONUS * Math.min(pickrate, BONUS_CAP) + BAN_BONUS * Math.min(banrate, BONUS_CAP);
+  const score = smoothed(g, w, 0.5, TIER_K) + PICK_BONUS * (Math.min(pickrate, BONUS_CAP) - PICK_CENTER)
+    + BAN_BONUS * Math.min(banrate, BONUS_CAP);
+  return roleShare(stats, champ, role) < OFF_ROLE_SHARE ? Math.min(score, OFF_ROLE_MAX) : score;
+}
+
+/** Part des parties du champion jouées dans ce rôle (1 = toujours dans ce rôle). */
+export function roleShare(stats: Stats, champ: number, role: number): number {
+  let all = 0;
+  for (let r = 0; r < 5; r++) all += stats.base.get(k2(champ, r))?.[0] ?? 0;
+  return all ? (stats.base.get(k2(champ, role))?.[0] ?? 0) / all : 0;
 }
 
 export function tierLetter(score: number): string {
@@ -480,6 +496,7 @@ export function tierList(stats: Stats, role: number, minPick = TIER_MIN_PICKRATE
     const c = Number(cs);
     const score = tierScore(stats, c, role);
     out.push({ champ: c, winrate: w / g, pickrate, games: g, score, tier: tierLetter(score),
+               offRole: roleShare(stats, c, role) < OFF_ROLE_SHARE,
                banrate: stats.banMatches > 0 ? (stats.bans.get(c) ?? 0) / stats.banMatches : null });
   }
   return out;

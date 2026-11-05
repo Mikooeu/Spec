@@ -87,6 +87,11 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
             <span className="tier-row__champ">
               <ChampionIcon stats={stats} champ={r.champ} size={1.75} />
               <span className="tier-row__name">{champName(stats, r.champ)}</span>
+              {r.offRole && (
+                <span className="badge badge--muted" title={t("Champion surtout joué dans un autre rôle : son winrate vient souvent de joueurs spécialistes. Limité au tier B.")}>
+                  {t("Pick atypique")}
+                </span>
+              )}
             </span>
             <span className="tier-row__num tier-row__score">{dec1(r.score * 100)}</span>
             <span className={`tier-row__num tier-row__wr tone-${wrTone(r.winrate)}`}>{pct(r.winrate)}<Trend tone={wrTone(r.winrate)} /></span>

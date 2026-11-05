@@ -1,6 +1,11 @@
 // Traductions anglaises : texte français (tel qu'écrit dans le code, avec ses {variables}) → anglais.
 // Un texte absent reste en français. Les noms de champions, objets, sorts et runes viennent de Riot (Data Dragon).
 export const EN: Record<string, string> = {
+  "Meilleure note de l’équipe gagnante": "Best score on the winning team",
+  "Meilleure note de l’équipe perdante": "Best score on the losing team",
+  "Calcul…": "Calculating…",
+  "Pick atypique": "Off-role pick",
+  "Champion surtout joué dans un autre rôle : son winrate vient souvent de joueurs spécialistes. Limité au tier B.": "Champion mostly played in another role: its win rate often comes from specialists. Capped at tier B.",
   "Évolution de l’objet de support": "Support item evolution",
   "Le choix à faire à la fin de ta quête de support · part des parties où il est choisi": "The choice to make when your support quest completes · share of games where it’s picked",
   "Pas encore assez de parties : les évolutions s’affichent avec les prochaines stats (calcul toutes les 6 h).": "Not enough games yet: evolutions show up with the next stats update (every 6 h).",

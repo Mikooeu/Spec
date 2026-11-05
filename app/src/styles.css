@@ -824,3 +824,11 @@ button.game:hover { border-color: var(--separator); }
 .evolution__text strong { font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evolution__text small { font-size: 0.6875rem; color: var(--text-3); }
 .evolution__wr { font-size: 0.9375rem; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* MVP / ACE visible dans la ligne d'historique, sans déplier la partie */
+.game__name { display: inline-flex; align-items: center; gap: 0.4375rem; min-width: 0; }
+.badge-note--lg { padding: 0.125rem 0.4375rem; border-radius: 0.3125rem; font-size: 0.6875rem; }
+.badge-note--lg.badge-note--mvp { color: #fff; background: var(--accent); }
+.badge-note--lg.badge-note--ace { color: #1c1c1e; background: #ffd60a; }
+
+.badge--muted { color: var(--text-2); background: var(--bg-surface-2); }
