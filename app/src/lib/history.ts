@@ -61,8 +61,13 @@ const SERIES_KEY = "spec.lp.series";
 /** Point de la courbe des LP (Solo/Duo) : LP « absolus » (promotions comprises) à un instant donné. */
 export interface LpPoint { at: number; lp: number; game?: number }
 
+// Une courbe par compte : `spec.lp.series.<puuid>`. Le compte affiché est le dernier vu dans le client.
+const ACCOUNT_KEY = "spec.lp.account";
+const seriesKey = (puuid: string) => `${SERIES_KEY}.${puuid}`;
 export function readLpSeries(): LpPoint[] {
-  try { const v = JSON.parse(localStorage.getItem(SERIES_KEY) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+  const puuid = localStorage.getItem(ACCOUNT_KEY);
+  if (!puuid) return [];
+  try { const v = JSON.parse(localStorage.getItem(seriesKey(puuid)) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 /** Ajoute un point si les LP ont changé depuis le dernier (ou pour lier une partie à un point déjà noté). */
 function pushLpPoint(p: LpPoint) {
@@ -71,17 +76,41 @@ function pushLpPoint(p: LpPoint) {
   if (last && last.lp === p.lp && (!p.game || last.game === p.game)) return;
   if (p.game && list.some((x) => x.game === p.game)) return;
   list.push(p);
-  try { localStorage.setItem(SERIES_KEY, JSON.stringify(list.slice(-600))); } catch { /* stockage plein */ }
+  const puuid = localStorage.getItem(ACCOUNT_KEY);
+  if (!puuid) return;
+  try { localStorage.setItem(seriesKey(puuid), JSON.stringify(list.slice(-600))); } catch { /* stockage plein */ }
+}
+/** Retient le compte connecté. L'ancienne courbe commune (avant la 0.3.15) n'est gardée
+ *  que si elle finit sur les LP actuels de ce compte : sinon elle mélange plusieurs comptes. */
+async function noteAccount(currentLp: number | null): Promise<boolean> {
+  const me = await get<{ puuid?: string }>("/lol-summoner/v1/current-summoner").catch(() => null);
+  if (!me?.puuid) return false;
+  localStorage.setItem(ACCOUNT_KEY, me.puuid);
+  const legacy = localStorage.getItem(SERIES_KEY);
+  if (legacy != null) {
+    try {
+      const v = JSON.parse(legacy);
+      const last = Array.isArray(v) ? v[v.length - 1] : null;
+      if (last && last.lp === currentLp && localStorage.getItem(seriesKey(me.puuid)) == null) {
+        const lps = v.map((p: LpPoint) => p.lp);
+        // une seule session de suivi cohérente : pas de saut de plus de 150 LP entre deux points
+        if (lps.every((lp: number, i: number) => i === 0 || Math.abs(lp - lps[i - 1]) <= 150)) localStorage.setItem(seriesKey(me.puuid), legacy);
+      }
+    } catch { /* ancienne courbe illisible */ }
+    localStorage.removeItem(SERIES_KEY);
+  }
+  return true;
 }
 /** Note les LP Solo/Duo actuels (au chargement du profil, en début de draft). */
-export function noteSoloLp(r: RankedStats | null) {
+export async function noteSoloLp(r: RankedStats | null) {
   const lp = absoluteLp(r?.queueMap?.RANKED_SOLO_5x5);
+  if (!(await noteAccount(lp ?? null))) return;
   if (lp != null) pushLpPoint({ at: Date.now(), lp });
 }
 /** « Émeraude II · 47 LP » à partir de LP absolus. */
 export function lpLabel(total: number, short = false): string {
   const apex = TIERS.length * 400;
-  if (total >= apex) return short ? t("Maître+") : t("Maître+ · {v} LP", { v: total - apex });
+  if (total >= apex) return short ? t("Maître+ {v}", { v: total - apex }) : t("Maître+ · {v} LP", { v: total - apex });
   const tier = Math.max(0, Math.floor(total / 400)), d = Math.min(3, Math.floor((total % 400) / 100));
   const name = `${TIER_FR[TIERS[tier]]} ${DIVISIONS[d]}`;
   return short ? name : `${name} · ${total % 100} LP`;

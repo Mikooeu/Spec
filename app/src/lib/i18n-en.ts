@@ -6,6 +6,7 @@ export const EN: Record<string, string> = {
   "Calcul…": "Calculating…",
   "Pick atypique": "Off-role pick",
   "Pick de niche": "Niche pick",
+  "Maître+ {v}": "Master+ {v}",
   "Champion peu joué : son winrate vient souvent de joueurs spécialistes. Limité au tier A.": "Rarely played champion: its win rate often comes from specialists. Capped at tier A.",
   "Champion surtout joué dans un autre rôle : son winrate vient souvent de joueurs spécialistes. Limité au tier B.": "Champion mostly played in another role: its win rate often comes from specialists. Capped at tier B.",
   "Évolution de l’objet de support": "Support item evolution",

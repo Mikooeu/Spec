@@ -129,6 +129,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   // compte déjà vu lié sur ce PC : l'onglet Duo reste visible même si le serveur ne répond pas pour l'instant
   const [linked, setLinked] = usePersistent<string | null>("spec.linked", null);
   useEffect(() => { if (registered && account?.puuid && linked !== account.puuid) setLinked(account.puuid); }, [registered, account?.puuid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [seriesTick, setSeriesTick] = useState(0);
   const showDuo = registered || (perso.kind === "error" && !!account?.puuid && linked === account.puuid);
 
   useEffect(() => {
@@ -136,7 +137,10 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
     let alive = true;
     loadHistory(50, guess).then((g) => { if (alive) { setClientGames(g); setHistoryError(false); } })
       .catch(() => alive && setHistoryError(true));
-    readRanked().then((r) => { noteSoloLp(r); if (alive) setRank(rankText(r?.queueMap?.RANKED_SOLO_5x5)); });
+    readRanked().then((r) => {
+      noteSoloLp(r).then(() => alive && setSeriesTick((n) => n + 1));   // la courbe suit le compte connecté
+      if (alive) setRank(rankText(r?.queueMap?.RANKED_SOLO_5x5));
+    });
     return () => { alive = false; };
   }, [clientOn, lpVersion, guess]);
 
@@ -248,7 +252,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
         </>
       )}
       {tab === "progress" && (
-        <ProgressView stats={stats} games={games} perso={perso} version={lpVersion + impactVersion} onOpenGame={openGame} />
+        <ProgressView stats={stats} games={games} perso={perso} version={lpVersion + impactVersion + seriesTick} onOpenGame={openGame} />
       )}
       {tab === "duo" && account?.puuid && (
         <DuoList stats={stats} client={account.puuid} selected={duo?.key ?? null} onOpen={openDuo} />
