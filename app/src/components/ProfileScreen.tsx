@@ -116,6 +116,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   const [more, setMore] = useState<"idle" | "loading" | "end">("idle");
   const [rank, setRank] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState(false);
+  const [historyRetry, setHistoryRetry] = useState(0);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -135,14 +136,25 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   useEffect(() => {
     if (!clientOn) return;
     let alive = true;
-    loadHistory(50, guess).then((g) => { if (alive) { setClientGames(g); setHistoryError(false); } })
-      .catch(() => alive && setHistoryError(true));
+    // Juste après son lancement, le client LoL peut refuser l'historique : on réessaie quelques fois
+    // (sinon seules les parties Solo/Duo du serveur s'affichent, sans erreur visible).
+    let timer: number | undefined;
+    const fetchClient = (attempt: number) => {
+      loadHistory(50, guess).then((g) => { if (alive) { setClientGames(g); setHistoryError(false); } })
+        .catch((e) => {
+          console.warn("[history] client", e);
+          if (!alive) return;
+          if (attempt < 4) timer = window.setTimeout(() => fetchClient(attempt + 1), 3000 * (attempt + 1));
+          else setHistoryError(true);
+        });
+    };
+    fetchClient(0);
     readRanked().then((r) => {
       noteSoloLp(r).then(() => alive && setSeriesTick((n) => n + 1));   // la courbe suit le compte connecté
       if (alive) setRank(rankText(r?.queueMap?.RANKED_SOLO_5x5));
     });
-    return () => { alive = false; };
-  }, [clientOn, lpVersion, guess]);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [clientOn, lpVersion, guess, historyRetry]);
 
   // historique complet de la saison (Solo/Duo) gardé par le serveur Spec
   useEffect(() => {
@@ -152,7 +164,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
       if (!alive) return;
       setServerGames(g);
       setMore(g.length < 20 ? "end" : "idle");
-    }).catch(() => undefined);
+    }).catch((e) => console.warn("[history] serveur", e));
     return () => { alive = false; };
   }, [registered, account?.puuid, lpVersion]);
 
@@ -236,6 +248,12 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
                    : t("Tes dernières parties. Clique sur une partie pour voir le détail des 10 joueurs. Active tes stats perso pour retrouver toute ta saison.")}
                  empty={!clientOn && !games ? t("Lance le client LoL pour voir ton historique.") : null}
                  error={historyError && !serverGames.length ? t("Le client LoL n’a pas renvoyé ton historique. Réessaie dans un instant.") : null}
+                 notice={historyError && serverGames.length > 0 && !duo ? (
+                   <p className="hint history__notice">
+                     {t("Seules tes parties Solo/Duo s’affichent : le client LoL n’a pas renvoyé les autres.")}{" "}
+                     <button className="link-btn" onClick={() => { setHistoryError(false); setHistoryRetry((n) => n + 1); }}>{t("Réessayer")}</button>
+                   </p>
+                 ) : null}
                  onOpenPlayer={onOpenPlayer} showLp duo={duo} onClearDuo={() => setDuo(null)} focus={focus}
                  footer={!duo && registered && serverGames.length > 0 && more !== "end" ? (
                    <button className="btn btn--secondary btn--small history__more" onClick={loadMore} disabled={more === "loading"}>
@@ -468,7 +486,7 @@ interface HistoryProps {
   role: number | null; onRole: (r: number | null) => void;
   me: string | null; subject?: string;
   title?: string; intro: string; empty?: string | null; error?: string | null;
-  footer?: React.ReactNode; showLp?: boolean;
+  footer?: React.ReactNode; notice?: React.ReactNode; showLp?: boolean;
   onOpenPlayer: (puuid: string | null) => void;
   /** Historique filtré sur un partenaire de duo. */
   duo?: DuoFilter | null; onClearDuo?: () => void;
@@ -477,7 +495,7 @@ interface HistoryProps {
 }
 
 /** Historique : filtre par file et par poste (le poste choisit aussi les meilleurs picks), ligne dépliable. */
-function History({ stats, games, assets, role, onRole, me, subject, title, intro, empty, error, footer,
+function History({ stats, games, assets, role, onRole, me, subject, title, intro, empty, error, notice, footer,
                    showLp = false, onOpenPlayer, duo, onClearDuo, focus = null }: HistoryProps) {
   const [queue, setQueue] = useState<"all" | QueueKind>("all");
   const [open, setOpen] = useState<number | null>(focus);
@@ -510,6 +528,7 @@ function History({ stats, games, assets, role, onRole, me, subject, title, intro
       {duo && !games && <div className="skeleton">{[0, 1, 2].map((i) => <span key={i} />)}</div>}
       {empty && <p className="hint">{empty}</p>}
       {error && <p className="hint">{error}</p>}
+      {notice}
       {games && (
         <>
           <div className="history__filters">

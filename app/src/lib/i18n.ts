@@ -29,7 +29,7 @@ export function t(fr: string, vars?: Record<string, string | number>): string {
   if (current === "en") {
     const en = EN[fr];
     if (en != null) s = en;
-    else if (import.meta.env.DEV && !missing.has(fr)) { missing.add(fr); console.warn("[i18n] sans traduction :", fr); }
+    else if (import.meta.env.DEV && !missing.has(fr) && !/^[A-Za-z0-9+.-]+$/.test(fr)) { missing.add(fr); console.warn("[i18n] sans traduction :", fr); }
   }
   if (vars) s = s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
   return s;
