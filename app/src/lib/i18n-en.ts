@@ -573,4 +573,6 @@ export const EN: Record<string, string> = {
   "Trier par {v}": "Sort by {v}",
   "Suivant : {role}": "Next: {role}",
   "Pool encore vide": "Pool still empty",
+  "Aucun champion ne correspond à « {q} » en {role}.": "No champion matches “{q}” in {role}.",
+  "Aucun champion ne correspond à « {q} ».": "No champion matches “{q}”.",
 };

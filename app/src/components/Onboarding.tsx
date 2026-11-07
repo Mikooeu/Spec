@@ -8,6 +8,7 @@ import type { Roles } from "../lib/settings";
 import type { Pools } from "./PoolScreen";
 import { ChampionIcon } from "./ChampionIcon";
 import { Logo } from "./Logo";
+import { RoleIcon } from "./RoleIcon";
 import { t, plural } from "../lib/i18n";
 
 interface Props {
@@ -225,13 +226,3 @@ function AccountStep({ clientOn, account, perso, onRegister }:
 }
 
 // Icônes officielles des postes (client LoL, servies par Community Dragon, comme l'emblème Master de la tier list)
-const POSITION_ICON = (name: string) =>
-  `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-${name}.png`;
-const POSITIONS = ["top", "jungle", "middle", "bottom", "utility"];
-
-/** Icône officielle du poste ; si elle ne charge pas, on n'affiche rien plutôt qu'une icône fausse. */
-function RoleIcon({ role }: { role: number }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <span className="role-card__icon role-card__icon--empty" aria-hidden />;
-  return <img className="role-card__icon" src={POSITION_ICON(POSITIONS[role])} alt="" aria-hidden onError={() => setFailed(true)} />;
-}

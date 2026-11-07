@@ -450,11 +450,13 @@ export function explain(stats: Stats, res: Result, role: number, allies: number[
  * dans la méta Master+). La lettre de tier vient de ce score.
  */
 export interface TierRow {
-  champ: number; winrate: number; pickrate: number; banrate: number | null; games: number; score: number; tier: string;
+  champ: number; role: number; winrate: number; pickrate: number; banrate: number | null; games: number; score: number; tier: string;
   offRole: boolean;   // moins de 30 % des parties du champion dans ce rôle
   niche: boolean;     // pick rate sous 3 % : pas au-dessus du tier A
 }
-export const TIER_MIN_PICKRATE = 0.02;
+// Plancher de la tier list : sous 50 parties (pondérées) dans le rôle, le winrate ne veut encore rien dire.
+// Pas de seuil de pick rate : le score plafonne déjà les picks rares (niche, hors rôle).
+export const TIER_MIN_GAMES = 50;
 const TIER_K = 1000;          // parties « fictives » à 50 % ajoutées pour lisser le winrate
 // Pick rate : centré sur 5 % (un pick courant), +0,15 point par point de pick rate au-dessus, autant en moins en dessous.
 // Un pick de niche à gros winrate (souvent joué par des spécialistes) ne passe plus devant les champions du méta.
@@ -490,17 +492,17 @@ export function tierLetter(score: number): string {
   return score >= 0.515 ? "S" : score >= 0.507 ? "A" : score >= 0.5 ? "B" : score >= 0.493 ? "C" : "D";
 }
 
-export function tierList(stats: Stats, role: number, minPick = TIER_MIN_PICKRATE): TierRow[] {
+export function tierList(stats: Stats, role: number, minGames = TIER_MIN_GAMES): TierRow[] {
   const out: TierRow[] = [];
   if (!stats.matchesWeighted) return out;
   for (const [key, [g, w]] of stats.base) {
     const [cs, rs] = key.split("|");
     if (Number(rs) !== role || !g) continue;
+    if (g < minGames) continue;
     const pickrate = g / stats.matchesWeighted;
-    if (pickrate < minPick) continue;
     const c = Number(cs);
     const score = tierScore(stats, c, role);
-    out.push({ champ: c, winrate: w / g, pickrate, games: g, score, tier: tierLetter(score),
+    out.push({ champ: c, role, winrate: w / g, pickrate, games: g, score, tier: tierLetter(score),
                offRole: roleShare(stats, c, role) < OFF_ROLE_SHARE, niche: pickrate < NICHE_PICKRATE,
                banrate: stats.banMatches > 0 ? (stats.bans.get(c) ?? 0) / stats.banMatches : null });
   }

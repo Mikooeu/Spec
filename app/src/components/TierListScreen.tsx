@@ -1,7 +1,8 @@
 import { EloBadge } from "./EloBadge";
 import { useMemo, useState, type ReactNode } from "react";
-import { ROLE_LABELS, TIER_MIN_PICKRATE, tierList, type Stats, type TierRow } from "../lib/score";
-import { champName, dec1, int, patchLabel, pct, wrTone } from "../lib/ui";
+import { ROLE_LABELS, tierList, type Stats, type TierRow } from "../lib/score";
+import { champName, dec1, normalize, patchLabel, pct, wrTone } from "../lib/ui";
+import { RoleIcon } from "./RoleIcon";
 import { ChampionIcon } from "./ChampionIcon";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
@@ -16,6 +17,8 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
     region?: ReactNode; regionLabel?: string }) {
   const [sort, setSort] = useState<SortKey>("score");
   const [asc, setAsc] = useState(false); // décroissant par défaut
+  const [all, setAll] = useState(false);  // onglet « Tous » : une ligne par champion et par rôle
+  const [query, setQuery] = useState("");
   // même colonne : on inverse l'ordre ; autre colonne : on repart en décroissant
   const choose = (key: SortKey) => {
     if (key === sort) setAsc(!asc);
@@ -23,11 +26,16 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
   };
   const arrow = asc ? "↑" : "↓";
   const lists = useMemo(() => [0, 1, 2, 3, 4].map((r) => tierList(stats, r)), [stats]);
-  const hasBans = stats.banMatches > 0;
-  const rows = useMemo(() => {
+  const total = lists.reduce((a, l) => a + l.length, 0);
+  // classement complet d'abord (le # reste celui de la tier list), puis filtre de recherche
+  const ranked = useMemo(() => {
     const value = (r: TierRow) => (sort === "banrate" ? r.banrate ?? -1 : r[sort]);
-    return [...lists[role]].sort((a, b) => (asc ? value(a) - value(b) : value(b) - value(a)));
-  }, [lists, role, sort, asc]);
+    return [...(all ? lists.flat() : lists[role])].sort((a, b) => (asc ? value(a) - value(b) : value(b) - value(a)))
+      .map((r, i) => ({ r, rank: i + 1 }));
+  }, [lists, role, all, sort, asc]);
+  const q = normalize(query.trim());
+  const rows = q ? ranked.filter(({ r }) => normalize(champName(stats, r.champ)).includes(q)) : ranked;
+  const scope = all ? t("Tous") : ROLE_LABELS[role];
 
   return (
     <div className="content">
@@ -41,20 +49,35 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
 
       <div className="tier-controls">
         <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
+          <button role="tab" aria-selected={all} className={all ? "is-active" : ""} onClick={() => setAll(true)}>
+            {t("Tous")} <span className="count">{total}</span>
+          </button>
           {ROLE_LABELS.map((label, i) => (
-            <button key={label} role="tab" aria-selected={role === i} className={role === i ? "is-active" : ""}
-                    onClick={() => onRole(i)}>
+            <button key={label} role="tab" aria-selected={!all && role === i} className={!all && role === i ? "is-active" : ""}
+                    onClick={() => { setAll(false); onRole(i); }}>
               {label} <span className="count">{lists[i].length}</span>
             </button>
           ))}
         </Segmented>
+        <div className="search-wrap tier-search">
+          <svg className="search__icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+            <circle cx="7" cy="7" r="4.75" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M10.5 10.5l3.25 3.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <input className="search" type="search" placeholder={t("Rechercher un champion")} value={query} aria-label={t("Rechercher un champion")}
+                 onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setQuery(""); }} />
+          {query && (
+            <button className="search__clear" onClick={() => setQuery("")} aria-label={t("Effacer la recherche")} title={t("Effacer")}>
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+                <circle cx="8" cy="8" r="7" fill="currentColor" opacity="0.25" />
+                <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
-      <p className="muted small">{t("Champions joués dans plus de {n} % des parties {role} · {games} parties analysées", { n: Math.round(TIER_MIN_PICKRATE * 100), role: ROLE_LABELS[role], games: int(Number(stats.meta.matches ?? 0)) })}
-        {!hasBans && t(" · banrate en cours de collecte")}
-        {" · "}{t("Score : winrate corrigé selon le nombre de parties, plus un petit bonus de pick rate et de ban rate")}
-      </p>
 
-      <div className="tier-table" role="table" aria-label={t("Tier list {v}", { v: ROLE_LABELS[role] })}>
+      <div className="tier-table" role="table" aria-label={t("Tier list {v}", { v: scope })}>
         <div className="tier-row tier-row--head" role="row">
           <span className="tier-row__rank" role="columnheader">#</span>
           <span className="tier-row__tier" role="columnheader">{t("Tier")}</span>
@@ -67,15 +90,16 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
             </button>
           ))}
         </div>
-        <div className="stagger tier-table__rows" key={`${role}-${sort}-${asc}`}>
-        {rows.map((r, i) => (
-          <button key={r.champ} className="tier-row tier-row--link" role="row" onClick={() => onOpen(r.champ, role)}
+        <div className="stagger tier-table__rows" key={`${all ? "all" : role}-${sort}-${asc}`}>
+        {rows.map(({ r, rank }) => (
+          <button key={`${r.champ}-${r.role}`} className="tier-row tier-row--link" role="row" onClick={() => onOpen(r.champ, r.role)}
                   title={t("Ouvrir la page de {champName}", { champName: champName(stats, r.champ) })}>
-            <span className="tier-row__rank">{i + 1}</span>
+            <span className="tier-row__rank">{rank}</span>
             <span className={`tier-row__tier tier--${r.tier}`}>{r.tier}</span>
             <span className="tier-row__champ">
               <ChampionIcon stats={stats} champ={r.champ} size={1.75} />
               <span className="tier-row__name">{champName(stats, r.champ)}</span>
+              {all && <RoleIcon role={r.role} className="tier-row__role" title={ROLE_LABELS[r.role]} />}
               {r.offRole && (
                 <span className="badge badge--muted" title={t("Champion surtout joué dans un autre rôle : son winrate vient souvent de joueurs spécialistes. Limité au tier B.")}>
                   {t("Pick atypique")}
@@ -95,7 +119,9 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
         ))}
         </div>
         {rows.length === 0 && (
-          <p className="hint">{t("Pas encore assez de parties en {role}. Laisse tourner le collecteur.", { role: ROLE_LABELS[role] })}</p>
+          <p className="hint">{q ? (all ? t("Aucun champion ne correspond à « {q} ».", { q: query.trim() })
+                 : t("Aucun champion ne correspond à « {q} » en {role}.", { q: query.trim(), role: scope }))
+            : t("Pas encore assez de parties en {role}. Laisse tourner le collecteur.", { role: scope })}</p>
         )}
       </div>
     </div>
