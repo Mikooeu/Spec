@@ -3,7 +3,7 @@
 // Pour chaque joueur : participation aux kills, part des dégâts et de l'or de son équipe, CS par minute
 // et score de vision par minute comparés aux joueurs du même rôle, et morts (en négatif). Chaque mesure est centrée et réduite
 // sur les 10 joueurs, puis pondérée selon le rôle (barème validé par Théo en 0.4.0, choisi à la main).
-// 10 = joueur moyen de la partie, petit bonus pour la victoire. MVP : meilleure note des gagnants,
+// 10,5 = joueur moyen de la partie (les points perdus sont amortis), petit bonus pour la victoire. MVP : meilleure note des gagnants,
 // ACE : meilleure note des perdants.
 import type { GameDetail, PlayerLine } from "./history";
 import { dec1 } from "./ui";
@@ -27,6 +27,10 @@ const DEFAULT_WEIGHTS: Weights = { kp: 0.205, dmg: 0.23, gold: 0.135, cs: 0.155,
 export const weightsFor = (role: number | null | undefined): Weights => (role != null && ROLE_WEIGHTS[role]) || DEFAULT_WEIGHTS;
 const SCALE = 4;   // un écart-type pondéré = 4 points
 const RESULT = 0.8;
+// Notation un peu moins sévère : un critère sous la moyenne coûte 30 % de moins qu'il ne rapporte au-dessus,
+// et la base passe à 10,5. Les mauvaises parties font moins mal, les très bonnes restent rares.
+const SOFT_NEG = 0.7;
+const BASE = 10.5;
 
 function standardize(xs: number[]): number[] {
   const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -78,9 +82,10 @@ export function rateGame(detail: GameDetail): Map<PlayerLine, Rating> {
       { key: "deaths", points: -SCALE * scale * w.deaths * deaths[i] },
       ...(hasVision ? [{ key: "vision" as const, points: SCALE * w.vision * vision[i] }] : []),
     ];
-    const parts = raw.filter((c) => w[c.key as keyof Weights] > 0);
+    const parts = raw.filter((c) => w[c.key as keyof Weights] > 0)
+      .map((c) => (c.points < 0 ? { ...c, points: c.points * SOFT_NEG } : c));
     parts.push({ key: "result", points: team.win ? RESULT : -RESULT });
-    const note = Math.min(20, Math.max(0, 10 + parts.reduce((a, c) => a + c.points, 0)));
+    const note = Math.min(20, Math.max(0, BASE + parts.reduce((a, c) => a + c.points, 0)));
     return { p, win: team.win, note: Math.round(note * 10) / 10, parts };
   });
   const ranked = [...notes].sort((a, b) => b.note - a.note);

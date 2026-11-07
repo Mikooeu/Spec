@@ -556,8 +556,6 @@ export const EN: Record<string, string> = {
   "Participation": "Kill participation",
   "Farm": "Farm",
   "Morts": "Deaths",
-  "Détail de ta note": "Your score breakdown",
-  "Clique sur la partie pour le détail": "Click the game for the breakdown",
   "ta participation aux kills": "your kill participation",
   "tes dégâts": "your damage",
   "ton or": "your gold",
@@ -575,4 +573,5 @@ export const EN: Record<string, string> = {
   "Pool encore vide": "Pool still empty",
   "Aucun champion ne correspond à « {q} » en {role}.": "No champion matches “{q}” in {role}.",
   "Aucun champion ne correspond à « {q} ».": "No champion matches “{q}”.",
+  "Détail de la note": "Score breakdown",
 };

@@ -85,7 +85,7 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
         <p className="label">{t("Dans ton pool ")}{ROLE_LABELS[role]}</p>
         <div className="chips">
           {pool.length === 0 && <p className="muted small">{t("Aucun champion pour l’instant : en autofill, Spec proposera les meilleurs choix du rôle.")}</p>}
-          {pool.map((c) => (
+          {[...pool].sort((a, b) => (roleWr(b) ?? -1) - (roleWr(a) ?? -1)).map((c) => (
             <button key={c} className="chip" onClick={() => toggle(c)} aria-label={t("Retirer {champName}", { champName: champName(stats, c) })}>
               <ChampionIcon stats={stats} champ={c} size={1.75} />
               {champName(stats, c)}
