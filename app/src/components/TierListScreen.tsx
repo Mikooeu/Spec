@@ -10,7 +10,7 @@ import { t } from "../lib/i18n";
 type SortKey = "score" | "winrate" | "pickrate" | "banrate";
 const SORTS: [SortKey, string][] = [["score", t("Score")], ["winrate", t("Winrate")], ["pickrate", t("Pickrate")], ["banrate", t("Banrate")]];
 
-/** Tier list solo/duo Master+ par rôle, triable par winrate, pickrate ou banrate. */
+/** Tier list solo/duo Master+ par rôle. Un clic sur l'en-tête d'une colonne trie (re-clic : ordre inversé). */
 export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabel = "EUW" }:
   { stats: Stats; role: number; onRole: (role: number) => void; onOpen: (champ: number, role: number) => void;
     region?: ReactNode; regionLabel?: string }) {
@@ -48,18 +48,6 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
             </button>
           ))}
         </Segmented>
-        <div className="tier-sort">
-          <span className="muted small">{t("Trier par")}</span>
-          <Segmented className="segmented" role="tablist" aria-label={t("Tri")}>
-            {SORTS.map(([key, label]) => (
-              <button key={key} role="tab" aria-selected={sort === key} className={sort === key ? "is-active" : ""}
-                      onClick={() => choose(key)}
-                      title={sort === key ? (asc ? t("Trier du plus haut au plus bas") : t("Trier du plus bas au plus haut")) : undefined}>
-                {label}{sort === key && <span className="count">{arrow}</span>}
-              </button>
-            ))}
-          </Segmented>
-        </div>
       </div>
       <p className="muted small">{t("Champions joués dans plus de {n} % des parties {role} · {games} parties analysées", { n: Math.round(TIER_MIN_PICKRATE * 100), role: ROLE_LABELS[role], games: int(Number(stats.meta.matches ?? 0)) })}
         {!hasBans && t(" · banrate en cours de collecte")}
@@ -73,8 +61,9 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
           <span className="tier-row__champ" role="columnheader">{t("Champion")}</span>
           {SORTS.map(([key, label]) => (
             <button key={key} role="columnheader" className={`tier-row__num${sort === key ? " is-sorted" : ""}`}
-                    onClick={() => choose(key)} aria-sort={sort === key ? (asc ? "ascending" : "descending") : "none"}>
-              {label}{sort === key ? ` ${arrow}` : ""}
+                    onClick={() => choose(key)} aria-sort={sort === key ? (asc ? "ascending" : "descending") : "none"}
+                    title={sort === key ? (asc ? t("Trier du plus haut au plus bas") : t("Trier du plus bas au plus haut")) : t("Trier par {v}", { v: label })}>
+              {label}<span className="tier-sort__arrow" aria-hidden="true">{sort === key ? arrow : "↕"}</span>
             </button>
           ))}
         </div>

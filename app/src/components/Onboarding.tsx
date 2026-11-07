@@ -25,6 +25,18 @@ const STEPS = [t("Tes rôles"), t("Ton champion pool"), t("Ton compte")];
 export function Onboarding({ stats, roles, onRoles, pools, onPools, clientOn, account, perso, onRegister, onDone }: Props) {
   const [step, setStep] = useState(0);
   const chosen = [roles.main, roles.second].filter((r): r is number => r != null);
+  const poolRoles = chosen.length ? chosen : [2];
+  // onglet de rôle de l'étape pool, remonté ici pour que « Suivant » ouvre d'abord un rôle encore vide
+  const [poolRole, setPoolRole] = useState(poolRoles[0]);
+  const [seen, setSeen] = useState<number[]>([]);
+  const role = poolRoles.includes(poolRole) ? poolRole : poolRoles[0];
+  const openRole = (r: number) => { setSeen((v) => (v.includes(role) ? v : [...v, role])); setPoolRole(r); };
+  const nextRole = step === 1 ? poolRoles.find((r) => r !== role && pools[r].length === 0 && !seen.includes(r)) : undefined;
+  const next = () => {
+    if (nextRole != null) openRole(nextRole);
+    else if (step < 2) setStep(step + 1);
+    else onDone();
+  };
   return (
     <div className="onboarding">
       <div className="onboarding__inner">
@@ -44,7 +56,7 @@ export function Onboarding({ stats, roles, onRoles, pools, onPools, clientOn, ac
 
         <div key={step} className="onboarding__body fade-in">
           {step === 0 && <RolesStep roles={roles} onRoles={onRoles} />}
-          {step === 1 && <PoolStep stats={stats} roles={chosen.length ? chosen : [2]} pools={pools} onPools={onPools} clientOn={clientOn} />}
+          {step === 1 && <PoolStep stats={stats} roles={poolRoles} role={role} onRole={openRole} pools={pools} onPools={onPools} clientOn={clientOn} />}
           {step === 2 && <AccountStep clientOn={clientOn} account={account} perso={perso} onRegister={onRegister} />}
         </div>
 
@@ -53,7 +65,9 @@ export function Onboarding({ stats, roles, onRoles, pools, onPools, clientOn, ac
           <span className="grow" />
           <span className="muted small">{t("Étape {n} sur 3", { n: step + 1 })}</span>
           {step === 2 && perso.kind !== "ready" && <button className="btn btn--secondary" onClick={onDone}>{t("Plus tard")}</button>}
-          <button className="btn btn--primary" onClick={() => (step < 2 ? setStep(step + 1) : onDone())}>{step < 2 ? t("Suivant") : t("Terminer")}</button>
+          <button className="btn btn--primary" onClick={next}>
+            {nextRole != null ? t("Suivant : {role}", { role: ROLE_LABELS[nextRole] }) : step < 2 ? t("Suivant") : t("Terminer")}
+          </button>
         </div>
       </div>
     </div>
@@ -92,8 +106,8 @@ function RolesStep({ roles, onRoles }: { roles: Roles; onRoles: (r: Roles) => vo
   );
 }
 
-function PoolStep({ stats, roles, pools, onPools, clientOn }: { stats: Stats; roles: number[]; pools: Pools; onPools: (p: Pools) => void; clientOn: boolean }) {
-  const [role, setRole] = useState(roles[0]);
+function PoolStep({ stats, roles, role, onRole, pools, onPools, clientOn }:
+  { stats: Stats; roles: number[]; role: number; onRole: (r: number) => void; pools: Pools; onPools: (p: Pools) => void; clientOn: boolean }) {
   const [query, setQuery] = useState("");
   const [history, setHistory] = useState<Game[] | null>(null);
   useEffect(() => {
@@ -128,8 +142,9 @@ function PoolStep({ stats, roles, pools, onPools, clientOn }: { stats: Stats; ro
       {roles.length > 1 && (
         <div className="segmented" role="tablist" aria-label={t("Rôle")}>
           {roles.map((r) => (
-            <button key={r} role="tab" aria-selected={role === r} className={role === r ? "is-active" : ""} onClick={() => setRole(r)}>
+            <button key={r} role="tab" aria-selected={role === r} className={role === r ? "is-active" : ""} onClick={() => onRole(r)}>
               {ROLE_LABELS[r]} <span className="count">{pools[r].length}</span>
+              {pools[r].length === 0 && role !== r && <span className="tab-dot" title={t("Pool encore vide")} aria-label={t("Pool encore vide")} />}
             </button>
           ))}
         </div>

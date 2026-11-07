@@ -12,7 +12,7 @@ import {
   QUEUE_LABELS, duoPartner, loadDuos, type Duo, findPlayer, loadGameDetail, loadHistory, loadPlayer, loadServerHistory, mergeHistory, rankText,
   readRanked, readLpSeries, noteSoloLp, lpLabel, type LpPoint, type Game, type GameDetail, type OtherPlayer, type PlayerLine, type QueueKind,
 } from "../lib/history";
-import { noteText, noteTone, rateGame, type Rating } from "../lib/rating";
+import { noteText, noteTone, rateGame, sortedParts, summaryParts, type Contribution, type Criterion, type Rating } from "../lib/rating";
 import { Segmented } from "./Segmented";
 import { t, locale, ordinal, plural } from "../lib/i18n";
 
@@ -690,6 +690,7 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onTogg
       <ItemRow items={g.items} role={g.role} assets={assets} size="md" />
       <span className="grow" />
       <span className="stat-col game__note">
+        {rating && rating.parts.length > 0 && <NoteTip rating={rating} />}
         <span className="stat-col__value">
           <span className={`tone-${rating ? noteTone(rating.note) : "neutral"}`}>{rating ? noteText(rating.note) : "—"}</span>
           {rating && <Trend tone={noteTone(rating.note)} />}
@@ -747,8 +748,11 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
   const notes = rateGame(detail);
   // ton équipe d'abord
   const teams = [...detail.teams].sort((a, b) => Number(b.players.some((p) => p.puuid === me)) - Number(a.players.some((p) => p.puuid === me)));
+  const mine = all.find((p) => p.puuid != null && p.puuid === me);
+  const myRating = mine ? notes.get(mine) : undefined;
   return (
     <div className="game-detail">
+      {myRating && myRating.parts.length > 0 && <RatingBreakdown rating={myRating} />}
       {teams.map((team) => {
         const k = team.players.reduce((a, p) => a + p.kills, 0), d = team.players.reduce((a, p) => a + p.deaths, 0);
         const a = team.players.reduce((x, p) => x + p.assists, 0), gold = team.players.reduce((x, p) => x + p.gold, 0);
@@ -775,7 +779,7 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
           </div>
         );
       })}
-      <p className="muted small">{t("Note sur 20 calculée par rapport aux 9 autres joueurs (participation, dégâts, or, CS, vision et morts). MVP : meilleure note de l’équipe gagnante · ACE : meilleure note de l’équipe perdante. Clique sur un joueur pour ouvrir son profil.")}
+      <p className="muted small">{t("Note sur 20 calculée par rapport aux 9 autres joueurs, avec un barème propre à chaque rôle. MVP : meilleure note de l’équipe gagnante · ACE : meilleure note de l’équipe perdante. Clique sur un joueur pour ouvrir son profil.")}
       </p>
     </div>
   );
@@ -1215,5 +1219,69 @@ function RecapRow({ stats, recap: r, game, onOpen }: { stats: Stats; recap: Reca
         <span className="stat-col__label">{game?.lp == null ? `${Math.round((game?.duration ?? 0) / 60) || "—"} min` : result}</span>
       </span>
     </button>
+  );
+}
+
+// --- Explication de la note (0.4.0) ---
+const signed = (x: number) => `${x > 0.04 ? "+" : x < -0.04 ? "−" : ""}${dec1(Math.abs(x))}`;
+function partLabel(c: Contribution): string {
+  const labels: Record<Criterion, string> = {
+    kp: t("Participation"), dmg: t("Dégâts"), gold: t("Or"), cs: t("Farm"), deaths: t("Morts"), vision: t("Vision"),
+    result: c.points >= 0 ? t("Victoire") : t("Défaite"),
+  };
+  return labels[c.key];
+}
+/** Groupe nominal pour la phrase d'explication ; `good` = le critère a fait monter la note. */
+function partPhrase(c: Contribution, good: boolean): { text: string; plural: boolean } {
+  switch (c.key) {
+    case "kp": return { text: t("ta participation aux kills"), plural: false };
+    case "dmg": return { text: t("tes dégâts"), plural: true };
+    case "gold": return { text: t("ton or"), plural: false };
+    case "cs": return { text: t("ton farm"), plural: false };
+    case "vision": return { text: t("ta vision"), plural: false };
+    case "deaths": return good ? { text: t("le peu de morts"), plural: false } : { text: t("tes morts"), plural: true };
+    default: return { text: "", plural: false };
+  }
+}
+const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+
+function NoteTip({ rating }: { rating: Rating }) {
+  const { up, down } = summaryParts(rating);
+  const ups = up.map((c) => ({ ...partPhrase(c, true), pts: signed(c.points) }));
+  let line1: string | null = null;
+  if (ups.length === 2) line1 = t("{a} ({pa}) et {b} ({pb}) t’ont fait monter.", { a: cap(ups[0].text), pa: ups[0].pts, b: ups[1].text, pb: ups[1].pts });
+  else if (ups.length === 1) line1 = ups[0].plural ? t("{a} ({pa}) t’ont fait monter.", { a: cap(ups[0].text), pa: ups[0].pts }) : t("{a} ({pa}) t’a fait monter.", { a: cap(ups[0].text), pa: ups[0].pts });
+  let line2: string | null = null;
+  if (down) { const d = partPhrase(down, false); line2 = d.plural ? t("{a} ({pa}) t’ont coûté le plus.", { a: cap(d.text), pa: signed(down.points) }) : t("{a} ({pa}) t’a coûté le plus.", { a: cap(d.text), pa: signed(down.points) }); }
+  if (!line1 && !line2) return null;
+  return (
+    <span className="note-tip" role="tooltip">
+      {line1 && <span>{line1}</span>}
+      {line2 && <span>{line2}</span>}
+      <span className="note-tip__more">{t("Clique sur la partie pour le détail")}</span>
+    </span>
+  );
+}
+
+const BAR_MAX = 2.2;   // points pour une demi-barre pleine
+function RatingBreakdown({ rating }: { rating: Rating }) {
+  return (
+    <div className="rating-why" aria-label={t("Détail de ta note")}>
+      {sortedParts(rating).map((c) => {
+        const w = `${Math.min(100, (Math.abs(c.points) / BAR_MAX) * 100)}%`;
+        const tone = c.points > 0.04 ? "good" : c.points < -0.04 ? "bad" : "neutral";
+        return (
+          <div key={c.key} className="rating-why__row">
+            <span className="rating-why__label">{partLabel(c)}</span>
+            <span className="rating-why__bar" aria-hidden>
+              <span className="rating-why__half rating-why__half--neg">{c.points < -0.04 && <span className="rating-why__fill tone-bg-bad" style={{ width: w }} />}</span>
+              <span className="rating-why__zero" />
+              <span className="rating-why__half">{c.points > 0.04 && <span className="rating-why__fill tone-bg-good" style={{ width: w }} />}</span>
+            </span>
+            <span className={`rating-why__pts tone-${tone}`}>{signed(c.points)}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
