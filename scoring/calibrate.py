@@ -16,12 +16,15 @@ from pathlib import Path
 from collector.db import connect_with_retry
 
 from .build import HOLDOUT_SQL, build_stats
-from .score import ROLES, Params, Stats, score_champion
+from dataclasses import replace
+
+from .score import ROLES, Params, Stats, score_champion, team_strength
 
 log = logging.getLogger(__name__)
 
 MIN_TEST_MATCHES = 2000            # en dessous, le résultat est trop bruité pour régler quoi que ce soit
 WEIGHTS = (0.0, 0.25, 0.5, 0.75, 1.0)
+TEAM_SCALES = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5)
 SMOOTHINGS = (25, 50, 100, 200)
 
 
@@ -70,7 +73,8 @@ def calibrate(db_path: Path, train_stats_path: Path) -> tuple[list[Evaluation], 
     meta = build_stats(db_path, train_stats_path, holdout=True)
     stats = Stats.load(train_stats_path)
     test = load_holdout(db_path, meta["patch"], meta["previous_patch"] or None)
-    info = {"test_matches": len(test), "train_matches": int(meta["matches"]), "patch": meta["patch"]}
+    info = {"test_matches": len(test), "train_matches": int(meta["matches"]), "patch": meta["patch"],
+            "stats": stats, "test": test}
     if not test:
         return [], info
 
@@ -95,3 +99,19 @@ def calibrate(db_path: Path, train_stats_path: Path) -> tuple[list[Evaluation], 
                 results.append(evaluate(preds, outcomes, f"Score complet (α={a}, β={b}, k={k})",
                                         Params(alpha=a, beta=b, k_base=k, k_delta=k)))
     return results, info
+
+
+def calibrate_team(stats: Stats, test: list[list[tuple]], params: Params) -> tuple[Evaluation, Evaluation]:
+    """Probabilité de victoire d'équipe (barre du haut de la draft) : une prédiction par partie, équipe bleue.
+    Renvoie (50 %, meilleure échelle) ; l'échelle retenue est dans `params` du second résultat."""
+    diffs, outcomes = [], []
+    for match in test:
+        blue = [(c, r) for t, c, r, _ in match if t == 100]
+        red = [(c, r) for t, c, r, _ in match if t != 100]
+        diffs.append(team_strength(stats, blue, [c for c, _ in red], params)
+                     - team_strength(stats, red, [c for c, _ in blue], params))
+        outcomes.append(next(w for t, _, _, w in match if t == 100))
+    neutral = evaluate([0.5] * len(outcomes), outcomes, "Équipe : sans information (50 %)")
+    best = min((evaluate([1 / (1 + math.exp(-s * d)) for d in diffs], outcomes, f"Équipe : échelle {s}",
+                         replace(params, team=s)) for s in TEAM_SCALES), key=lambda e: e.log_loss)
+    return neutral, best

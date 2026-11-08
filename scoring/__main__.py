@@ -45,7 +45,8 @@ def print_result(i: str, r, champions: Champions) -> None:
 
 
 def run_calibration(db_path: Path, data_dir: Path, force: bool) -> None:
-    from .calibrate import MIN_TEST_MATCHES, calibrate
+    from dataclasses import replace
+    from .calibrate import MIN_TEST_MATCHES, calibrate, calibrate_team
     results, info = calibrate(db_path, data_dir / "stats_train.duckdb")
     n = info["test_matches"]
     print(f"\nCalibrage · patch {info['patch']} · {info['train_matches']} parties pour apprendre, "
@@ -70,9 +71,18 @@ def run_calibration(db_path: Path, data_dir: Path, force: bool) -> None:
               "Réglages non enregistrés : relance plus tard, ou ajoute --force.")
         return
     chosen = full_best if gain > 0 else base_best
-    chosen.params.save(data_dir / "params.json", {"test_matches": n, "patch": info["patch"]})
-    p = chosen.params
-    print(f"\nRéglages enregistrés dans data/params.json : α={p.alpha}, β={p.beta}, k={int(p.k_base)}.")
+    # probabilité de victoire d'équipe : gardée seulement si elle prédit mieux que 50 %
+    team_neutral, team_best = calibrate_team(info["stats"], info["test"], chosen.params)
+    team_gain = (team_neutral.log_loss - team_best.log_loss) / team_neutral.log_loss * 100
+    print(f"\n{'Victoire d’équipe':<42} {'log loss':>9} {'Brier':>7} {'précision':>10}")
+    for r in (team_neutral, team_best):
+        print(f"{r.label:<42} {r.log_loss:>9.4f} {r.brier:>7.4f} {pct(r.accuracy):>10}")
+    params = team_best.params if team_gain > 0 else replace(chosen.params, team=0.0)
+    print(f"La probabilité d'équipe améliore la prédiction de {team_gain:.2f} % par rapport à 50 %.".replace(".", ",", 1)
+          if team_gain > 0 else "La probabilité d'équipe ne fait pas mieux que 50 % : la barre restera à 50 / 50.")
+    params.save(data_dir / "params.json", {"test_matches": n, "patch": info["patch"]})
+    p = params
+    print(f"\nRéglages enregistrés dans data/params.json : α={p.alpha}, β={p.beta}, k={int(p.k_base)}, équipe={p.team}.")
     print("Ils seront utilisés automatiquement par `recommend`.")
 
 

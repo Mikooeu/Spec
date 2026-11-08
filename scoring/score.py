@@ -7,6 +7,7 @@ Pour un Δ, la référence est WR(c,R) : un matchup joué 5 fois pèse presque z
 """
 
 import json
+import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -79,6 +80,7 @@ class Params:
     beta: float = BETA
     k_base: float = K_BASE
     k_delta: float = K_DELTA
+    team: float = 0.0    # échelle de la probabilité de victoire d'équipe ; 0 tant que le calibrage ne l'a pas validée
 
     @classmethod
     def load(cls, path: Path) -> "Params":
@@ -152,3 +154,27 @@ def recommend(stats: Stats, role: str, pool: list[int], allies: list[int], enemi
     discovery = max((score_champion(stats, c, role, allies, enemies, params) for c in candidates),
                     key=lambda r: r.score, default=None)
     return pool_results[:top], discovery
+
+
+def _logit(p: float) -> float:
+    p = min(max(p, 0.02), 0.98)
+    return math.log(p / (1 - p))
+
+
+def team_strength(stats: Stats, team: list[tuple[int, str]], enemies: list[int], params: Params | None = None) -> float:
+    """Somme des logits du score de chaque champion choisi, avec ses alliés et les ennemis connus."""
+    champs = [c for c, _ in team]
+    return sum(_logit(score_champion(stats, c, r, [a for a in champs if a != c], enemies, params).score)
+               for c, r in team)
+
+
+def team_win_probability(stats: Stats, ally: list[tuple[int, str]], enemy: list[tuple[int, str]],
+                         params: Params | None = None) -> float:
+    """Probabilité que `ally` gagne : écart des forces des deux équipes, ramené à une probabilité
+    par l'échelle calibrée (`params.team`). Sans calibrage, 50 %."""
+    p = params or Params()
+    if not p.team:
+        return 0.5
+    diff = (team_strength(stats, ally, [c for c, _ in enemy], p)
+            - team_strength(stats, enemy, [c for c, _ in ally], p))
+    return 1 / (1 + math.exp(-p.team * diff))

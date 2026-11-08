@@ -319,3 +319,47 @@ def test_spells_change_against_a_matchup_only_when_clearly_better():
     [[_, _, e]] = compute_builds(iter(rows), Items(None))
     assert e["spells"][0][:2] == [4, 7]
     assert [v[:3] for v in e["spellsVs"]] == [[22, 1, 4]]
+
+
+def test_team_probability_is_symmetric_and_neutral_without_calibration(tmp_path):
+    from scoring.score import Params, team_win_probability
+    db = tmp_path / "draft.duckdb"
+    synthetic_db(db)
+    build_stats(db, tmp_path / "stats.duckdb")
+    stats = Stats.load(tmp_path / "stats.duckdb")
+    blue = [(7, "TOP"), (4, "JUNGLE"), (1, "MIDDLE"), (9, "BOTTOM"), (6, "UTILITY")]
+    red = [(12, "TOP"), (8, "JUNGLE"), (2, "MIDDLE"), (5, "BOTTOM"), (10, "UTILITY")]
+    assert team_win_probability(stats, blue, red) == 0.5          # échelle 0 : pas encore validée
+    p = Params(team=0.5)
+    ahri_side = team_win_probability(stats, blue, red, p)
+    assert ahri_side > 0.55                                          # Ahri bat Syndra dans les données
+    assert abs(ahri_side + team_win_probability(stats, red, blue, p) - 1) < 1e-9
+
+
+def test_team_calibration_beats_coin_flip_when_a_matchup_matters(tmp_path):
+    from scoring.calibrate import calibrate, calibrate_team
+    from scoring.score import Params
+    db = tmp_path / "draft.duckdb"
+    synthetic_db(db, n_matches=4000)
+    _, info = calibrate(db, tmp_path / "stats_train.duckdb")
+    neutral, best = calibrate_team(info["stats"], info["test"], Params())
+    assert best.log_loss < neutral.log_loss and best.params.team > 0
+
+
+def test_export_includes_damage_profile(tmp_path, champions):
+    from scoring.export import export_json
+    from scoring.score import Params
+    db = tmp_path / "draft.duckdb"
+    store = synthetic_db(db, n_matches=200)
+    with store._connect() as con:
+        con.execute("""INSERT INTO damage SELECT match_id, team_id, champion_id,
+                       CASE WHEN champion_id = 1 THEN 1000 ELSE 8000 END, CASE WHEN champion_id = 1 THEN 8000 ELSE 1000 END, 1000
+                       FROM participants""")
+    build_stats(db, tmp_path / "stats.duckdb")
+    out = tmp_path / "stats.json"
+    export_json(tmp_path / "stats.duckdb", champions, Params(team=0.4), out)
+    import json as _json
+    data = _json.loads(out.read_text())
+    ahri = next(r for r in data["damage"] if r[0] == 1 and r[1] == 2)
+    assert ahri[2:5] == [0.1, 0.8, 0.1] and ahri[5] > 0
+    assert data["params"]["team"] == 0.4

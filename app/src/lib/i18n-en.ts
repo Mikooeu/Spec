@@ -632,4 +632,12 @@ export const EN: Record<string, string> = {
   "Pentas": "Pentas",
   "{w} V – {l} D": "{w} W – {l} L",
   "Sur tes {n} dernières parties : le serveur Spec ne répond pas pour l’instant.": "Over your last {n} games: the Spec server isn’t responding right now.",
+  "Bans adverses": "Enemy bans",
+  "Bans de ton équipe": "Your team’s bans",
+  "Brut": "True",
+  "Choisit…": "Picking…",
+  "Draft": "Draft",
+  "Le calcul s’affiche dès que le serveur l’a validé sur les parties Master+.": "The estimate appears once the server has validated it on Master+ games.",
+  "Victoire estimée": "Estimated win chance",
+  "{role} {p}": "{role} {p}",
 };

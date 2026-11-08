@@ -44,6 +44,9 @@ def parse_match(data: dict, platform: str) -> tuple[dict, list[tuple]] | None:
     match["bans"] = sorted({int(b["championId"]) for t in info.get("teams", [])
                             for b in t.get("bans", []) if int(b.get("championId", -1)) > 0})
     match["builds"] = [build_row(match_id, p) for p in players]
+    match["damage"] = [(match_id, int(p["teamId"]), int(p["championId"]),
+                        int(p.get("physicalDamageDealtToChampions") or 0), int(p.get("magicDamageDealtToChampions") or 0),
+                        int(p.get("trueDamageDealtToChampions") or 0)) for p in players]
     return match, rows
 
 

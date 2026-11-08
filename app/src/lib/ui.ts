@@ -22,6 +22,18 @@ export const iconUrl = (stats: Stats, champ: number) => {
   return c ? `https://ddragon.leagueoflegends.com/cdn/${stats.ddragon}/img/champion/${c.key}.png` : "";
 };
 
+/** Vignette carrée du splash art (380 × 380), recadrée par Riot sur le visage : base des mini-cartes. */
+export const tileUrl = (stats: Stats, champ: number) => {
+  const c = stats.champions.get(champ);
+  return c ? `https://ddragon.leagueoflegends.com/cdn/img/champion/tiles/${c.key}_0.jpg` : "";
+};
+
+/** Portrait de chargement (308 × 560), le même pour toutes les versions du jeu (secours si la vignette manque). */
+export const loadingUrl = (stats: Stats, champ: number) => {
+  const c = stats.champions.get(champ);
+  return c ? `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${c.key}_0.jpg` : "";
+};
+
 export const champName = (stats: Stats, champ: number | null) =>
   champ == null ? "" : stats.champions.get(champ)?.name ?? `#${champ}`;
 

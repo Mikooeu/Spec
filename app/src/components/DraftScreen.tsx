@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  LOW_DATA_GAMES, ROLE_LABELS, ROLE_SHORT, banSuggestions, enemyDisplay, explain, recommend, roleDistribution,
+  LOW_DATA_GAMES, ROLE_LABELS, banSuggestions, explain, recommend,
   scoreChampion, topForRole, type Result, type Stats,
 } from "../lib/score";
 import { RunePage } from "./Runes";
-import { champName, int, patchLabel, pct, pctN, pts, wrTone } from "../lib/ui";
+import { champName, int, patchLabel, pct, pts, wrTone } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import type { PersonalState } from "../lib/api";
 import { ChampionPicker } from "./ChampionPicker";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
-import { GAP_LABEL, analyzeTeam, bumpForComposition, fills, type Gap, type TeamComp } from "../lib/composition";
+import { DraftBand } from "./DraftBand";
+import { GAP_LABEL, analyzeTeam, bumpForComposition, fills, type Gap } from "../lib/composition";
 import { t, plural } from "../lib/i18n";
 
 export interface Draft {
@@ -18,6 +19,10 @@ export interface Draft {
   allies: (number | null)[];       // 5 emplacements, par rôle ; celui du joueur reste vide
   enemies: (number | null)[];      // 5 emplacements, dans l'ordre des picks
   bans: number[];
+  allyBans?: number[];             // en direct : bans de chaque équipe (sinon tous dans `bans`)
+  enemyBans?: number[];
+  allyPicking?: number | null;     // en direct : allié (index de rôle) en train de choisir
+  enemyPicking?: number | null;    // en direct : adversaire (ordre des picks) en train de choisir
   allyLocked?: boolean[];          // en direct : true = lock, false = survol
   myChamp?: number | null;         // ton champion, survolé ou verrouillé
   myLocked?: boolean;
@@ -48,16 +53,12 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
   const [notice, setNotice] = useState<string | null>(null);
 
   const { allies, enemies, autofill, rows, team } = useRecos(stats, draft, pool);
-  const myComp = useMemo(() => analyzeTeam(stats, draft.myChamp != null ? [...allies, draft.myChamp] : allies), [stats, allies, draft.myChamp]);
-  const enemyComp = useMemo(() => analyzeTeam(stats, enemies), [stats, enemies]);
 
   const selected = rows.find((r) => r.res.champ === openChamp)?.res ?? null;
   // ton champion présélectionné : sa ligne s'ouvre, avec l'explication (pas de carte en double au-dessus)
   const myInList = draft.myChamp != null && rows.some((r) => r.res.champ === draft.myChamp);
   useEffect(() => { if (draft.myChamp != null) setOpenChamp(draft.myChamp); }, [draft.myChamp]);
   const taken = new Set([...allies, ...enemies, ...draft.bans]);
-  // adversaires rangés par rôle le plus probable (Top en haut, Support en bas), un seul par rôle
-  const enemyRows = useMemo(() => enemyDisplay(stats, draft.enemies), [stats, draft.enemies]);
 
   const setSlot = (slot: NonNullable<Slot>, champ: number | null) => {
     const next = { ...draft, allies: [...draft.allies], enemies: [...draft.enemies] };
@@ -93,37 +94,9 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
         </div>
       </header>
 
-      <div className={wide ? "columns" : "stack"}>
-        <section className={wide ? "teams teams--column" : "teams"} aria-label={t("Équipes")}>
-          <TeamCard title={t("Ton équipe")} comp={<CompSummary comp={myComp} mine />}>
-            {draft.allies.map((c, i) => {
-              const me = i === draft.role;
-              const mine = me ? draft.myChamp ?? null : null;
-              return (
-                <SlotRow key={i} stats={stats} label={ROLE_SHORT[i]} champ={me ? mine : c}
-                         name={me ? (mine != null ? champName(stats, mine) : t("À toi de choisir")) : c == null ? t("En attente") : champName(stats, c)}
-                         detail={me ? (mine == null ? t("Ton tour") : draft.myLocked ? t("Lock · toi") : t("Présélectionne · toi"))
-                                 : c == null ? (live ? t("Pas encore choisi") : t("Clique pour ajouter un pick"))
-                                 : draft.allyLocked && !draft.allyLocked[i] ? t("Présélectionne") : t("Lock")}
-                         tone={me ? "me" : c == null ? "empty" : "default"}
-                         onClick={me || live ? undefined : () => setPicking({ side: "ally", index: i })} />
-              );
-            })}
-          </TeamCard>
-          <TeamCard title={t("Équipe adverse")} comp={<CompSummary comp={enemyComp} mine={false} />}>
-            {enemyRows.map(({ index: i, role }) => {
-              const c = draft.enemies[i];
-              return (
-                <SlotRow key={i} stats={stats} label={role != null ? ROLE_SHORT[role] : "—"} champ={c}
-                         name={c == null ? t("En attente") : champName(stats, c)}
-                         detail={c == null ? (live ? t("Pas encore choisi") : t("Clique pour ajouter un pick")) : rolesText(stats, c)}
-                         tone={c == null ? "empty" : "default"}
-                         onClick={live ? undefined : () => setPicking({ side: "enemy", index: i })} />
-              );
-            })}
-          </TeamCard>
-        </section>
+      <DraftBand stats={stats} draft={draft} live={live} onPick={live ? undefined : setPicking} />
 
+      <div className="stack">
         <section className="recos" aria-label={t("Recommandations")}>
           {draft.banPhase && (
             <>
@@ -178,43 +151,6 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
       )}
       {notice && <div className="toast" role="status">{notice}</div>}
     </div>
-  );
-}
-
-const ROLE_WORDS = ["top", "jungle", "mid", "ADC", "support"];
-
-/** « Probabilité d'être mid : 46 % · top : 38 % » (deuxième rôle affiché s'il dépasse 15 %). */
-function rolesText(stats: Stats, champ: number): string {
-  const [first, second] = roleDistribution(stats, champ);
-  if (!first) return t("Rôle inconnu");
-  const head = t("Probabilité d’être {v} : {round} %", { v: ROLE_WORDS[first.role], round: Math.round(first.p * 100) });
-  return second && second.p >= 0.15 ? `${head} · ${ROLE_WORDS[second.role]} ${pctN(Math.round(second.p * 100))}` : head;
-}
-
-function TeamCard({ title, children, comp }: { title: string; children: React.ReactNode; comp?: React.ReactNode }) {
-  return (
-    <div className="card team">
-      <div className="team__head"><h3 className="card__title">{title}</h3>{comp}</div>
-      {children}
-    </div>
-  );
-}
-
-interface SlotRowProps {
-  stats: Stats; label: string; champ: number | null; name: string; detail: string;
-  tone: "default" | "me" | "empty"; onClick?: () => void;
-}
-
-function SlotRow({ stats, label, champ, name, detail, tone, onClick }: SlotRowProps) {
-  return (
-    <button className={`slot slot--${tone}`} onClick={onClick} disabled={!onClick}>
-      <span className="slot__role">{label}</span>
-      <ChampionIcon stats={stats} champ={champ} size={1.75} tone={tone === "me" ? "accent" : "default"} />
-      <span className="slot__text">
-        <span className="slot__name">{name}</span>
-        <span className="slot__detail">{detail}</span>
-      </span>
-    </button>
   );
 }
 
@@ -481,31 +417,5 @@ export function BanPanel({ stats, draft, compact = false, titled = true, onSelec
         ))}
       </div>
     </div>
-  );
-}
-
-/** Composition d'une équipe en une ligne : barre AD/AP et manques ; le détail s'affiche au survol. */
-function CompSummary({ comp, mine }: { comp: TeamComp; mine: boolean }) {
-  if (comp.known < 2) return null;
-  const ad = Math.round(comp.ad * 100), ap = 100 - ad;
-  const dmgIssue = comp.issues.find((i) => i.gap === "ap" || i.gap === "ad");
-  const others = comp.issues.filter((i) => i !== dmgIssue && (mine || i.level === "bad"));
-  const dmgText = dmgIssue ? dmgIssue.short : ad >= 60 ? `${pctN(ad)} AD` : ap >= 60 ? `${pctN(ap)} AP` : t("AD / AP équilibré");
-  return (
-    <span className="comp" tabIndex={0} aria-label={t("Composition : {dmgText}{v}", { dmgText: dmgText, v: others.length ? t(", manque : {list}", { list: others.map((i) => i.short).join(", ") }) : "" })}>
-      <span className="comp__bar" aria-hidden><span className="comp__ad" style={{ width: `${ad}%` }} /><span className="comp__ap" /></span>
-      <span className={`comp__dmg${dmgIssue ? " tone-bad" : ""}`}>{dmgText}</span>
-      {mine && others.slice(0, 2).map((i) => (
-        <span key={i.gap} className={`comp__chip comp__chip--${i.level}`}>✕ {i.short}</span>
-      ))}
-      <span className="comp__pop" role="tooltip">
-        <strong>{mine ? t("Composition de ton équipe") : t("Composition adverse")}</strong>
-        {comp.issues.length === 0 && <span className="comp__line"><b className="tone-good">✓</b>{t("Rien ne manque pour l’instant.")}</span>}
-        {comp.issues.map((i) => (
-          <span key={i.gap} className="comp__line"><b className={i.level === "bad" ? "tone-bad" : "tone-warn"}>{i.level === "bad" ? "✕" : "~"}</b>{i.text}</span>
-        ))}
-        {mine && comp.issues.length > 0 && <small>{t("Les picks qui comblent ces manques sont marqués « Comble : … ».")}</small>}
-      </span>
-    </span>
   );
 }

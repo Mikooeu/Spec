@@ -94,10 +94,13 @@ h3 { font-size: 0.9375rem; font-weight: 600; }
 .tone-warn { color: var(--warn); }
 
 /* icônes de champion */
-.icon { flex: none; border-radius: 50%; object-fit: cover; background: var(--bg-surface-2); display: inline-block; }
+.icon { flex: none; border-radius: 0.375rem; object-fit: cover; background: var(--bg-surface-2); display: inline-block; }
 .icon--image { overflow: hidden; position: relative; }
-/* les icônes Data Dragon ont un liseré : on zoome légèrement pour qu'il reste hors du cercle */
-.icon--image img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.18); display: block; }
+.icon--image img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; }
+.icon--loading img { object-position: 50% 12%; transform: scale(1.4); transform-origin: 50% 18%; }
+.icon--image::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+                      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.icon--icon img { object-position: center; transform: scale(1.12); transform-origin: center; }
 .icon--empty { background: transparent; border: 1px dashed var(--separator); }
 .icon--accent { background: var(--accent-tint); }
 
@@ -904,7 +907,6 @@ button.game--loss:hover, .recap--loss:hover:not(:disabled) { border-color: color
 .grunes__p { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 0.5rem 0.25rem 0.625rem; border-radius: 0.625rem; }
 .grunes__p.is-me { background: var(--highlight, rgba(255, 255, 255, 0.08)); }
 .grunes__champ { position: relative; display: flex; flex-direction: column; align-items: center; margin-bottom: 0.875rem; }
-.grunes__champ .icon { border-radius: 0.625rem; }
 .grunes__champ .rune--key { position: absolute; bottom: -1.125rem; border: 2px solid var(--bg-surface); }
 .grunes__row { display: flex; gap: 0.375rem; justify-content: center; }
 .grunes__row .rune--minor { width: 1.875rem; height: 1.875rem; }
@@ -954,3 +956,65 @@ button.game--loss:hover, .recap--loss:hover:not(:disabled) { border-color: color
 .slane__cell { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.75rem 0.875rem; border-radius: 0.625rem; background: var(--bg-surface-2); }
 .slane__cell span { font-size: 0.75rem; color: var(--text-2); }
 .slane__cell strong { font-size: 1.375rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* draft : bandeau du haut (bans, probabilité de victoire, 10 cartes, dégâts) */
+.dband { display: flex; flex-direction: column; gap: 1.125rem; padding: 1.125rem 1.25rem; }
+.dband__top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1.5rem; }
+.dbans { display: flex; gap: 0.25rem; }
+.dbans__slot { position: relative; width: 1.875rem; height: 1.875rem; border-radius: 0.375rem; background: var(--bg-surface-2); overflow: hidden; }
+.dbans__slot img { width: 100%; height: 100%; display: block; filter: grayscale(1) brightness(0.65); transform: scale(1.1); }
+.dbans__slot.is-banned::after { content: ""; position: absolute; left: 50%; top: -15%; width: 2px; height: 130%;
+                                 background: var(--bad); transform: rotate(45deg); border-radius: 1px; }
+.dwin { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.dwin__nums { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.dwin__nums strong { font-size: 1.375rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dwin__nums > span { font-size: 0.75rem; font-weight: 600; color: var(--text-2); text-align: center; }
+.dwin__ally { color: var(--accent); }
+.dwin__enemy { color: var(--bad); }
+.dwin__bar { display: flex; gap: 3px; height: 0.375rem; }
+.dwin__bar > span { display: block; border-radius: 999px; transition: flex-grow 0.4s ease; }
+.dwin__a { background: var(--accent); }
+.dwin__b { background: var(--bad); }
+.dband__teams { display: grid; grid-template-columns: 1fr 2.5rem 1fr; align-items: start; }
+.dband__team { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
+.dband__vs { align-self: center; justify-self: center; margin-top: -1.25rem; font-size: 0.8125rem; font-weight: 700; color: var(--text-3); }
+.dslot { display: flex; flex-direction: column; align-items: center; gap: 0.4375rem; min-width: 0; }
+.dcard { position: relative; width: 100%; aspect-ratio: 0.58; border-radius: 0.5rem; overflow: hidden; padding: 0; border: 0;
+         background: var(--bg-surface-2); display: flex; align-items: center; justify-content: center; font: inherit; color: inherit; }
+button.dcard { cursor: pointer; }
+button.dcard:hover { box-shadow: inset 0 0 0 1px var(--separator); }
+.dcard__art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+.dcard__art--loading { object-position: 50% 15%; }
+.dcard::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+                background: linear-gradient(transparent 55%, rgba(0, 0, 0, 0.85)); }
+.dcard--empty::after { background: none; }
+.dcard.is-hover .dcard__art { filter: saturate(0.6) brightness(0.75); }
+.dcard.is-me { box-shadow: inset 0 0 0 2px var(--accent); }
+.dcard.is-me::before { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--accent); z-index: 2; pointer-events: none; }
+.dcard.is-picking { outline: 1.5px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: -1.5px; }
+.dcard__ghost { position: relative; width: 1.75rem; height: 1.75rem; opacity: 0.18; }
+.dcard__name { position: absolute; left: 0.5rem; right: 0.375rem; bottom: 0.4375rem; z-index: 1; text-align: left;
+               font-size: 0.75rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dcard__badge { position: absolute; top: 0.375rem; left: 0.375rem; z-index: 1; padding: 0.0625rem 0.375rem; border-radius: 0.25rem;
+                background: var(--accent); font-size: 0.625rem; font-weight: 700; }
+.dcard__state { position: absolute; bottom: 0.5rem; left: 0; right: 0; text-align: center; font-size: 0.625rem; font-weight: 600; color: var(--accent); }
+.dslot__role { display: flex; flex-direction: column; align-items: center; gap: 0.125rem; min-height: 1.75rem; }
+.dslot__icon { width: 0.875rem; height: 0.875rem; opacity: 0.55; }
+.dslot__icon.is-me { opacity: 1; filter: brightness(0) saturate(100%) invert(42%) sepia(97%) saturate(2600%) hue-rotate(200deg); }
+.dslot__role small { font-size: 0.625rem; color: var(--text-3); white-space: nowrap; }
+.dband__dmg { display: grid; grid-template-columns: 1fr 2.5rem 1fr; }
+.ddmg { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
+.ddmg__head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; font-size: 0.75rem; font-weight: 600; color: var(--text-2); }
+.ddmg__legend { display: flex; gap: 0.75rem; font-weight: 500; color: var(--text); white-space: nowrap; }
+.ddmg__legend > span { display: inline-flex; align-items: center; gap: 0.3125rem; }
+.ddmg__dot { width: 0.4375rem; height: 0.4375rem; border-radius: 50%; display: inline-block; }
+.ddmg__dot--ad, .ddmg__ad { background: #ff9f0a; }
+.ddmg__dot--ap, .ddmg__ap { background: #bf5af2; }
+.ddmg__dot--tru, .ddmg__tru { background: #e5e5ea; }
+.ddmg__bar { display: flex; gap: 2px; height: 0.375rem; border-radius: 999px; overflow: hidden; }
+.ddmg__bar > span { display: block; }
+.ddmg__gaps { display: flex; gap: 0.375rem; flex-wrap: wrap; }
+@media (max-width: 60rem) {
+  .dband__top { grid-template-columns: 1fr; }
+  .dbans--end { justify-content: flex-end; }
+}

@@ -76,6 +76,15 @@ CREATE TABLE IF NOT EXISTS builds (
     skills VARCHAR,                  -- ordre des sorts « QEWQQR… » (déroulé uniquement)
     purchases VARCHAR                -- achats « 1056@14,2003@14,… » en secondes (déroulé uniquement)
 );
+-- depuis la 0.6 : dégâts infligés aux champions, par type (profil AD / AP / brut de chaque champion)
+CREATE TABLE IF NOT EXISTS damage (
+    match_id VARCHAR,
+    team_id INTEGER,
+    champion_id INTEGER,
+    physical INTEGER,
+    magic INTEGER,
+    true_dmg INTEGER
+);
 """
 
 LOCK_RETRY_SECONDS = 60
@@ -218,6 +227,9 @@ class Store:
                     if match.get("builds"):
                         con.executemany("INSERT INTO builds VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                         match["builds"])
+                if match.get("damage"):
+                    con.execute("DELETE FROM damage WHERE match_id = ?", [match["match_id"]])
+                    con.executemany("INSERT INTO damage VALUES (?, ?, ?, ?, ?, ?)", match["damage"])
                 con.execute("DELETE FROM match_queue WHERE match_id = ?", [match["match_id"]])
                 con.execute("COMMIT")
             except Exception:

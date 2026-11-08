@@ -29,7 +29,7 @@ def export_json(stats_path: Path, champions: Champions, params: Params, out_path
         payload = {
             "meta": dict(con.execute("SELECT key, value FROM meta").fetchall()),
             "params": {"alpha": params.alpha, "beta": params.beta,
-                       "k_base": params.k_base, "k_delta": params.k_delta},
+                       "k_base": params.k_base, "k_delta": params.k_delta, "team": params.team},
             "ddragon": champions.version,
             "roles": list(ROLES),
             "champions": [[cid, key, name] for cid, (key, name) in sorted(champions.keys.items())],
@@ -49,6 +49,14 @@ def export_json(stats_path: Path, champions: Champions, params: Params, out_path
             "SELECT count(*) FROM duckdb_tables() WHERE table_name = 'champ'").fetchone()[0] > 0
         champ_pages = json.loads(con.execute("SELECT value FROM champ").fetchone()[0]) if has_champ else []
         payload["champ"] = [[c, role_index[r], e] for c, r, e in champ_pages]
+        has_damage = con.execute(
+            "SELECT count(*) FROM duckdb_tables() WHERE table_name = 'damage'").fetchone()[0] > 0
+        r3 = lambda x: round(float(x), 3)
+        # [champion, rôle, part AD, part AP, part brute, parties]
+        payload["damage"] = ([[c, role_index[r], r3(ad), r3(ap), r3(tru), r1(g)]
+                              for c, r, g, ad, ap, tru in con.execute(
+                                  "SELECT champ, role, games, ad, ap, tru FROM damage ORDER BY champ, role").fetchall()]
+                             if has_damage else [])
         payload["bans"] = ([[c, r1(g)] for c, g in con.execute("SELECT champ, games FROM bans ORDER BY champ").fetchall()]
                            if has_bans else [])
     finally:

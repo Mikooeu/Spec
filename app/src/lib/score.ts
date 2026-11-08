@@ -26,6 +26,8 @@ export interface Params {
   beta: number;
   k_base: number;
   k_delta: number;
+  /** Échelle de la probabilité de victoire d'équipe (calibrée sur le serveur) ; 0 ou absent : pas encore validée. */
+  team?: number;
 }
 
 export interface Champion {
@@ -50,6 +52,8 @@ export interface Stats {
   banMatches: number;               // parties détaillées (dénominateur du banrate), 0 si pas encore collecté
   matchesWeighted: number;          // parties pondérées (dénominateur du pickrate)
   champPages: Map<string, ChampPage>; // `${champ}|${rôle}` -> sorts, objets, ordre des sorts
+  /** Dégâts infligés aux champions par type, en Master+ : champion -> [part AD, part AP, part brute, parties] (tous rôles). */
+  damage: Map<number, [number, number, number, number]>;
 }
 
 type GW = [games: number, wins: number];
@@ -89,6 +93,7 @@ interface RawStats {
   runeVs?: [number, number, number, number, number, number][];
   bans?: [number, number][];
   champ?: [number, number, ChampPage][];
+  damage?: [number, number, number, number, number, number][];
 }
 
 const k2 = (c: number, r: number) => `${c}|${r}`;
@@ -111,7 +116,14 @@ export function parseStats(raw: RawStats): Stats {
     banMatches: Number(raw.meta.ban_matches ?? 0),
     matchesWeighted: 0,
     champPages: new Map((raw.champ ?? []).map(([c, r, e]) => [k2(c, r), e])),
+    damage: new Map(),
   };
+  // profil de dégâts par champion, tous rôles confondus (pondéré par les parties de chaque rôle)
+  for (const [c, , ad, ap, tru, g] of raw.damage ?? []) {
+    const cur = stats.damage.get(c) ?? [0, 0, 0, 0];
+    const n = cur[3] + g;
+    stats.damage.set(c, n ? [(cur[0] * cur[3] + ad * g) / n, (cur[1] * cur[3] + ap * g) / n, (cur[2] * cur[3] + tru * g) / n, n] : cur);
+  }
   for (const [c, r, pages] of raw.runes ?? []) {
     stats.runes.set(k2(c, r), pages.map(([keystone, games, wins, primaryStyle, primary, subStyle, sub, shards]) =>
       ({ keystone, games, wins, primaryStyle, primary, subStyle, sub, shards })));

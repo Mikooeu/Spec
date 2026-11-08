@@ -227,3 +227,16 @@ def test_save_match_stores_details(tmp_path):
         assert con.execute("SELECT count(*) FROM bans").fetchone()[0] == 2
         assert con.execute("SELECT count(*) FROM builds").fetchone()[0] == 10
         assert con.execute("SELECT count(*) FROM match_ext").fetchone()[0] == 1
+
+
+def test_save_match_stores_damage_by_type():
+    data = make_match()
+    for p in data["info"]["participants"]:
+        p.update(physicalDamageDealtToChampions=9000, magicDamageDealtToChampions=3000, trueDamageDealtToChampions=1000)
+    match, rows = parse_match(data, "euw1")
+    assert match["damage"][0] == ("EUW1_1", 100, 100, 9000, 3000, 1000)
+    store = Store(":memory:")
+    store.save_match(match, rows)
+    store.save_match(match, rows)  # rejouer ne duplique rien
+    with store._connect() as con:
+        assert con.execute("SELECT count(*), sum(true_dmg) FROM damage").fetchone() == (10, 10000)

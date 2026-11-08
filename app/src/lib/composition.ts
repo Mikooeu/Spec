@@ -50,15 +50,20 @@ const TABLE: Record<string, string> = {
   Zaahen: "A111", Zac: "p222", Zed: "A000", Zeri: "A000", Ziggs: "P000", Zilean: "p001", Zoe: "P001", Zyra: "P002",
 };
 
-export interface Traits { ad: number; ap: number; weight: number; front: number; engage: number; cc: number }
+export interface Traits { ad: number; ap: number; tru: number; weight: number; front: number; engage: number; cc: number }
+
+/** Au-delà de ce nombre de parties Master+, les vrais dégâts infligés remplacent la table faite à la main. */
+const DAMAGE_MIN_GAMES = 30;
 
 export function traitsOf(stats: Stats, champ: number): Traits | null {
   const key = stats.champions.get(champ)?.key;
   const code = key ? TABLE[key] : undefined;
   if (!code) return null;
   const d = code[0];
-  const [ad, ap] = d.toUpperCase() === "A" ? [0.9, 0.1] : d.toUpperCase() === "P" ? [0.1, 0.9] : [0.5, 0.5];
-  return { ad, ap, weight: d === d.toUpperCase() ? 1 : 0.4, front: +code[1], engage: +code[2], cc: +code[3] };
+  const measured = stats.damage.get(champ);
+  const [ad, ap, tru] = measured && measured[3] >= DAMAGE_MIN_GAMES ? measured
+    : d.toUpperCase() === "A" ? [0.9, 0.1, 0] : d.toUpperCase() === "P" ? [0.1, 0.9, 0] : [0.5, 0.5, 0];
+  return { ad, ap, tru, weight: d === d.toUpperCase() ? 1 : 0.4, front: +code[1], engage: +code[2], cc: +code[3] };
 }
 
 export type Gap = "ap" | "ad" | "front" | "engage" | "cc";
@@ -66,7 +71,9 @@ export const GAP_LABEL: Record<Gap, string> = { ap: "AP", ad: "AD", front: t("fr
 
 export interface TeamComp {
   known: number;                      // champions présents dans la table
-  ad: number; ap: number;             // part des dégâts (0 à 1), dégâts bruts non distingués
+  ad: number; ap: number;             // part des dégâts (0 à 1)
+  /** Part des dégâts bruts (0 à 1) ; ad + ap + tru = 1. 0 quand Spec n'a pas encore les dégâts Master+. */
+  tru: number;
   front: number; engage: number; cc: number;
   /** Alertes, de la plus grave à la moins grave. */
   issues: { gap: Gap; level: "bad" | "warn"; short: string; text: string }[];
@@ -77,14 +84,16 @@ export function analyzeTeam(stats: Stats, champs: number[]): TeamComp {
   const ts = champs.map((c) => traitsOf(stats, c)).filter((t): t is Traits => t != null);
   const w = ts.reduce((a, t) => a + t.weight, 0);
   const ad = w ? ts.reduce((a, t) => a + t.ad * t.weight, 0) / w : 0.5;
+  const tru = w ? ts.reduce((a, t) => a + t.tru * t.weight, 0) / w : 0;
+  const ap = w ? ts.reduce((a, t) => a + t.ap * t.weight, 0) / w : 0.5;
   const front = ts.reduce((a, t) => a + t.front, 0), engage = ts.reduce((a, t) => a + t.engage, 0), cc = ts.reduce((a, t) => a + t.cc, 0);
   const issues: TeamComp["issues"] = [];
   if (ts.length >= 3) {
     const pctAd = Math.round(ad * 100);
     if (ad >= 0.75) issues.push({ gap: "ap", level: "bad", short: `${pctN(pctAd)} AD`,
       text: t("{pctAd} % de dégâts physiques : l’adversaire n’a qu’à acheter de l’armure. Un pick AP équilibrerait.", { pctAd: pctAd }) });
-    if (ad <= 0.25) issues.push({ gap: "ad", level: "bad", short: `${pctN(100 - pctAd)} AP`,
-      text: t("{v} % de dégâts magiques : l’adversaire n’a qu’à acheter de la résistance magique. Un pick AD équilibrerait.", { v: 100 - pctAd }) });
+    if (ap >= 0.75) issues.push({ gap: "ad", level: "bad", short: `${pctN(Math.round(ap * 100))} AP`,
+      text: t("{v} % de dégâts magiques : l’adversaire n’a qu’à acheter de la résistance magique. Un pick AD équilibrerait.", { v: Math.round(ap * 100) }) });
     if (front < 2) issues.push({ gap: "front", level: front === 0 ? "bad" : "warn", short: t("Frontline"),
       text: front === 0 ? t("Pas de frontline : personne pour encaisser en combat.") : t("Frontline légère : un seul champion peut encaisser un peu.") });
     if (engage < 2) issues.push({ gap: "engage", level: engage === 0 ? "bad" : "warn", short: t("Engage"),
@@ -92,7 +101,7 @@ export function analyzeTeam(stats: Stats, champs: number[]): TeamComp {
     if (cc < 3) issues.push({ gap: "cc", level: "warn", short: t("Contrôle"),
       text: t("Peu de contrôle : difficile d’attraper ou de bloquer l’adversaire.") });
   }
-  return { known: ts.length, ad, ap: 1 - ad, front, engage, cc, issues };
+  return { known: ts.length, ad, ap, tru, front, engage, cc, issues };
 }
 
 /** Manques de l'équipe (sans toi) que ce champion comble. Vide si l'équipe n'a pas encore assez de picks. */
@@ -101,7 +110,7 @@ export function fills(stats: Stats, champ: number, team: TeamComp): Gap[] {
   if (!t || team.known < 2) return [];
   const out: Gap[] = [];
   if (team.ad >= 0.7 && t.ap >= 0.5) out.push("ap");
-  if (team.ad <= 0.3 && t.ad >= 0.5) out.push("ad");
+  if (team.ap >= 0.7 && t.ad >= 0.5) out.push("ad");
   if (team.front < 2 && t.front >= 2 - team.front) out.push("front");
   if (team.engage < 2 && t.engage >= 2 - team.engage) out.push("engage");
   if (team.cc < 3 && t.cc === 2) out.push("cc");

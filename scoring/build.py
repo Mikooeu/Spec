@@ -45,7 +45,7 @@ def choose_patches(src_con) -> tuple[str, str | None, dict]:
 HOLDOUT_SQL = "hash(m.match_id) % 10 = 0"   # 10 % des parties, toujours les mêmes
 
 
-SOURCE_TABLES = ("matches", "participants", "runes", "match_ext", "bans", "builds")
+SOURCE_TABLES = ("matches", "participants", "runes", "match_ext", "bans", "builds", "damage")
 
 
 def _attach(con, path: Path, alias: str) -> None:
@@ -167,6 +167,14 @@ def build_stats(db_path: Path | list[Path], out_path: Path, patch: str | None = 
                   ON b.match_id = a.match_id AND b.team_id = a.team_id AND b.champion_id = a.champ
                 LEFT JOIN p o ON o.match_id = a.match_id AND o.team_id <> a.team_id AND o.role = a.role""")
             champ_pages = compute_builds(_stream(cur), items or Items(None))
+        # dégâts par type (collectés depuis la 0.6) : part physique, magique et brute de chaque champion dans son rôle
+        damage_rows = []
+        if _has(con, "damage"):
+            damage_rows = con.execute("""
+                SELECT a.champ, a.role, sum(a.w), sum(a.w * d.physical), sum(a.w * d.magic), sum(a.w * d.true_dmg)
+                FROM p a JOIN src.damage d
+                  ON d.match_id = a.match_id AND d.team_id = a.team_id AND d.champion_id = a.champ
+                GROUP BY 1, 2""").fetchall()
         con.execute("DETACH src")
         for i in range(len(sources) if len(sources) > 1 else 0):
             con.execute(f"DETACH s{i}")
@@ -199,6 +207,12 @@ def build_stats(db_path: Path | list[Path], out_path: Path, patch: str | None = 
         con.execute("CREATE TABLE out.bans (champ INTEGER, games DOUBLE)")
         if ban_rows:
             con.executemany("INSERT INTO out.bans VALUES (?, ?)", ban_rows)
+        con.execute("CREATE TABLE out.damage (champ INTEGER, role VARCHAR, games DOUBLE, ad DOUBLE, ap DOUBLE, tru DOUBLE)")
+        for champ, role, games, phys, mag, tru in damage_rows:
+            total = (phys or 0) + (mag or 0) + (tru or 0)
+            if total > 0:
+                con.execute("INSERT INTO out.damage VALUES (?, ?, ?, ?, ?, ?)",
+                            [champ, role, games, phys / total, mag / total, tru / total])
         con.execute("CREATE TABLE out.runes (value VARCHAR)")
         con.execute("INSERT INTO out.runes VALUES (?)", [json.dumps(runes)])
         con.execute("CREATE TABLE out.meta (key VARCHAR, value VARCHAR)")

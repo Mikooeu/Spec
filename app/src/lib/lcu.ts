@@ -36,6 +36,10 @@ export interface LiveDraft {
   allyLocked: boolean[];
   enemies: (number | null)[];
   bans: number[];
+  allyBans: number[];               // bans de ton équipe, puis de l'équipe adverse (barre du haut)
+  enemyBans: number[];
+  allyPicking: number | null;       // allié (index de rôle) en train de choisir, null sinon
+  enemyPicking: number | null;      // adversaire (ordre des picks) en train de choisir
   myChamp: number | null;           // ton champion : survolé ou verrouillé
   myLocked: boolean;
   banPhase: boolean;                // il te reste un ban à faire
@@ -55,37 +59,44 @@ export function sessionToDraft(s: Session, chosenRole: number | null): LiveDraft
 
   const allies: (number | null)[] = [null, null, null, null, null];
   const allyLocked = [false, false, false, false, false];
-  const rest: { champ: number; locked: boolean }[] = [];
+  const rest: { champ: number; locked: boolean; cell: number }[] = [];
+  const slotOf = new Map<number, number>();   // cellule alliée -> index de rôle
 
   for (const m of s.myTeam) {
     if (m.cellId === s.localPlayerCellId) continue;
     const locked = m.championId > 0;
     const champ = locked ? m.championId : m.championPickIntent ?? 0;
-    if (champ <= 0) continue;
     const pos = m.assignedPosition ? POSITIONS[m.assignedPosition.toLowerCase()] : undefined;
     if (pos != null && pos !== role && allies[pos] == null) {
-      allies[pos] = champ; allyLocked[pos] = locked;
-    } else {
-      rest.push({ champ, locked });
+      slotOf.set(m.cellId, pos);
+      if (champ > 0) { allies[pos] = champ; allyLocked[pos] = locked; }
+    } else if (champ > 0) {
+      rest.push({ champ, locked, cell: m.cellId });
     }
   }
   // sans rôles assignés (partie perso, blind) : on remplit les places libres dans l'ordre
   for (const r of rest) {
     const free = allies.findIndex((c, i) => c == null && i !== role);
     if (free < 0) break;
-    allies[free] = r.champ; allyLocked[free] = r.locked;
+    allies[free] = r.champ; allyLocked[free] = r.locked; slotOf.set(r.cell, free);
   }
 
-  const enemies: (number | null)[] = [...s.theirTeam]
-    .sort((a, b) => a.cellId - b.cellId)
-    .map((m) => (m.championId > 0 ? m.championId : null));
+  const theirs = [...s.theirTeam].sort((a, b) => a.cellId - b.cellId);
+  const enemies: (number | null)[] = theirs.map((m) => (m.championId > 0 ? m.championId : null));
   while (enemies.length < 5) enemies.push(null);
 
-  const bans = new Set<number>([...(s.bans?.myTeamBans ?? []), ...(s.bans?.theirTeamBans ?? [])]);
+  const mine = new Set(s.myTeam.map((m) => m.cellId));
+  const allyBans = new Set<number>(s.bans?.myTeamBans ?? []), enemyBans = new Set<number>(s.bans?.theirTeamBans ?? []);
+  let allyPicking: number | null = null, enemyPicking: number | null = null;
   for (const a of (s.actions ?? []).flat()) {
-    if (a.type === "ban" && a.completed && a.championId > 0) bans.add(a.championId);
+    if (a.type === "ban" && a.completed && a.championId > 0) (mine.has(a.actorCellId) ? allyBans : enemyBans).add(a.championId);
+    if (a.type === "pick" && a.isInProgress && !a.completed && a.actorCellId !== s.localPlayerCellId) {
+      if (mine.has(a.actorCellId)) allyPicking = slotOf.get(a.actorCellId) ?? null;
+      else { const i = theirs.findIndex((m) => m.cellId === a.actorCellId); if (i >= 0) enemyPicking = i; }
+    }
   }
-  bans.delete(0);
+  allyBans.delete(0); enemyBans.delete(0);
+  const bans = new Set<number>([...allyBans, ...enemyBans]);
 
   const myLocked = (me?.championId ?? 0) > 0;
   const myChamp = myLocked ? me!.championId : (me?.championPickIntent ?? 0) > 0 ? me!.championPickIntent! : null;
@@ -93,7 +104,8 @@ export function sessionToDraft(s: Session, chosenRole: number | null): LiveDraft
     .some((a) => a.actorCellId === s.localPlayerCellId && a.type === "ban" && !a.completed);
 
   return { role, assigned: assignedRole != null && chosenRole == null, allies, allyLocked,
-           enemies: enemies.slice(0, 5), bans: [...bans], myChamp, myLocked, banPhase };
+           enemies: enemies.slice(0, 5), bans: [...bans], allyBans: [...allyBans].slice(0, 5), enemyBans: [...enemyBans].slice(0, 5),
+           allyPicking, enemyPicking, myChamp, myLocked, banPhase };
 }
 
 /** Action de pick du joueur encore ouverte, ou null. */
