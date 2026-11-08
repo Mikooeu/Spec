@@ -11,6 +11,9 @@ from collections import Counter, defaultdict
 from .items import Items
 
 START_MAX_SECONDS = 90     # achats de la première visite en boutique
+# Balises de départ (totem, lentille, longue-vue) : gratuites et changées selon le rôle ou la game, elles
+# ne font pas partie du combo. Sans ce filtre, « Lame de Doran » sortait deux fois (avec et sans balise).
+TRINKETS = {3340, 3363, 3364}
 SKILL_LEVELS = 15          # on compare les ordres sur les 15 premiers niveaux
 SKILL_FALLBACK = 11
 MIN_SEQ_GAMES = 10         # build complet : parties minimum pour un enchaînement exact
@@ -47,8 +50,8 @@ def legendary_order(purchases: str, items: Items) -> list[int]:
 
 
 def starting_items(purchases: str) -> str | None:
-    first = sorted(int(p.split("@")[0]) for p in purchases.split(",")
-                   if p and int(p.split("@")[1]) <= START_MAX_SECONDS)
+    first = sorted(item for item, at in (map(int, p.split("@")) for p in purchases.split(",") if p)
+                   if at <= START_MAX_SECONDS and item not in TRINKETS)
     return ",".join(map(str, first)) or None
 
 

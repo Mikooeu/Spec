@@ -242,6 +242,9 @@ def test_champion_builds_from_details():
     buys = "1056@14,2003@15,2003@15,1058@600,6655@700,3020@800,3089@1300,6655@1400,3135@1900"
     assert legendary_order(buys, items) == [6655, 3089, 3135]
     assert starting_items(buys) == "1056,2003,2003"
+    # la balise de départ ne change pas le combo (sinon Doran sortait deux fois, avec et sans totem)
+    assert starting_items("1055@2,2003@3,3340@4") == starting_items("1055@2,2003@3") == "1055,2003"
+    assert starting_items("3340@1") is None
     assert skill_priority("QEWQQRQWQWRWWEE") == "R > Q > W > E"
     rows = [(103, "MIDDLE", 1, 1.0, 4, 14, "6655,3020,3089", "QEWQQRQWQWRWWEE", buys)] * 6 + \
            [(103, "MIDDLE", 0, 1.0, 4, 12, "6655,3020", None, None)] * 4

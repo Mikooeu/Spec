@@ -84,7 +84,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
         <Card title={t("Objets de départ")} sub={t("Les 3 combinaisons les plus jouées")}>
           {page?.start.length ? (
             <div className="combos combos--stack">
-              {page.start.map(([ids, cg, cw]) => (
+              {mergeStarts(page.start).map(([ids, cg, cw]) => (
                 <Combo key={ids} icons={groupIcons(ids)} data={items} wr={cw / cg} pr={cg / page.tg} />
               ))}
             </div>
@@ -194,6 +194,20 @@ function runeSub(stats: Stats, champ: number, role: number): string | undefined 
 }
 
 /** « 1056,2003,2003 » -> [[1056, 1], [2003, 2]] */
+// Balises de départ (totem, lentille, longue-vue) : elles ne font pas partie du combo. Les stats déjà en ligne
+// les comptent encore ; on les retire ici et on fusionne les combos devenus identiques (Doran avec ou sans totem).
+const TRINKETS = new Set([3340, 3363, 3364]);
+function mergeStarts(start: [string, number, number][]): [string, number, number][] {
+  const merged = new Map<string, [string, number, number]>();
+  for (const [ids, g, w] of start) {
+    const key = ids.split(",").map(Number).filter((id) => !TRINKETS.has(id)).sort((a, b) => a - b).join(",");
+    if (!key) continue;
+    const cur = merged.get(key);
+    if (cur) { cur[1] += g; cur[2] += w; } else merged.set(key, [key, g, w]);
+  }
+  return [...merged.values()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+}
+
 function groupIcons(ids: string): [number, number][] {
   const out: [number, number][] = [];
   for (const id of ids.split(",").map(Number)) {
