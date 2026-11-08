@@ -23,6 +23,8 @@ export interface Game {
   cs: number;
   duration: number;         // secondes
   created: number;          // epoch ms
+  /** Côté (0 bleu, 1 rouge), fin par abandon et pentakills : null quand la source ne les donne pas. */
+  side: 0 | 1 | null; ff: boolean | null; pentas: number | null;
   lp: number | null;        // LP gagnés (+) ou perdus (−), null si la partie n'a pas été suivie
   items: number[];          // objets 0 à 6 (6 = balise), puis celui de la quête de rôle s'il est connu
   spells: number[];         // D, F
@@ -40,11 +42,15 @@ export interface PlayerLine {
   champ: number;
   role: number | null;
   spells: number[]; keystone: number; subStyle: number;
+  /** Page de runes jouée (détail d'une partie du client) ; null si le client ne l'a pas renvoyée. */
+  runes: PlayedRunes | null;
   items: number[];
   kills: number; deaths: number; assists: number;
   cs: number; gold: number; damage: number;
   vision: number | null;    // score de vision (absent des vieilles parties)
 }
+export interface PlayedRunes { primary: number[]; sub: number[]; shards: number[] }
+
 export interface GameDetail { duration: number; teams: { teamId: number; win: boolean; players: PlayerLine[] }[] }
 
 interface Ranked { tier: string; division: string; leaguePoints: number }
@@ -185,8 +191,9 @@ type RawStats = {
   win: boolean; kills: number; deaths: number; assists: number; totalMinionsKilled?: number;
   neutralMinionsKilled?: number; gameEndedInEarlySurrender?: boolean;
   item0?: number; item1?: number; item2?: number; item3?: number; item4?: number; item5?: number; item6?: number;
-  roleBoundItem?: number; perk0?: number; perkSubStyle?: number; goldEarned?: number; totalDamageDealtToChampions?: number;
-  visionScore?: number;
+  roleBoundItem?: number; perk0?: number; perk1?: number; perk2?: number; perk3?: number; perk4?: number; perk5?: number;
+  statPerk0?: number; statPerk1?: number; statPerk2?: number; perkPrimaryStyle?: number; perkSubStyle?: number; goldEarned?: number; totalDamageDealtToChampions?: number;
+  visionScore?: number; pentaKills?: number; gameEndedInSurrender?: boolean;
 };
 type RawParticipant = {
   participantId?: number; teamId?: number; championId: number; teamPosition?: string; individualPosition?: string;
@@ -202,6 +209,12 @@ type RawHistory = { games?: { games?: RawGame[] } };
 
 const n = (x: number | undefined) => (Number.isFinite(x) ? Math.max(0, Math.round(x as number)) : 0);
 const seconds = (d: number) => (d > 10_000 ? Math.round(d / 1000) : d);
+/** Runes jouées : 3 de l'arbre principal, 2 du secondaire, 3 fragments (null si le client ne les donne pas). */
+function runesOf(s: RawStats): PlayedRunes | null {
+  const primary = [s.perk1, s.perk2, s.perk3].map(n), sub = [s.perk4, s.perk5].map(n);
+  const shards = [s.statPerk0, s.statPerk1, s.statPerk2].map(n);
+  return n(s.perk0) && primary.every(Boolean) && sub.every(Boolean) ? { primary, sub, shards: shards.filter(Boolean) } : null;
+}
 const itemsOf = (s: RawStats) => [s.item0, s.item1, s.item2, s.item3, s.item4, s.item5, s.item6, s.roleBoundItem].map(n);
 
 /** Parties d'un historique du client (celui du joueur connecté ou d'un joueur cherché). */
@@ -224,6 +237,9 @@ async function parseHistory(raw: RawHistory, guess?: Guess): Promise<Game[]> {
       duration, created: g.gameCreation, lp: lp[String(g.gameId)] ?? null,
       items: itemsOf(s), spells: [n(p.spell1Id), n(p.spell2Id)], keystone: n(s.perk0), subStyle: n(s.perkSubStyle),
       gold: n(s.goldEarned), damage: n(s.totalDamageDealtToChampions),
+      side: p.teamId === 200 ? 1 : p.teamId === 100 ? 0 : null,
+      ff: s.gameEndedInSurrender == null ? null : !!s.gameEndedInSurrender && !s.gameEndedInEarlySurrender,
+      pentas: Number.isFinite(s.pentaKills) ? n(s.pentaKills) : null,
     });
   }
   return out.sort((a, b) => b.created - a.created);
@@ -235,7 +251,7 @@ export async function loadHistory(count = 50, guess?: Guess): Promise<Game[]> {
 }
 
 type ServerMatch = [string, number, number, number, number | null, number, number,
-  [number, number, number, number, number, number, number, number[], number[], number, number] | null];
+  [number, number, number, number, number, number, number, number[], number[], number, number, number?, number?, number?] | null];
 
 /**
  * Parties classées solo de la saison gardées par le serveur Spec (stats perso activées) : l'historique
@@ -252,13 +268,14 @@ export async function loadServerHistory(client: string, before?: number, limit =
   const lp = readLp();
   return matches.map(([matchId, created, champ, role, , win, remake, d]) => {
     const id = Number(matchId.split("_")[1] ?? 0);
-    const [duration, kills, deaths, assists, cs, gold, damage, items, spells, keystone, subStyle] =
+    const [duration, kills, deaths, assists, cs, gold, damage, items, spells, keystone, subStyle, side, ff, pentas] =
       d ?? [0, 0, 0, 0, 0, 0, 0, [], [], 0, 0];
     return {
       id, queue: "solo" as const, queueName: "Solo/Duo", queueType: "RANKED_SOLO_5x5",
       champ, role: role >= 0 ? role : null, win: !!win, remake: !!remake,
       kills, deaths, assists, cs, duration, created, lp: lp[String(id)] ?? null,
       items, spells, keystone, subStyle, gold, damage,
+      side: side === 0 || side === 1 ? side : null, ff: ff == null ? null : ff === 1, pentas: pentas ?? null,
     };
   });
 }
@@ -270,7 +287,8 @@ export function mergeHistory(client: Game[], server: Game[]): Game[] {
   for (const g of client) {
     const s = byId.get(g.id);
     // le client connaît la file exacte ; le serveur connaît le poste officiel et l'objet de quête
-    byId.set(g.id, s ? { ...g, role: s.role ?? g.role, items: g.items.some((i, k) => k === 7 && i > 0) ? g.items : s.items } : g);
+    byId.set(g.id, s ? { ...g, role: s.role ?? g.role, items: g.items.some((i, k) => k === 7 && i > 0) ? g.items : s.items,
+                         side: g.side ?? s.side, ff: g.ff ?? s.ff, pentas: g.pentas ?? s.pentas } : g);
   }
   return [...byId.values()].sort((a, b) => b.created - a.created);
 }
@@ -297,6 +315,7 @@ async function fetchGameDetail(gameId: number, guess?: Guess): Promise<GameDetai
     const line: PlayerLine = {
       puuid: who?.puuid || null, name, icon: who?.profileIcon ?? null, champ: p.championId, role: roleOf(p, guess),
       spells: [n(p.spell1Id), n(p.spell2Id)], keystone: n(s.perk0), subStyle: n(s.perkSubStyle), items: itemsOf(s),
+      runes: runesOf(s),
       kills: s.kills, deaths: s.deaths, assists: s.assists,
       cs: (s.totalMinionsKilled ?? 0) + (s.neutralMinionsKilled ?? 0), gold: n(s.goldEarned), damage: n(s.totalDamageDealtToChampions),
       vision: Number.isFinite(s.visionScore) ? n(s.visionScore) : null,
@@ -421,4 +440,48 @@ export async function duoPartner(d: Duo, me: string | null): Promise<{ name: str
     } catch { /* client fermé ou partie introuvable : on essaie la suivante */ }
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Écart en lane (page Stats) : CS et or face au vis-à-vis à 15 et 25 min, lus dans la timeline du client.
+
+/** [CS à 15, or à 15, CS à 25, or à 25] (null quand la partie a fini avant) ; null si pas de vis-à-vis. */
+export type LaneDiff = [number, number, number | null, number | null];
+type Frame = { participantFrames?: Record<string, { participantId?: number; totalGold?: number; minionsKilled?: number; jungleMinionsKilled?: number }> };
+
+const LANE_KEY = "spec.laneDiff";
+function readLane(): Record<string, LaneDiff | 0> {
+  try { return JSON.parse(localStorage.getItem(LANE_KEY) ?? "{}"); } catch { return {}; }
+}
+
+/** Écart d'une partie, gardé sur le PC (une partie terminée ne change plus ; 0 = pas de vis-à-vis). */
+export async function laneDiff(gameId: number, me: string, guess?: Guess): Promise<LaneDiff | null> {
+  const saved = readLane()[String(gameId)];
+  if (saved !== undefined) return saved || null;
+  const [g, tl] = await Promise.all([invoke<RawGame>("lcu_game", { gameId }), invoke<{ frames?: Frame[] }>("lcu_timeline", { gameId })]);
+  const ids = new Map((g.participantIdentities ?? []).map((x) => [x.player?.puuid, x.participantId]));
+  const mine = g.participants.find((p) => p.participantId === ids.get(me));
+  const role = mine ? roleOf(mine, guess) : null;
+  const opp = mine && role != null
+    ? g.participants.find((p) => p.teamId !== mine.teamId && roleOf(p, guess) === role) : undefined;
+  let out: LaneDiff | null = null;
+  const frames = tl.frames ?? [];
+  if (mine && opp && frames.length > 15) {
+    const at = (min: number, id: number | undefined) => {
+      const f = frames[min]?.participantFrames?.[String(id)];
+      return f ? { cs: (f.minionsKilled ?? 0) + (f.jungleMinionsKilled ?? 0), gold: f.totalGold ?? 0 } : null;
+    };
+    const diff = (min: number) => {
+      const a = at(min, mine.participantId), b = at(min, opp.participantId);
+      return a && b ? [a.cs - b.cs, a.gold - b.gold] : null;
+    };
+    const d15 = diff(15), d25 = frames.length > 25 ? diff(25) : null;
+    if (d15) out = [d15[0], d15[1], d25?.[0] ?? null, d25?.[1] ?? null];
+  }
+  const all = readLane();
+  const keys = Object.keys(all);
+  if (keys.length > 300) for (const k of keys.slice(0, keys.length - 300)) delete all[k];
+  all[String(gameId)] = out ?? 0;
+  try { localStorage.setItem(LANE_KEY, JSON.stringify(all)); } catch { /* stockage plein : pas grave */ }
+  return out;
 }

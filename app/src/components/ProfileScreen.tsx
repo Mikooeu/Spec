@@ -15,6 +15,8 @@ import {
 } from "../lib/history";
 import { noteText, noteTone, rateGame, sortedParts, summaryParts, type Contribution, type Criterion, type Rating } from "../lib/rating";
 import { Segmented } from "./Segmented";
+import { StatsView } from "./StatsView";
+import { loadSeasonStats, statsOf, type SeasonStats } from "../lib/seasonStats";
 import { t, locale, ordinal, plural } from "../lib/i18n";
 
 export type { Pools } from "./PoolScreen";
@@ -123,6 +125,9 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   const [message, setMessage] = useState<string | null>(null);
   const [role, setRole] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("history");   // le profil s'ouvre toujours sur l'historique
+  const [queue, setQueue] = usePersistent<"all" | QueueKind>("spec.profileQueue", "all");   // partagée par Historique et Stats
+  const [season, setSeason] = useState<SeasonStats | null>(null);
+  const [seasonFailed, setSeasonFailed] = useState(false);
   const [duo, setDuo] = useState<DuoFilter | null>(null);
   const [duoGames, setDuoGames] = useState<Game[] | null>(null);
   const [impactVersion, setImpactVersion] = useState(0);
@@ -180,6 +185,26 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   };
 
   const games = clientGames || serverGames.length ? mergeHistory(clientGames ?? [], serverGames) : null;
+  const inQueue = (list: Game[]) => list.filter((g) => (queue === "all" ? g.queue !== "other" : g.queue === queue));
+  const queueCount = (q: "all" | QueueKind) => (games ?? []).filter((g) => (q === "all" ? g.queue !== "other" : g.queue === q)).length;
+  // totaux de la saison (Solo/Duo, serveur) : relus à l'ouverture de l'onglet Stats
+  const wantSeason = queue === "solo" && registered && !!account?.puuid;
+  // serveur injoignable (ou pas encore à jour) : on se rabat sur les dernières parties chargées
+  const useSeason = wantSeason && !seasonFailed;
+  useEffect(() => {
+    if (tab !== "stats" || !wantSeason || !account?.puuid) return;
+    let alive = true;
+    loadSeasonStats(account.puuid).then((d) => { if (alive) { setSeason(d); setSeasonFailed(false); } })
+      .catch((e) => { console.warn("[stats] serveur", e); if (alive) setSeasonFailed(true); });
+    return () => { alive = false; };
+  }, [tab, wantSeason, account?.puuid, lpVersion]);
+  const recent = games ? inQueue(games) : [];
+  const statsData = useSeason ? season : games ? statsOf(recent) : null;
+  const recentNote = useSeason ? null
+    : queue === "flex" || queue === "5c5" ? t("Sur tes {n} dernières parties seulement", { n: recent.length })
+    : queue === "all" ? t("Toutes files, sur tes {n} dernières parties", { n: recent.length })
+    : wantSeason ? t("Sur tes {n} dernières parties : le serveur Spec ne répond pas pour l’instant.", { n: recent.length })
+    : t("Sur tes {n} dernières parties : active tes stats perso pour toute la saison.", { n: recent.length });
   // picks notés au lock : on les relie aux parties terminées
   useEffect(() => { if (games && settle(games)) setImpactVersion((v) => v + 1); }, [games?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -238,11 +263,13 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
 
       {perso.kind === "ready" && <SeasonTiles stats={stats} data={perso.data} games={games} />}
 
-      <ProfileTabs tab={tab} onTab={setTab} tabs={showDuo ? ["history", "stats", "progress", "duo"] : ["history", "stats", "progress"]} />
+      <ProfileTabs tab={tab} onTab={setTab} tabs={showDuo ? ["history", "stats", "progress", "duo"] : ["history", "stats", "progress"]}
+                   extra={(tab === "history" && !duo) || tab === "stats" ? <QueueFilter queue={queue} onQueue={setQueue} count={tab === "history" ? queueCount : undefined} /> : null} />
 
       <div key={tab} className="profile-view fade-in">
       {tab === "history" && (
         <History stats={stats} games={duo ? duoGames : games} assets={assets} role={role} onRole={setRole} me={account?.puuid ?? null}
+                 queue={duo ? undefined : queue}
                  intro={duo ? t("Vos {games} parties ensemble en Solo/Duo, de la plus récente à la plus ancienne.", { games: duo.games })
                    : registered
                    ? t("Tes parties de la saison. Clique sur une partie pour voir le détail des 10 joueurs. Les LP s’affichent pour les parties jouées avec Spec ouvert.")
@@ -264,10 +291,9 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
       )}
       {tab === "stats" && (
         <>
+          <StatsView stats={stats} data={statsData} laneGames={clientGames ? inQueue(clientGames) : []}
+                     me={account?.puuid ?? null} guess={guess} recentNote={recentNote} />
           <ImpactCard version={impactVersion} />
-          {perso.kind === "ready"
-            ? <OwnBestPicks stats={stats} data={perso.data} />
-            : <p className="hint">{t("Active tes stats perso pour voir tes meilleurs picks de la saison.")}</p>}
         </>
       )}
       {tab === "progress" && (
@@ -340,20 +366,6 @@ function bestPicks(rows: [number, number, number, number][], role: number | null
     .map(([champ, [games, wins]]) => ({ champ, games, wins, share: total ? games / total : 0 }))
     .sort((a, b) => b.wins / b.games - a.wins / a.games || b.games - a.games)
     .slice(0, 3);
-}
-
-function OwnBestPicks({ stats, data }: { stats: Stats; data: Personal }) {
-  const [role, setRole] = useState<number | null>(null);
-  const season = data.champions.reduce((a, [, , g]) => a + g, 0);
-  const min = season < 200 ? 10 : 20;   // seuil adapté au nombre de parties de la saison
-  const picks = bestPicks(data.champions, role, min);
-  const where = role == null ? "" : t(" en {role}", { role: ROLE_LABELS[role] });
-  return (
-    <BestPicks stats={stats} picks={picks}
-               sub={t("Tes 3 meilleurs champions{where} cette saison en Solo/Duo · minimum {min} parties", { where: where, min: min })}
-               empty={t("Aucun champion avec {min} parties ou plus{where} cette saison.", { min: min, where: where })}
-               filter={<RoleFilter role={role} onRole={setRole} />} />
-  );
 }
 
 function BestPicks({ stats, picks, sub, empty, filter }: { stats: Stats; picks: Pick[]; sub: string; empty: string; filter?: React.ReactNode }) {
@@ -493,12 +505,15 @@ interface HistoryProps {
   duo?: DuoFilter | null; onClearDuo?: () => void;
   /** Partie à déplier à l’ouverture (depuis un bilan de l’onglet Progression). */
   focus?: number | null;
+  /** File choisie dans la barre d'onglets (partagée avec Stats) : le filtre de file de l'historique est alors masqué. */
+  queue?: "all" | QueueKind;
 }
 
 /** Historique : filtre par file et par poste (le poste choisit aussi les meilleurs picks), ligne dépliable. */
 function History({ stats, games, assets, role, onRole, me, subject, title, intro, empty, error, notice, footer,
-                   showLp = false, onOpenPlayer, duo, onClearDuo, focus = null }: HistoryProps) {
-  const [queue, setQueue] = useState<"all" | QueueKind>("all");
+                   showLp = false, onOpenPlayer, duo, onClearDuo, focus = null, queue: shared }: HistoryProps) {
+  const [own, setQueue] = useState<"all" | QueueKind>("all");
+  const queue = shared ?? own;
   const [open, setOpen] = useState<number | null>(focus);
   useEffect(() => {
     if (focus == null) return;
@@ -533,14 +548,7 @@ function History({ stats, games, assets, role, onRole, me, subject, title, intro
       {games && (
         <>
           <div className="history__filters">
-            <Segmented className="segmented" role="tablist" aria-label={t("File")}>
-              {QUEUES.map((q) => (
-                <button key={q} role="tab" aria-selected={queue === q} className={queue === q ? "is-active" : ""}
-                        onClick={() => setQueue(q)}>
-                  {q === "all" ? t("Toutes") : QUEUE_LABELS[q]} <span className="count">{count(q)}</span>
-                </button>
-              ))}
-            </Segmented>
+            {!shared && <QueueFilter queue={queue} onQueue={setQueue} count={count} />}
             <Segmented className="segmented" role="tablist" aria-label={t("Poste (meilleurs picks et historique)")}>
               {[null, 0, 1, 2, 3, 4].map((r) => (
                 <button key={String(r)} role="tab" aria-selected={role === r} className={role === r ? "is-active" : ""}
@@ -671,7 +679,6 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onTogg
   const min = Math.round(g.duration / 60);
   return (
     <button className={`game game--${result}${open ? " is-open" : ""}`} onClick={onToggle} aria-expanded={open}>
-      <span className="game__bar" aria-hidden />
       <ChampionIcon stats={stats} champ={g.champ} size={2.5} />
       <Loadout spells={g.spells} keystone={g.keystone} subStyle={g.subStyle} assets={assets} size="md" />
       <span className="game__id">
@@ -736,6 +743,7 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
   const guess = useGuess(stats);
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [error, setError] = useState(false);
+  const [view, setView] = usePersistent<"general" | "runes">("spec.gameDetailView", "general");
   useEffect(() => {
     let alive = true;
     loadGameDetail(game.id, guess).then((d) => alive && setDetail(d)).catch(() => alive && setError(true));
@@ -750,8 +758,17 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
   // ton équipe d'abord
   const teams = [...detail.teams].sort((a, b) => Number(b.players.some((p) => p.puuid === me)) - Number(a.players.some((p) => p.puuid === me)));
   return (
+    <>
+    <div className="gtabs" role="tablist" aria-label={t("Vue du détail")}>
+      {(["general", "runes"] as const).map((v) => (
+        <button key={v} role="tab" aria-selected={view === v} className={view === v ? "is-active" : ""} onClick={() => setView(v)}>
+          {v === "general" ? t("Général") : t("Runes")}
+        </button>
+      ))}
+    </div>
     <div className="game-detail">
-      {teams.map((team) => {
+      {view === "runes" && <PlayedRunesView stats={stats} teams={teams} runes={assets.runes} me={me} />}
+      {view === "general" && teams.map((team) => {
         const k = team.players.reduce((a, p) => a + p.kills, 0), d = team.players.reduce((a, p) => a + p.deaths, 0);
         const a = team.players.reduce((x, p) => x + p.assists, 0), gold = team.players.reduce((x, p) => x + p.gold, 0);
         return (
@@ -777,8 +794,37 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
           </div>
         );
       })}
-      <p className="muted small">{t("Note sur 20 calculée par rapport aux 9 autres joueurs, avec un barème propre à chaque rôle. MVP : meilleure note de l’équipe gagnante · ACE : meilleure note de l’équipe perdante. Clique sur un joueur pour ouvrir son profil.")}
-      </p>
+      {view === "general" && <p className="muted small">{t("Note sur 20 calculée par rapport aux 9 autres joueurs, avec un barème propre à chaque rôle. MVP : meilleure note de l’équipe gagnante · ACE : meilleure note de l’équipe perdante. Clique sur un joueur pour ouvrir son profil.")}
+      </p>}
+    </div>
+    </>
+  );
+}
+
+/** Runes jouées par les 10 joueurs : champion, rune clé, arbre principal, secondaire et fragments (description au survol). */
+function PlayedRunesView({ stats, teams, runes, me }:
+  { stats: Stats; teams: GameDetail["teams"]; runes: RuneData | null; me: string | null }) {
+  return (
+    <div className="grunes">
+      {teams.map((team) => (
+        <div key={team.teamId} className="grunes__team">
+          {team.players.map((p, i) => (
+            <div key={`${p.puuid ?? p.name}-${i}`} className={`grunes__p${p.puuid != null && p.puuid === me ? " is-me" : ""}`}>
+              <span className="grunes__champ" title={`${champName(stats, p.champ)} · ${p.name}`}>
+                <ChampionIcon stats={stats} champ={p.champ} size={3.5} />
+                {p.keystone > 0 && <Rune data={runes} id={p.keystone} size="key" />}
+              </span>
+              {p.runes ? (
+                <>
+                  <span className="grunes__row">{p.runes.primary.map((id, k) => <Rune key={k} data={runes} id={id} size="minor" />)}</span>
+                  <span className="grunes__row">{p.runes.sub.map((id, k) => <Rune key={k} data={runes} id={id} size="minor" />)}</span>
+                  <span className="grunes__row grunes__shards">{p.runes.shards.map((id, k) => <Rune key={k} data={runes} id={id} size="shard" />)}</span>
+                </>
+              ) : <small className="muted">{t("Runes non renvoyées par le client")}</small>}
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
@@ -858,15 +904,31 @@ function ProfileIcon({ version, icon, size = 3 }: { version: string; icon: numbe
 type Tab = "history" | "stats" | "progress" | "duo";
 const TAB_LABELS: Record<Tab, string> = { history: t("Historique"), stats: t("Stats"), progress: t("Progression"), duo: t("Duo") };
 
-function ProfileTabs({ tab, onTab, tabs }: { tab: Tab; onTab: (t: Tab) => void; tabs: Tab[] }) {
+function ProfileTabs({ tab, onTab, tabs, extra }: { tab: Tab; onTab: (t: Tab) => void; tabs: Tab[]; extra?: React.ReactNode }) {
   return (
-    <div className="ptabs" role="tablist" aria-label={t("Sections du profil")}>
-      {tabs.map((t) => (
-        <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "is-active" : ""} onClick={() => onTab(t)}>
-          {TAB_LABELS[t]}
+    <div className="ptabs-bar">
+      <div className="ptabs" role="tablist" aria-label={t("Sections du profil")}>
+        {tabs.map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "is-active" : ""} onClick={() => onTab(t)}>
+            {TAB_LABELS[t]}
+          </button>
+        ))}
+      </div>
+      {extra && <div className="ptabs-bar__extra">{extra}</div>}
+    </div>
+  );
+}
+
+/** Filtre de file (Toutes, Solo/Duo, Flex, 5c5) avec le nombre de parties de chaque file. */
+function QueueFilter({ queue, onQueue, count }: { queue: "all" | QueueKind; onQueue: (q: "all" | QueueKind) => void; count?: (q: "all" | QueueKind) => number }) {
+  return (
+    <Segmented className="segmented" role="tablist" aria-label={t("File")}>
+      {QUEUES.map((q) => (
+        <button key={q} role="tab" aria-selected={queue === q} className={queue === q ? "is-active" : ""} onClick={() => onQueue(q)}>
+          {q === "all" ? t("Toutes") : QUEUE_LABELS[q]}{count && <> <span className="count">{count(q)}</span></>}
         </button>
       ))}
-    </div>
+    </Segmented>
   );
 }
 
@@ -1192,7 +1254,6 @@ function RecapRow({ stats, recap: r, game, onOpen }: { stats: Stats; recap: Reca
   return (
     <button className={`recap recap--${game?.remake ? "remake" : r.win ? "win" : "loss"}`} onClick={onOpen} disabled={!game}
             title={game ? t("Ouvrir le détail de la partie") : t("Partie plus chargée dans l’historique")}>
-      <span className="game__bar" aria-hidden />
       <span className="recap__played">
         <ChampionIcon stats={stats} champ={r.champ} size={2.5} />
         <span>

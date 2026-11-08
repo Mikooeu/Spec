@@ -9,7 +9,7 @@ import { syncRun } from "../src/sync.ts";
 // --- D1 et KV en mémoire, avec la même interface que Cloudflare -------------------------------
 function fakeD1() {
   const db = new DatabaseSync(":memory:");
-  for (const f of ["0001_init.sql", "0002_client_id.sql", "0003_devices.sql", "0004_match_detail.sql", "0005_match_index.sql"]) {
+  for (const f of ["0001_init.sql", "0002_client_id.sql", "0003_devices.sql", "0004_match_detail.sql", "0005_match_index.sql", "0006_stats_fields.sql"]) {
     db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url).pathname, "utf8"));
   }
   class Stmt {
@@ -73,21 +73,25 @@ const C2 = "9f8e7d6c-1111-5222-9333-444455556666";
 const reg = (e: Env, client: string, riotId: string, invite = "K7Q2-M9XD") =>
   call(e, "POST", "/v1/players", { client, riotId, invite });
 
-function match(id: string, opts: { duration?: number; p1Champ?: number; p1Win?: boolean; withP2?: boolean } = {}): MatchDto {
+function match(id: string, opts: { duration?: number; p1Champ?: number; p1Win?: boolean; withP2?: boolean;
+  red?: boolean; surrender?: boolean; pentas?: number; created?: number } = {}): MatchDto {
   const mk = (puuid: string, championId: number, teamId: number, teamPosition: string, win: boolean) =>
     ({ puuid, championId, teamId, teamPosition, win, kills: 7, deaths: 2, assists: 9, totalMinionsKilled: 200,
        neutralMinionsKilled: 14, goldEarned: 12000, totalDamageDealtToChampions: 24310.4, item0: 3089, item1: 6655,
        item6: 3364, roleBoundItem: 3006, summoner1Id: 4, summoner2Id: 14,
        perks: { styles: [{ style: 8100, selections: [{ perk: 8112 }] }, { style: 8200 }] } });
   const parts = [
-    mk(P1, opts.p1Champ ?? 103, 100, "MIDDLE", opts.p1Win ?? true),
+    { ...mk(P1, opts.p1Champ ?? 103, 100, "MIDDLE", opts.p1Win ?? true),
+      gameEndedInSurrender: !!opts.surrender, pentaKills: opts.pentas ?? 0 },
     mk(opts.withP2 ? P2 : "x".repeat(78), 122, 100, "TOP", opts.p1Win ?? true),
     mk("y".repeat(78), 134, 200, "MIDDLE", !(opts.p1Win ?? true)),
     mk("z".repeat(78), 86, 200, "TOP", !(opts.p1Win ?? true)),
   ];
+  // côté rouge : les deux équipes échangent leur teamId
+  if (opts.red) for (const p of parts) p.teamId = p.teamId === 100 ? 200 : 100;
   return {
     metadata: { matchId: id, participants: parts.map((p) => p.puuid) },
-    info: { queueId: 420, gameCreation: 1_790_000_000_000, gameDuration: opts.duration ?? 1800, participants: parts },
+    info: { queueId: 420, gameCreation: opts.created ?? 1_790_000_000_000, gameDuration: opts.duration ?? 1800, participants: parts },
   };
 }
 
@@ -182,7 +186,7 @@ test("synchro : historique, détail des parties, remakes exclus, vis-à-vis", as
   assert.equal(hist.matches.length, 3);                  // remake compris (marqué), 404 exclue
   const first = hist.matches.find((m) => m[0] === "EUW1_103")!;
   assert.deepEqual(first.slice(2, 7), [103, 2, 134, 1, 0]);
-  assert.deepEqual(first[7], [1800, 7, 2, 9, 214, 12000, 24310, [3089, 6655, 0, 0, 0, 0, 3364, 3006], [4, 14], 8112, 8200]);
+  assert.deepEqual(first[7], [1800, 7, 2, 9, 214, 12000, 24310, [3089, 6655, 0, 0, 0, 0, 3364, 3006], [4, 14], 8112, 8200, 0, 0, 0]);
   assert.ok(!JSON.stringify(hist).includes("p".repeat(78)));
   assert.equal((await call(e, "GET", "/v1/players/" + "1a1b2c3d-1111-5222-9333-444455556666" + "/matches")).status, 404);
 
@@ -361,4 +365,51 @@ test("migration : les liens existants deviennent des appareils", async () => {
   db.prepare("INSERT INTO players (puuid, created_at, last_seen_at, client_hash) VALUES (?, 1, 1, ?)").run(P1, "h1");
   db.exec(sql("0003_devices.sql"));
   assert.deepEqual({ ...db.prepare("SELECT client_hash, puuid FROM devices").get() as object }, { client_hash: "h1", puuid: P1 });
+});
+
+test("page Stats : totaux par champion, côté, abandon, durée et jour (fuseau du joueur), sans appel Riot", async () => {
+  const e = env();
+  await reg(e, C1, "MIKO#KCORP");
+  // lundi 2 novembre 2026 à 23 h 30 UTC = mardi 0 h 30 à Paris (UTC+1)
+  const monLate = Date.parse("2026-11-02T23:30:00Z");
+  const ids = { [P1]: ["EUW1_4", "EUW1_3", "EUW1_2", "EUW1_1"] };
+  const matches = {
+    EUW1_4: match("EUW1_4", { red: true, surrender: true, p1Win: true, duration: 1500, pentas: 1, created: monLate }),
+    EUW1_3: match("EUW1_3", { red: true, p1Win: false, duration: 2100, created: monLate }),
+    EUW1_2: match("EUW1_2", { p1Win: true, duration: 1700, created: monLate }),
+    EUW1_1: match("EUW1_1", { duration: 200, created: monLate }),   // remake : exclu
+  };
+  await syncRun(e.DB, new Riot("RGAPI-test", "europe", 14, riotFetch(ids, matches, [])),
+    Date.parse("2026-01-08T00:00:00Z"), 1_800_000_000_000);
+  riotCalls = 0;
+  const r = await (await call(e, "GET", `/v1/players/${C1}/stats?tz=60`)).json() as {
+    champions: number[][]; sides: number[][]; surrender: { known: number; games: number; wins: number };
+    duration: number[][]; days: number[][];
+  };
+  assert.equal(riotCalls, 0);
+  // Ahri mid : 3 parties, 2 victoires, K/D/A, CS, or et durée additionnés, 1 pentakill
+  assert.deepEqual(r.champions, [[103, 2, 3, 2, 21, 6, 27, 642, 36000, 5300, 1]]);
+  assert.deepEqual(r.sides, [[1, 1], [2, 1]]);                 // bleu 1/1, rouge 1/2
+  assert.deepEqual(r.surrender, { known: 3, games: 1, wins: 1 });
+  assert.deepEqual(r.duration, [[2, 2], [1, 0]]);               // < 30 min : 2/2, ≥ 30 min : 0/1
+  assert.deepEqual(r.days[1], [3, 2]);                          // mardi à Paris
+  assert.deepEqual(r.days[0], [0, 0]);
+  const utc = await (await call(e, "GET", `/v1/players/${C1}/stats?tz=0`)).json() as { days: number[][] };
+  assert.deepEqual(utc.days[0], [3, 2]);                        // lundi en UTC
+  assert.equal((await call(e, "GET", `/v1/players/${C1}/stats?tz=9999`)).status, 400);
+  assert.equal((await call(e, "GET", `/v1/players/1a1b2c3d-1111-5222-9333-444455556666/stats`)).status, 404);
+});
+
+test("migration 0006 : les parties d'avant la 0.5 sont remises en file pour être relues", async () => {
+  const db = new DatabaseSync(":memory:");
+  for (const f of ["0001_init.sql", "0002_client_id.sql", "0003_devices.sql", "0004_match_detail.sql", "0005_match_index.sql"]) {
+    db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url).pathname, "utf8"));
+  }
+  db.exec(`DELETE FROM pending`);
+  const ins = db.prepare(`INSERT INTO player_matches (puuid, match_id, game_creation, champion_id, role, win, remake, detail)
+                          VALUES (?, ?, 1, 103, 2, 1, 0, ?)`);
+  ins.run(P1, "EUW1_OLD", JSON.stringify([1800, 1, 1, 1, 1, 1, 1, [], [], 0, 0]));
+  ins.run(P1, "EUW1_NEW", JSON.stringify([1800, 1, 1, 1, 1, 1, 1, [], [], 0, 0, 1, 0, 0]));
+  db.exec(readFileSync(new URL("../migrations/0006_stats_fields.sql", import.meta.url).pathname, "utf8"));
+  assert.deepEqual(db.prepare(`SELECT match_id FROM pending`).all().map((x) => (x as { match_id: string }).match_id), ["EUW1_OLD"]);
 });

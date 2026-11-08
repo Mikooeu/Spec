@@ -67,6 +67,12 @@ pub fn game_path(game_id: u64) -> Result<String, String> {
     Ok(format!("/lol-match-history/v1/games/{game_id}"))
 }
 
+/// Timeline d'une partie (or et CS de chaque joueur minute par minute), pour l'écart en lane de la page Stats.
+pub fn timeline_path(game_id: u64) -> Result<String, String> {
+    if game_id == 0 { return Err("bad_game".into()); }
+    Ok(format!("/lol-match-history/v1/game-timelines/{game_id}"))
+}
+
 pub fn lookup_paths(name: &str, tag: &str) -> Result<[String; 2], String> {
     if !valid_riot_id(name, tag) { return Err("bad_riot_id".into()); }
     Ok([
@@ -265,6 +271,10 @@ impl Lcu {
     /// Détail d'une partie (les 10 joueurs), comme quand on l'ouvre dans le client.
     pub async fn game(&self, game_id: u64) -> Result<Value, String> {
         self.read(&game_path(game_id)?).await
+    }
+
+    pub async fn timeline(&self, game_id: u64) -> Result<Value, String> {
+        self.read(&timeline_path(game_id)?).await
     }
 
     /// Joueur cherché par son Riot ID.
@@ -526,6 +536,8 @@ mod tests {
     fn built_paths_only_take_validated_ids() {
         assert_eq!(game_path(7412345678).unwrap(), "/lol-match-history/v1/games/7412345678");
         assert!(game_path(0).is_err());
+        assert_eq!(timeline_path(7412345678).unwrap(), "/lol-match-history/v1/game-timelines/7412345678");
+        assert!(timeline_path(0).is_err());
         let [alias, legacy] = lookup_paths("Héo Lune", "EUW").unwrap();
         assert_eq!(alias, "/lol-summoner/v1/alias/lookup?gameName=H%C3%A9o%20Lune&tagLine=EUW");
         assert_eq!(legacy, "/lol-summoner/v1/summoners?name=H%C3%A9o%20Lune%23EUW");

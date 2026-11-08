@@ -61,7 +61,7 @@ export interface MatchDto {
 
 export interface ParticipantDto {
   puuid: string; championId: number; teamId: number; teamPosition: string; win: boolean;
-  gameEndedInEarlySurrender?: boolean;
+  gameEndedInEarlySurrender?: boolean; gameEndedInSurrender?: boolean; pentaKills?: number;
   kills?: number; deaths?: number; assists?: number;
   totalMinionsKilled?: number; neutralMinionsKilled?: number;
   goldEarned?: number; totalDamageDealtToChampions?: number;
@@ -72,8 +72,10 @@ export interface ParticipantDto {
 }
 
 /** Détail compact d'une partie : [durée, K, D, A, CS, or, dégâts, [objets 0 à 6 puis celui de la quête de rôle],
- *  [2 sorts], rune clé, arbre secondaire]. */
-export type Detail = [number, number, number, number, number, number, number, number[], number[], number, number];
+ *  [2 sorts], rune clé, arbre secondaire, côté (0 bleu, 1 rouge), fin par abandon (0/1), pentakills].
+ *  Les parties enregistrées avant la 0.5 n'ont que les 11 premiers champs jusqu'à leur relecture. */
+export type Detail = [number, number, number, number, number, number, number, number[], number[], number, number,
+  number, number, number];
 
 export function detailOf(p: ParticipantDto, duration: number): Detail {
   const n = (x: number | undefined) => (Number.isFinite(x) ? Math.max(0, Math.round(x as number)) : 0);
@@ -81,7 +83,8 @@ export function detailOf(p: ParticipantDto, duration: number): Detail {
   const styles = p.perks?.styles ?? [];
   return [n(duration), n(p.kills), n(p.deaths), n(p.assists),
           n(p.totalMinionsKilled) + n(p.neutralMinionsKilled), n(p.goldEarned), n(p.totalDamageDealtToChampions),
-          items, [n(p.summoner1Id), n(p.summoner2Id)], n(styles[0]?.selections?.[0]?.perk), n(styles[1]?.style)];
+          items, [n(p.summoner1Id), n(p.summoner2Id)], n(styles[0]?.selections?.[0]?.perk), n(styles[1]?.style),
+          p.teamId === 200 ? 1 : 0, p.gameEndedInSurrender && !p.gameEndedInEarlySurrender ? 1 : 0, n(p.pentaKills)];
 }
 
 export interface PlayerRow {

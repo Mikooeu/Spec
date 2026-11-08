@@ -1,7 +1,5 @@
 mod lcu;
 
-use tauri::Manager;
-
 use lcu::Lcu;
 use serde_json::Value;
 
@@ -35,6 +33,12 @@ async fn lcu_game(state: tauri::State<'_, Lcu>, game_id: u64) -> Result<Value, S
     state.game(game_id).await
 }
 
+/// Timeline d'une partie terminée (or et CS minute par minute).
+#[tauri::command]
+async fn lcu_timeline(state: tauri::State<'_, Lcu>, game_id: u64) -> Result<Value, String> {
+    state.timeline(game_id).await
+}
+
 /// Cherche un joueur par son Riot ID (via le client LoL).
 #[tauri::command]
 async fn lcu_find_player(state: tauri::State<'_, Lcu>, game_name: String, tag_line: String) -> Result<Value, String> {
@@ -53,27 +57,12 @@ async fn lcu_set_spells(state: tauri::State<'_, Lcu>, spell1: u32, spell2: u32) 
     state.set_spells(spell1, spell2).await
 }
 
-/// Chemin de Spec.exe sur ce PC (affiché dans les réglages, « Ouvrir le dossier »).
-#[tauri::command]
-fn install_path() -> Result<String, String> {
-    std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string())
-}
-
-/// Argument ajouté par le lancement au démarrage de Windows : Spec s'ouvre réduit dans la barre des tâches.
-const MINIMIZED_ARG: &str = "--minimized";
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![MINIMIZED_ARG])))
         .setup(|app| {
-            if std::env::args().any(|a| a == MINIMIZED_ARG) {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.minimize();
-                }
-            }
             // mises à jour signées, publiées sur GitHub (voir tauri.conf.json → plugins.updater)
             #[cfg(desktop)]
             app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
@@ -82,7 +71,7 @@ pub fn run() {
         .manage(Lcu::new())
         .invoke_handler(tauri::generate_handler![
             lcu_get, lcu_preselect, lcu_set_rune_page, lcu_match_history,
-            lcu_game, lcu_find_player, lcu_player, lcu_set_spells, install_path
+            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -246,6 +246,57 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       return json({ duos }, 200, { "Cache-Control": "no-store" });
     }
 
+    // Page Stats : totaux de la saison (Solo/Duo) par champion et rôle, côté, abandon, durée et jour de la semaine.
+    // `tz` : décalage du fuseau de l'appli en minutes (Paris l'hiver : 60), pour que les jours soient ceux du joueur.
+    const sm = /^\/v1\/players\/([^/]+)\/stats$/.exec(path);
+    if (method === "GET" && sm) {
+      const client = decodeURIComponent(sm[1]);
+      if (!CLIENT_RE.test(client)) return error(400, "bad_client");
+      const tz = Math.round(Number(url.searchParams.get("tz") ?? "0"));
+      if (!Number.isFinite(tz) || Math.abs(tz) > 14 * 60) return error(400, "bad_tz");
+      const player = await env.DB.prepare(
+        `SELECT p.puuid FROM devices d JOIN players p ON p.puuid = d.puuid WHERE d.client_hash = ?1`,
+      ).bind(await sha256Hex(client)).first<{ puuid: string }>();
+      if (!player) return error(404, "not_registered");
+      const base = `FROM player_matches WHERE puuid = ?1 AND remake = 0 AND detail IS NOT NULL`;
+      const [champs, sides, ends, days] = await env.DB.batch([
+        // [champion, rôle, parties, victoires, K, D, A, CS, or, durée (s), pentakills]
+        env.DB.prepare(
+          `SELECT champion_id AS c, role AS r, COUNT(*) AS g, SUM(win) AS w,
+                  SUM(json_extract(detail, '$[1]')) AS k, SUM(json_extract(detail, '$[2]')) AS d,
+                  SUM(json_extract(detail, '$[3]')) AS a, SUM(json_extract(detail, '$[4]')) AS cs,
+                  SUM(json_extract(detail, '$[5]')) AS gold, SUM(json_extract(detail, '$[0]')) AS s,
+                  SUM(COALESCE(json_extract(detail, '$[13]'), 0)) AS p
+           ${base} GROUP BY champion_id, role`).bind(player.puuid),
+        // côté : seulement les parties relues depuis la 0.5
+        env.DB.prepare(
+          `SELECT json_extract(detail, '$[11]') AS k, COUNT(*) AS g, SUM(win) AS w
+           ${base} AND json_extract(detail, '$[11]') IS NOT NULL GROUP BY k`).bind(player.puuid),
+        // fin par abandon (parties relues) et durée (toutes) : [parties, victoires] de chaque groupe
+        env.DB.prepare(
+          `SELECT COUNT(json_extract(detail, '$[12]')) AS known,
+                  SUM(json_extract(detail, '$[12]') = 1) AS ff, SUM(json_extract(detail, '$[12]') = 1 AND win = 1) AS ffw,
+                  SUM(json_extract(detail, '$[0]') < 1800) AS short, SUM(json_extract(detail, '$[0]') < 1800 AND win = 1) AS shortw,
+                  SUM(json_extract(detail, '$[0]') >= 1800) AS long, SUM(json_extract(detail, '$[0]') >= 1800 AND win = 1) AS longw
+           ${base}`).bind(player.puuid),
+        // jour de la semaine (0 lundi … 6 dimanche) à l'heure du joueur ; le 1er janvier 1970 était un jeudi
+        env.DB.prepare(
+          `SELECT ((game_creation + ?2) / 86400000 + 3) % 7 AS k, COUNT(*) AS g, SUM(win) AS w
+           ${base} GROUP BY k`).bind(player.puuid, tz * 60_000),
+      ]);
+      type C = { c: number; r: number; g: number; w: number; k: number; d: number; a: number; cs: number; gold: number; s: number; p: number };
+      type GW = { k: number; g: number; w: number };
+      const e = (ends.results[0] ?? {}) as Record<string, number | null>;
+      const v = (x: number | null | undefined) => x ?? 0;
+      return json({
+        champions: (champs.results as C[]).map((x) => [x.c, x.r, x.g, x.w, x.k, x.d, x.a, x.cs, x.gold, x.s, x.p]),
+        sides: [0, 1].map((k) => { const r = (sides.results as GW[]).find((x) => x.k === k); return [r?.g ?? 0, r?.w ?? 0]; }),
+        surrender: { known: v(e.known), games: v(e.ff), wins: v(e.ffw) },
+        duration: [[v(e.short), v(e.shortw)], [v(e.long), v(e.longw)]],
+        days: [0, 1, 2, 3, 4, 5, 6].map((k) => { const r = (days.results as GW[]).find((x) => x.k === k); return [r?.g ?? 0, r?.w ?? 0]; }),
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
     // Stats perso d'un joueur inscrit
     const m = /^\/v1\/players\/([^/]+)$/.exec(path);
     if (method === "GET" && m) {
