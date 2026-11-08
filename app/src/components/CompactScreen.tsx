@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { ROLE_LABELS, ROLE_SHORT, type Stats, enemyDisplay } from "../lib/score";
 import { champName } from "../lib/ui";
@@ -26,6 +27,8 @@ interface Props {
   onBan?: (champ: number) => Promise<string | null>;
   perso?: PersonalState;
   onDemoPick?: (champ: number) => void;
+  /** Page du champion joué, affichée pendant la partie à la place de la draft. */
+  game?: ReactNode;
 }
 
 /** Petite fenêtre à garder à côté du client LoL pendant la sélection des champions. */
@@ -36,9 +39,9 @@ export function CompactScreen(props: Props) {
       <header className="compact__bar">
         <Logo className="brand__mark brand__mark--small" />
         <span className="compact__title">
-          {draft ? t("Tu joues {v}", { v: ROLE_LABELS[draft.role] }) : t("Spec")}
+          {props.game ? t("En partie") : draft ? t("Tu joues {v}", { v: ROLE_LABELS[draft.role] }) : t("Spec")}
         </span>
-        {draft && <span className={`compact__state${live ? " is-live" : ""}`}>{live ? t("En direct") : t("Démo")}</span>}
+        {draft && !props.game && <span className={`compact__state${live ? " is-live" : ""}`}>{live ? t("En direct") : t("Démo")}</span>}
         <span className="grow" />
         <button className={`icon-btn${onTop ? " is-active" : ""}`} onClick={onToggleTop}
                 title={onTop ? t("Ne plus garder au premier plan") : t("Garder au premier plan")}
@@ -49,7 +52,8 @@ export function CompactScreen(props: Props) {
           <ExpandIcon />
         </button>
       </header>
-      {draft ? <CompactDraft {...props} draft={draft} /> : <CompactWaiting {...props} />}
+      {props.game ? <div className="compact__body compact__game">{props.game}</div>
+        : draft ? <CompactDraft {...props} draft={draft} /> : <CompactWaiting {...props} />}
       <p className="compact__legal">{t("Spec n’est pas approuvé par Riot Games.")}</p>
     </div>
   );

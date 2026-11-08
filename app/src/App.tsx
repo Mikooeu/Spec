@@ -186,6 +186,12 @@ export default function App() {
 
   if (compact && stats) {
     const current = live ?? draft;
+    // en partie : la page du champion joué s'ouvre aussi dans la petite fenêtre
+    const game = screen === "champion" && champView?.inGame && regionStats.kind === "ready" ? (
+      <ChampionScreen stats={regionStats.stats} champ={champView.champ} role={champView.role} inGame
+                      onRole={(role) => setChampView({ ...champView, role })}
+                      onBack={() => setScreen("draft")} regionLabel={REGION_LABEL[region]} />
+    ) : null;
     return (
       <RuneImportContext.Provider value={runeImporter}>
       <SpellImportContext.Provider value={spellImporter}>
@@ -195,7 +201,7 @@ export default function App() {
                      onToggleTop={toggleTop} onExpand={() => setCompact(false)}
                      onDemo={clientOn ? undefined : () => setDraft(demoDraft(stats))} onEndDemo={() => setDraft(null)}
                      onDemoPick={(c) => draft && setDraft({ ...draft, myChamp: c, myLocked: false })}
-                     onPreselect={live ? doPreselect : undefined} onBan={live ? doBan : undefined} perso={perso} />
+                     onPreselect={live ? doPreselect : undefined} onBan={live ? doBan : undefined} perso={perso} game={game} />
       </SpellImportContext.Provider>
       </RuneImportContext.Provider>
     );

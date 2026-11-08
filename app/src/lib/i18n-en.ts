@@ -574,4 +574,5 @@ export const EN: Record<string, string> = {
   "Aucun champion ne correspond à « {q} » en {role}.": "No champion matches “{q}” in {role}.",
   "Aucun champion ne correspond à « {q} ».": "No champion matches “{q}”.",
   "Détail de la note": "Score breakdown",
+  "En partie": "In game",
 };

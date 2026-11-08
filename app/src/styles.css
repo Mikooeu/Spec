@@ -339,6 +339,7 @@ h3 { font-size: 0.9375rem; font-weight: 600; }
 .tier-row__tier { justify-self: center; width: 2rem; text-align: center; font-size: 0.75rem; font-weight: 700;
                   border-radius: 0.375rem; padding: 0.125rem 0; color: var(--accent); background: var(--accent-tint); }
 .tier-row--head .tier-row__tier { background: none; color: inherit; font-weight: inherit; }
+.tier--C { color: var(--text-2); background: rgba(255, 255, 255, 0.08); }
 .tier--D { color: var(--bad); background: rgba(255, 69, 58, 0.14); }
 .tier-row__champ { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
 .tier-row__name { font-size: 0.875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -452,7 +453,8 @@ button.bans__item:disabled { cursor: default; }
 .rtree__col:last-child .rtree__rune:last-child .rune__tip { left: auto; right: 0; transform: none; }
 .account__icon img { transform: none; }
 /* 0.3.3 : tier list, pool, régions */
-.tier--S, .tier--A { color: var(--good); background: rgba(48, 209, 88, 0.14); }
+.tier--S { color: #ffb340; background: rgba(255, 159, 10, 0.16); }
+.tier--A { color: var(--good); background: rgba(48, 209, 88, 0.14); }
 .tile__wr { white-space: nowrap; font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-3); }
 .tile__wr.tone-good { color: var(--good); }
 .tile__wr.tone-bad { color: var(--bad); }
@@ -864,3 +866,20 @@ button.game:hover { border-color: var(--separator); }
 .search__icon { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 .search-wrap:has(.search__icon) .search { padding-left: 2.125rem; }
 .search-wrap:focus-within .search__icon { color: var(--text-2); }
+
+/* 0.4.3 · bouton retour de la page champion toujours visible */
+.champ__top { position: sticky; top: 0; z-index: 6; margin-top: -0.5rem; padding: 0.5rem 0; background: var(--bg-window); }
+/* 0.4.3 · page champion dans la fenêtre compacte (en partie) */
+.compact__game { padding: 0; }
+.compact__game .content { padding: 0.75rem 0.875rem 1rem; gap: 0.875rem; }
+.compact__game .champ__top { background: var(--bg-window); }
+.compact__game .champ__head { gap: 0.75rem; }
+.compact__game .champ__head h1 { font-size: 1.375rem; }
+.compact__game .champ__stats { gap: 1rem; width: 100%; }
+.compact__game .champ__stat { font-size: 0.9375rem; }
+.compact__game .champ__row, .compact__game .champ__row--3 { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+.compact__game .champ__card { padding: 0.875rem 0.875rem 1rem; }
+.compact__game .rtree { flex-direction: column; gap: 0.75rem; }
+.compact__game .rtree__col { flex-basis: auto; padding: 0; }
+.compact__game .rtree__col + .rtree__col { border-left: 0; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.compact__game .rtree__title { margin-bottom: 0.5rem; }
