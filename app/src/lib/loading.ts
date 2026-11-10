@@ -43,20 +43,22 @@ interface RawSession {
 }
 interface RawRank { tier?: string; division?: string; leaguePoints?: number; wins?: number; losses?: number }
 
-/** Lit la partie dans le client puis le profil des 10 joueurs (un à la fois pour garder le client fluide). */
-export async function loadLoading(stats: Stats, mePuuid: string | null, guess?: Guess): Promise<LoadingData | null> {
+/** Lit la partie dans le client puis le profil des 10 joueurs. `onFirst` reçoit tout de suite les cartes sans stats
+ *  (champions, sorts, pseudos), pour que l'écran s'affiche dès le début du chargement ; les stats arrivent ensuite. */
+export async function loadLoading(stats: Stats, mePuuid: string | null, guess?: Guess,
+  onFirst?: (d: LoadingData) => void): Promise<LoadingData | null> {
   const s = await invoke<RawSession>("lcu_get", { path: "/lol-gameflow/v1/session" });
   const gd = s.gameData;
   if (!gd?.teamOne?.length || !gd.teamTwo?.length) return null;
   const sel = new Map((gd.playerChampionSelections ?? []).map((x) => [x.puuid, x]));
   const mine = gd.teamTwo.some((m) => m.puuid && m.puuid === mePuuid) ? 2 : 1;
-  const build = async (m: RawMember): Promise<LoadPlayer> => {
+  const build = async (m: RawMember, full: boolean): Promise<LoadPlayer> => {
     const puuid = m.puuid ?? "";
     const pick = sel.get(puuid);
     const champ = m.championId || pick?.championId || 0;
     const role = m.selectedPosition ? POS[m.selectedPosition.toUpperCase()] ?? null : null;
     let rank: RawRank | undefined, games: Game[] = [], level: number | null = null, name = m.gameName || m.summonerName || "";
-    if (puuid) {
+    if (puuid && full) {
       try {
         const raw = await invoke<{ summoner?: { gameName?: string; summonerLevel?: number }; ranked?: { queueMap?: Record<string, RawRank> }; history?: RawHistory }>(
           "lcu_player", { puuid, count: HISTORY });
@@ -70,12 +72,16 @@ export async function loadLoading(stats: Stats, mePuuid: string | null, guess?: 
     return { ...playerOf(puuid, name, champ, pick, role, rank, games, level, puuid === mePuuid), champName: c?.name ?? "", champKey: c?.key ?? "" };
   };
   const order = (list: LoadPlayer[]) => [...list].sort((a, b) => (a.role ?? 9) - (b.role ?? 9));
-  const one: LoadPlayer[] = [], two: LoadPlayer[] = [];
-  for (const m of gd.teamOne) one.push(await build(m));
-  for (const m of gd.teamTwo) two.push(await build(m));
+  const pack = (one: LoadPlayer[], two: LoadPlayer[]): LoadingData => {
+    const allies = order(mine === 1 ? one : two), enemies = order(mine === 1 ? two : one);
+    return { at: Date.now(), ddragon: stats.ddragon, queue: gd.queue?.description ?? "", allies, enemies, duels: allies.map((a, i) => duel(stats, a, enemies[i])) };
+  };
+  // 1) cartes immédiates, 2) profils des 10 joueurs en parallèle (l'écran de chargement ne dure que quelques dizaines de secondes)
+  const quick = async (list: RawMember[]) => Promise.all(list.map((m) => build(m, false)));
+  onFirst?.(pack(await quick(gd.teamOne), await quick(gd.teamTwo)));
+  const [one, two] = await Promise.all([Promise.all(gd.teamOne.map((m) => build(m, true))), Promise.all(gd.teamTwo.map((m) => build(m, true)))]);
   await addRunes([...one, ...two], one, mePuuid);
-  const allies = order(mine === 1 ? one : two), enemies = order(mine === 1 ? two : one);
-  return { at: Date.now(), ddragon: stats.ddragon, queue: gd.queue?.description ?? "", allies, enemies, duels: allies.map((a, i) => duel(stats, a, enemies[i])) };
+  return pack(one, two);
 }
 
 /** Runes : les 10 via le serveur Spec (joueur inscrit, API spectator de Riot), sinon les tiennes depuis le client. */

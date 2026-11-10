@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { loadItems, useInfo, type InfoMap } from "../lib/ddragon";
 import { t } from "../lib/i18n";
 import { useLiveGame, type LiveGame } from "../lib/live";
 import { useSavedLoading } from "../lib/loading";
-import { OVERLAY_STATS, useOverlaySettings, type OverlayStat } from "../lib/overlay";
+import { OVERLAY_STATS, readOverlay, setOverlayInteractive, useOverlaySettings, type OverlayStat } from "../lib/overlay";
 import { dec1, int, pctN } from "../lib/ui";
 import { LoadingCards } from "./LoadingCards";
 import { Logo } from "./Logo";
@@ -71,17 +71,59 @@ export function statValues(g: LiveGame, items: InfoMap | null): Record<OverlaySt
 }
 
 /** Stats en direct, carte verticale (par défaut) ou barre horizontale, dans le coin choisi. */
+const SAMPLE: LiveGame = { champion: null, position: "", level: 9, spent: 9, gold: 650, time: 900, items: [], enemies: [], at: 0,
+  scores: { kills: 4, deaths: 2, assists: 6, cs: 117, ward: 10 }, teamKills: 16, oppItems: [] };
+
 export function StatsOverlay() {
   useTransparentPage();
-  const [settings] = useOverlaySettings();
+  const [settings, save] = useOverlaySettings();
   const game = useLiveGame(settings.enabled);
   const items = useInfo(loadItems, localStorage.getItem("spec.ddragon") ?? "");
-  if (!settings.enabled || !game) return null;
-  const values = statValues(game, items);
+  const box = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+  const [live, setLive] = useState<{ x: number; y: number } | null>(null);
+  // fin du déplacement depuis l'overlay lui-même (bouton ou Échap) : la fenêtre couvre l'écran et cache Spec
+  const finish = () => { save({ ...readOverlay(), editing: false }); setOverlayInteractive(false); };
+  useEffect(() => {
+    if (!settings.editing) return;
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape" || e.key === "Enter") finish(); };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [settings.editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shownGame = game ?? (settings.editing ? SAMPLE : null);
   const shown = OVERLAY_STATS.filter((k) => settings.stats[k]);
-  if (!shown.length) return null;
+  // rien à afficher pendant un déplacement : on garde au moins de quoi en sortir (la fenêtre prend la souris)
+  if (settings.editing && (!settings.enabled || !shown.length))
+    return <button className="ov-stats__done ov-stats__done--alone" onClick={finish}>{t("Terminé")} <kbd>{t("Échap")}</kbd></button>;
+  if (!settings.enabled || !shownGame || !shown.length) return null;
+  const values = statValues(shownGame, items);
+  // glisser-déposer en mode déplacement ; la position est gardée en fraction de l'écran (même place à toute résolution)
+  const down = (e: PointerEvent<HTMLDivElement>) => {
+    if (!settings.editing || !box.current) return;
+    const r = box.current.getBoundingClientRect();
+    drag.current = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    box.current.setPointerCapture(e.pointerId);
+  };
+  const move = (e: PointerEvent<HTMLDivElement>) => {
+    if (!drag.current || !box.current) return;
+    const r = box.current.getBoundingClientRect();
+    const x = Math.min(Math.max(0, e.clientX - drag.current.dx), window.innerWidth - r.width) / window.innerWidth;
+    const y = Math.min(Math.max(0, e.clientY - drag.current.dy), window.innerHeight - r.height) / window.innerHeight;
+    setLive({ x, y });
+  };
+  const up = () => { if (drag.current && live) save({ ...settings, pos: live }); drag.current = null; };
+  const pos = live ?? settings.pos;
+  const place = pos ? { left: `${pos.x * 100}vw`, top: `${pos.y * 100}vh`, right: "auto", bottom: "auto" } : {};
   return (
-    <div className={`ov-stats ov-stats--${settings.layout} ov-stats--${settings.corner}`} style={{ opacity: settings.opacity / 100 }}>
+    <div ref={box} onPointerDown={down} onPointerMove={move} onPointerUp={up}
+         className={`ov-stats ov-stats--${settings.layout} ov-stats--${settings.corner}${settings.editing ? " is-editing" : ""}${(pos ? pos.y > 0.75 : settings.corner[0] === "b") ? " is-low" : ""}`}
+         style={{ opacity: settings.editing ? 1 : settings.opacity / 100, ...place }}>
+      {settings.editing && <span className="ov-stats__hint">{t("Glisse pour déplacer")}</span>}
+      {settings.editing && (
+        <button className="ov-stats__done" onPointerDown={(e) => e.stopPropagation()} onClick={finish}>
+          {t("Terminé")} <kbd>{t("Échap")}</kbd>
+        </button>
+      )}
       {settings.layout === "vertical"
         ? <p className="ov-stats__head"><Logo className="ov-stats__logo" />{t("Spec")}</p>
         : <Logo className="ov-stats__logo" />}

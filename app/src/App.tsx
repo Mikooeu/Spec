@@ -105,15 +105,20 @@ export default function App() {
   }, [phase]);
   const liveGame = useLiveGame(inGame != null);
   const [overlay, setOverlay] = useOverlaySettings();
+  // un déplacement resté ouvert (Spec fermé en plein déplacement) ne doit pas rouvrir l'overlay au démarrage
+  useEffect(() => { if (overlay.editing) setOverlay({ ...overlay, editing: false }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // écran de chargement : les 10 joueurs, lus une fois la draft terminée (la partie n'a pas encore commencé)
   const [loading, setLoading] = useState<LoadingData | null>(null);
-  const loadingPhase = inGame != null && liveGame == null;
+  // l'API du jeu peut répondre dès l'écran de chargement : la partie n'a vraiment commencé qu'avec le chrono qui tourne
+  const started = liveGame != null && liveGame.time > 1;
+  const loadingPhase = inGame != null && !started;
   useEffect(() => {
     if (!inGame) { setLoading(null); saveLoading(null); return; }
     if (!stats || loading) return;
     let alive = true, tries = 0;
     const read = async () => {
-      const d = await loadLoading(stats, account?.puuid ?? savedAccount?.puuid ?? null).catch(() => null);
+      const first = (d: LoadingData) => { if (alive) { setLoading(d); saveLoading(d); } };
+      const d = await loadLoading(stats, account?.puuid ?? savedAccount?.puuid ?? null, undefined, first).catch(() => null);
       if (!alive) return;
       if (d) { setLoading(d); saveLoading(d); } else if (tries++ < 10) setTimeout(read, 3000);
     };
@@ -123,8 +128,8 @@ export default function App() {
   // fenêtres par-dessus le jeu : l'écran de chargement, puis les stats dès que la partie a commencé
   useEffect(() => {
     if (loadingPhase && loading && overlay.loading) openOverlay("loading"); else closeOverlay("loading");
-    if (inGame && liveGame && overlay.enabled) openOverlay("overlay"); else closeOverlay("overlay");
-  }, [loadingPhase, loading != null, liveGame != null, inGame != null, overlay.loading, overlay.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+    if ((inGame && started && overlay.enabled) || overlay.editing) openOverlay("overlay"); else closeOverlay("overlay");
+  }, [loadingPhase, loading != null, started, inGame != null, overlay.loading, overlay.enabled, overlay.editing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (stats) localStorage.setItem("spec.ddragon", stats.ddragon); }, [stats]);
   // « Spec t'aide-t-il à gagner ? » : au lock, on note la place du champion dans les recos de Spec
   useEffect(() => {
@@ -290,7 +295,7 @@ export default function App() {
                           region={regionSelect} regionLabel={REGION_LABEL[region]} />
         )}
         {stats && screen === "pool" && <PoolScreen stats={stats} pools={pools} onChange={setPools} perso={perso} initialRole={roles.main ?? 2} />}
-        {screen === "overlay" && <OverlayScreen settings={overlay} onChange={setOverlay} />}
+        {screen === "overlay" && <OverlayScreen settings={overlay} onChange={setOverlay} inGame={inGame != null && started} />}
         {screen === "settings" && (
           <SettingsScreen account={me} registered={perso.kind === "ready"}
                           compact={compact} onCompact={setCompact} onTop={onTop} onOnTop={setOnTopPref}

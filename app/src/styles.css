@@ -1152,7 +1152,7 @@ html.is-overlay, html.is-overlay body, html.is-overlay #root { background: trans
 .lcards--full .lcard { box-shadow: 0 6px 24px rgba(0,0,0,.45); }
 .ov-stats { position: fixed; display: flex; background: rgba(10,11,15,.82); border: 1px solid rgba(255,255,255,.08); border-radius: 1vh;
             color: var(--text); font-size: 1.35vh; font-variant-numeric: tabular-nums; }
-.ov-stats--tr { top: 4.2vh; right: 0.8vh; } .ov-stats--tl { top: 0.8vh; left: 0.8vh; }
+.ov-stats--tr { top: 7.5vh; right: 0.8vh; } .ov-stats--tl { top: 0.8vh; left: 0.8vh; }
 .ov-stats--br { bottom: 26vh; right: 0.8vh; } .ov-stats--bl { bottom: 26vh; left: 0.8vh; }
 .ov-stats--vertical { flex-direction: column; gap: 0.6vh; padding: 1vh 1.2vh 1.2vh; width: 16vh; }
 .ov-stats--horizontal { flex-direction: row; align-items: center; gap: 1.4vh; padding: 0.8vh 1.4vh 0.8vh 1vh; }
@@ -1164,3 +1164,14 @@ html.is-overlay, html.is-overlay body, html.is-overlay #root { background: trans
 .ov-stats--horizontal .ov-stats__label { font-size: 0.75em; color: var(--text-3); }
 .ov-stats strong { font-weight: 600; }
 .ov-stats--horizontal strong { font-size: 1.12em; }
+.ov-stats.is-editing { outline: 2px dashed var(--accent); outline-offset: 0.4vh; cursor: grab; user-select: none; }
+.ov-stats.is-editing:active { cursor: grabbing; }
+.ov-stats__hint { position: absolute; left: 0; right: 0; top: -3vh; text-align: center; font-size: 1.2vh; color: #fff;
+                  text-shadow: 0 1px 3px #000; white-space: nowrap; }
+.ov-stats__done { position: absolute; left: 50%; bottom: -5.2vh; transform: translateX(-50%); display: inline-flex; align-items: center;
+                  gap: 0.6vh; padding: 0.7vh 1.4vh; border: 0; border-radius: 0.8vh; background: var(--accent); color: #fff;
+                  font: inherit; font-size: 1.3vh; font-weight: 600; white-space: nowrap; cursor: pointer; box-shadow: 0 0.4vh 1.2vh rgba(0,0,0,.45); }
+.ov-stats.is-low .ov-stats__hint { top: auto; bottom: -3vh; }
+.ov-stats.is-low .ov-stats__done { bottom: auto; top: -5.2vh; }
+.ov-stats__done--alone { position: fixed; top: 50%; bottom: auto; }
+.ov-stats__done kbd { font: inherit; font-size: 0.85em; opacity: 0.75; padding: 0.1vh 0.5vh; border-radius: 0.4vh; background: rgba(0,0,0,.25); }

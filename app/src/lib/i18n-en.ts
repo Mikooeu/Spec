@@ -1,6 +1,14 @@
 // Traductions anglaises : texte français (tel qu'écrit dans le code, avec ses {variables}) → anglais.
 // Un texte absent reste en français. Les noms de champions, objets, sorts et runes viennent de Riot (Data Dragon).
 export const EN: Record<string, string> = {
+  "Glisse pour déplacer": "Drag to move",
+  "Échap": "Esc",
+  "Déplacer à la souris": "Move with the mouse",
+  "Déplacer": "Move",
+  "Terminé": "Done",
+  "Placé à la main. Choisis un coin pour revenir à une position fixe.": "Placed by hand. Pick a corner to go back to a fixed position.",
+  "Glisse l’overlay où tu veux sur ton écran, puis clique sur Terminé sous l’overlay ou appuie sur Échap. Le jeu ne reçoit pas les clics pendant ce temps.": "Drag the overlay wherever you want on screen, then click Done under the overlay or press Esc. The game doesn’t receive clicks meanwhile.",
+  "Affiche l’overlay sur ton écran pour le placer où tu veux (par exemple sous ton compteur de FPS).": "Shows the overlay on your screen so you can place it anywhere (for example under your FPS counter).",
   "Overlay": "Overlay",
   "Overlay en partie": "In-game overlay",
   "Afficher l’overlay": "Show the overlay",

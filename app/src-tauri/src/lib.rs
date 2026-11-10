@@ -79,6 +79,16 @@ async fn overlay_open(app: tauri::AppHandle, kind: String) -> Result<(), String>
     w.set_ignore_cursor_events(true).map_err(|e| e.to_string())
 }
 
+/// Mode déplacement : la fenêtre reçoit les clics le temps de glisser l'overlay, puis les laisse repasser au jeu.
+#[tauri::command]
+fn overlay_interactive(app: tauri::AppHandle, kind: String, on: bool) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window(overlay_label(&kind)?) {
+        w.set_ignore_cursor_events(!on).map_err(|e| e.to_string())?;
+        if on { let _ = w.set_focus(); }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn overlay_close(app: tauri::AppHandle, kind: String) -> Result<(), String> {
     if let Some(w) = app.get_webview_window(overlay_label(&kind)?) {
@@ -134,7 +144,7 @@ pub fn run() {
         .manage(Lcu::new())
         .invoke_handler(tauri::generate_handler![
             lcu_get, lcu_preselect, lcu_set_rune_page, lcu_match_history,
-            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, live_game, overlay_open, overlay_close, install_path
+            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, live_game, overlay_open, overlay_close, overlay_interactive, install_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

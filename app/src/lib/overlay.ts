@@ -15,12 +15,14 @@ export interface OverlaySettings {
   opacity: 60 | 80 | 100;
   stats: Record<OverlayStat, boolean>;
   loading: boolean;          // écran de chargement refait par Spec
+  pos: { x: number; y: number } | null;   // position choisie à la souris (coin haut gauche, en fraction de l'écran)
+  editing: boolean;          // mode déplacement en cours
 }
 
 export const OVERLAY_STATS: OverlayStat[] = ["cs", "gold", "kp", "vision", "kda", "goldDiff"];
 const KEY = "spec.overlay";
 export const DEFAULT_OVERLAY: OverlaySettings = {
-  enabled: true, layout: "vertical", corner: "tr", opacity: 80, loading: true,
+  enabled: true, layout: "vertical", corner: "tr", opacity: 80, loading: true, pos: null, editing: false,
   stats: { cs: true, gold: true, kp: true, vision: false, kda: true, goldDiff: true },
 };
 
@@ -55,6 +57,11 @@ export async function openOverlay(kind: OverlayKind): Promise<void> {
 export async function closeOverlay(kind: OverlayKind): Promise<void> {
   if (!IN_APP) return;
   try { await invoke("overlay_close", { kind }); } catch { /* déjà fermée */ }
+}
+
+export async function setOverlayInteractive(on: boolean): Promise<void> {
+  if (!IN_APP) return;
+  try { await invoke("overlay_interactive", { kind: "overlay", on }); } catch { /* fenêtre fermée */ }
 }
 
 /** Vue affichée par cette fenêtre : l'appli, ou l'une des fenêtres par-dessus le jeu (?view=…). */
