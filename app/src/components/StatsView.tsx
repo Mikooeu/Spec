@@ -14,12 +14,14 @@ const rate = ([g, w]: GW) => (g ? w / g : 0);
 const signed = (x: number, f: (n: number) => string) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${f(Math.abs(x))}`;
 
 /** Page Stats du profil : côté, abandon, durée, champions, jour de la semaine et écart en lane. */
-export function StatsView({ stats, data, laneGames, me, guess, recentNote }: {
+export function StatsView({ stats, data, laneGames, me, guess, recentNote, other = false }: {
   stats: Stats; data: SeasonStats | null;
   /** parties récentes du client (la timeline n'existe que là), dans la file choisie */
   laneGames: Game[]; me: string | null; guess?: (champ: number, notJungle: boolean) => number | null;
   /** phrase courte quand les chiffres ne couvrent que les dernières parties */
   recentNote: string | null;
+  /** profil d'un autre joueur : textes à la 3e personne */
+  other?: boolean;
 }) {
   if (!data) return <div className="skeleton" aria-label={t("Chargement des stats")}>{[0, 1, 2].map((i) => <span key={i} />)}</div>;
   if (!data.games) return <p className="hint">{t("Pas encore de partie à analyser dans cette file.")}</p>;
@@ -50,10 +52,10 @@ export function StatsView({ stats, data, laneGames, me, guess, recentNote }: {
           </span>
         </div>
       </div>
-      <ChampionTable stats={stats} data={data} />
+      <ChampionTable stats={stats} data={data} other={other} />
       <div className="sview__row">
-        <DayChart days={data.days} season={data.source === "season"} />
-        <LaneCard games={laneGames} me={me} guess={guess} />
+        <DayChart days={data.days} season={data.source === "season"} other={other} />
+        <LaneCard games={laneGames} me={me} guess={guess} other={other} />
       </div>
     </div>
   );
@@ -74,7 +76,7 @@ const SHOWN = 5;
 const scoreTone = (x: number) => (x >= 55 ? "good" : x <= 45 ? "bad" : "neutral");
 const COLS: [SortKey, string][] = [["score", "Score"], ["games", "Parties"], ["wr", "Winrate"], ["kda", "KDA"], ["cs", "CS/min"], ["gold", "Or/min"], ["pentas", "Pentas"]];
 
-function ChampionTable({ stats, data }: { stats: Stats; data: SeasonStats }) {
+function ChampionTable({ stats, data, other }: { stats: Stats; data: SeasonStats; other: boolean }) {
   const [role, setRole] = useState<number | null>(null);
   const [sort, setSort] = useState<SortKey>("games");
   const [asc, setAsc] = useState(false);
@@ -86,7 +88,7 @@ function ChampionTable({ stats, data }: { stats: Stats; data: SeasonStats }) {
   return (
     <section className="card stable">
       <div className="stable__head">
-        <h2>{t("Tes champions")}</h2>
+        <h2>{other ? t("Ses champions") : t("Tes champions")}</h2>
         <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
           {[null, 0, 1, 2, 3, 4].map((r) => (
             <button key={String(r)} role="tab" aria-selected={role === r} className={role === r ? "is-active" : ""} onClick={() => setRole(r)}>
@@ -118,7 +120,8 @@ function ChampionTable({ stats, data }: { stats: Stats; data: SeasonStats }) {
                   </span>
                 </span>
                 <strong className={`stable__score tone-${scoreTone(champScore(c, data.champions))}`}
-                        title={t("Score sur 100 : winrate lissé, puis KDA, CS et or comparés à ta moyenne dans ce rôle. 50 = ton niveau habituel.")}>
+                        title={other ? t("Score sur 100 : winrate lissé, puis KDA, CS et or comparés à sa moyenne dans ce rôle. 50 = son niveau habituel.")
+                          : t("Score sur 100 : winrate lissé, puis KDA, CS et or comparés à ta moyenne dans ce rôle. 50 = ton niveau habituel.")}>
                   {champScore(c, data.champions)}</strong>
                 <span>{int(c.games)}</span>
                 <strong className={`tone-${wrTone(wr)}`}>{pct(wr)}</strong>
@@ -140,7 +143,7 @@ function ChampionTable({ stats, data }: { stats: Stats; data: SeasonStats }) {
   );
 }
 
-function DayChart({ days, season }: { days: GW[]; season: boolean }) {
+function DayChart({ days, season, other }: { days: GW[]; season: boolean; other: boolean }) {
   const W = 700, H = 150, lo = 0.35, hi = 0.65;
   const total = days.reduce((a, d) => a + d[0], 0);
   const y = (v: number) => H - 10 - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (H - 20);
@@ -179,14 +182,14 @@ function DayChart({ days, season }: { days: GW[]; season: boolean }) {
           </span>
         ))}
       </div>
-      {best >= 0 && <p className="muted small">{t("Ton meilleur jour : {day} ({wr}, {n}).", { day: DAY_NAMES()[best], wr: pct(rate(days[best])), n: plural(days[best][0], "{n} partie", "{n} parties") })}</p>}
+      {best >= 0 && <p className="muted small">{t(other ? "Son meilleur jour : {day} ({wr}, {n})." : "Ton meilleur jour : {day} ({wr}, {n}).", { day: DAY_NAMES()[best], wr: pct(rate(days[best])), n: plural(days[best][0], "{n} partie", "{n} parties") })}</p>}
     </section>
   );
 }
 
 const LANE_MAX = 20;
 
-function LaneCard({ games, me, guess }: { games: Game[]; me: string | null; guess?: (champ: number, notJungle: boolean) => number | null }) {
+function LaneCard({ games, me, guess, other }: { games: Game[]; me: string | null; guess?: (champ: number, notJungle: boolean) => number | null; other: boolean }) {
   const list = useMemo(() => games.filter((g) => !g.remake && g.role != null).slice(0, LANE_MAX), [games]);
   const [diffs, setDiffs] = useState<(LaneDiff | null)[]>([]);
   const [failed, setFailed] = useState(false);
@@ -217,9 +220,9 @@ function LaneCard({ games, me, guess }: { games: Game[]; me: string | null; gues
   return (
     <section className="card slane">
       <div>
-        <h2>{t("Face à ton vis-à-vis")}</h2>
+        <h2>{other ? t("Face à son vis-à-vis") : t("Face à ton vis-à-vis")}</h2>
       </div>
-      {!list.length || !me ? <p className="hint">{t("Lance le client LoL : l’écart se lit dans le détail de tes dernières parties.")}</p>
+      {!list.length || !me ? <p className="hint">{other ? t("Lance le client LoL : l’écart se lit dans le détail de ses dernières parties.") : t("Lance le client LoL : l’écart se lit dans le détail de tes dernières parties.")}</p>
         : failed && !ok.length ? <p className="hint">{t("Le client LoL n’a pas renvoyé le détail des parties. Réessaie dans un instant.")}</p>
         : (
           <>
@@ -233,8 +236,8 @@ function LaneCard({ games, me, guess }: { games: Game[]; me: string | null; gues
             </div>
             <p className="muted small">
               {loading ? t("Lecture du détail des parties… {a}/{b}", { a: diffs.length, b: list.length })
-                : early != null && late != null && early > 0 && late < 0 ? t("Tu prends l’avantage tôt mais le perds ensuite : pense à convertir avant les premiers objectifs.")
-                : early != null && late != null && early < 0 && late > 0 ? t("Tu commences en retard mais tu rattrapes : ton jeu paie sur la durée.")
+                : early != null && late != null && early > 0 && late < 0 ? (other ? t("Prend l’avantage tôt mais le perd ensuite.") : t("Tu prends l’avantage tôt mais le perds ensuite : pense à convertir avant les premiers objectifs."))
+                : early != null && late != null && early < 0 && late > 0 ? (other ? t("Commence en retard mais rattrape sur la durée.") : t("Tu commences en retard mais tu rattrapes : ton jeu paie sur la durée."))
                 : t("Sur {n} parties avec un vis-à-vis identifié.", { n: ok.length })}
             </p>
           </>

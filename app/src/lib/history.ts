@@ -503,7 +503,9 @@ function readLane(): Record<string, LaneDiff | 0> {
 
 /** Écart d'une partie, gardé sur le PC (une partie terminée ne change plus ; 0 = pas de vis-à-vis). */
 export async function laneDiff(gameId: number, me: string, guess?: Guess): Promise<LaneDiff | null> {
-  const saved = readLane()[String(gameId)];
+  // clé partie + joueur : la même partie peut apparaître dans ton profil et dans celui d'un autre joueur
+  const key = `${gameId}:${me.slice(0, 8)}`;
+  const saved = readLane()[key];
   if (saved !== undefined) return saved || null;
   const [g, tl] = await Promise.all([invoke<RawGame>("lcu_game", { gameId }), invoke<{ frames?: Frame[] }>("lcu_timeline", { gameId })]);
   const ids = new Map((g.participantIdentities ?? []).map((x) => [x.player?.puuid, x.participantId]));
@@ -528,7 +530,7 @@ export async function laneDiff(gameId: number, me: string, guess?: Guess): Promi
   const all = readLane();
   const keys = Object.keys(all);
   if (keys.length > 300) for (const k of keys.slice(0, keys.length - 300)) delete all[k];
-  all[String(gameId)] = out ?? 0;
+  all[key] = out ?? 0;
   try { localStorage.setItem(LANE_KEY, JSON.stringify(all)); } catch { /* stockage plein : pas grave */ }
   return out;
 }

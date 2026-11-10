@@ -346,58 +346,6 @@ function Tile({ label, value, detail, tone, stats, champ }:
 }
 
 // ---------------------------------------------------------------------------------------------
-// Meilleurs picks
-
-interface Pick { champ: number; games: number; wins: number; share: number }
-
-/** Les 3 meilleurs winrates parmi les champions assez joués (dans le rôle choisi, ou tous rôles). */
-function bestPicks(rows: [number, number, number, number][], role: number | null, min: number): Pick[] {
-  const per = new Map<number, [number, number]>();
-  let total = 0;
-  for (const [c, r, g, w] of rows) {
-    if (role != null && r !== role) continue;
-    total += g;
-    const t = per.get(c) ?? [0, 0];
-    per.set(c, [t[0] + g, t[1] + w]);
-  }
-  return [...per.entries()]
-    .filter(([, [g]]) => g >= min)
-    .map(([champ, [games, wins]]) => ({ champ, games, wins, share: total ? games / total : 0 }))
-    .sort((a, b) => b.wins / b.games - a.wins / a.games || b.games - a.games)
-    .slice(0, 3);
-}
-
-function BestPicks({ stats, picks, sub, empty, filter }: { stats: Stats; picks: Pick[]; sub?: string; empty: string; filter?: React.ReactNode }) {
-  return (
-    <section className="best">
-      <div>
-        <h2>{t("Meilleurs picks")}</h2>
-        {sub && <p className="muted small">{sub}</p>}
-      </div>
-      {filter}
-      {picks.length ? (
-        <div className="best__cards">
-          {picks.map((p, i) => (
-            <div key={p.champ} className="best__card">
-              <span className="best__rank">{i + 1}</span>
-              <ChampionIcon stats={stats} champ={p.champ} size={2.5} />
-              <span className="best__champ">
-                <span className="best__name">{champName(stats, p.champ)}</span>
-                <span className="muted small">{plural(p.games, "{n} partie", "{n} parties").replace(String(p.games), int(p.games))}</span>
-              </span>
-              <span className="best__stats">
-                <span className={`best__wr tone-${wrTone(p.wins / p.games)}`}>{pct(p.wins / p.games)}<Trend tone={wrTone(p.wins / p.games)} /></span>
-                <span className="muted small">{t("{n} % de pick", { n: Math.round(p.share * 100) })}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : <p className="hint">{empty}</p>}
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
 // Profil d'un autre joueur (via le client LoL)
 
 function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
@@ -406,8 +354,8 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
   const [player, setPlayer] = useState<OtherPlayer | null>(null);
   const [error, setError] = useState(false);
   const [role, setRole] = useState<number | null>(null);
-  const [pickRole, setPickRole] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("history");
+  const [queue, setQueue] = useState<"all" | QueueKind>("all");
   useEffect(() => {
     let alive = true;
     loadPlayer(puuid, guess).then((p) => alive && setPlayer(p)).catch(() => alive && setError(true));
@@ -424,8 +372,8 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
   }
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
   const mainRole = roles.indexOf(Math.max(...roles));
-  const rows = ranked.map((g) => [g.champ, g.role ?? -1, 1, g.win ? 1 : 0] as [number, number, number, number]);
-  const picks = bestPicks(rows, pickRole, 3);
+  const inQueue = (player?.games ?? []).filter((g) => (queue === "all" ? g.queue !== "other" : g.queue === queue));
+  const queueCount = (q: "all" | QueueKind) => (player?.games ?? []).filter((g) => (q === "all" ? g.queue !== "other" : g.queue === q)).length;
 
   return (
     <>
@@ -446,7 +394,7 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
             </div>
             <span className="pill"><span className="dot" />{t("Via le client LoL")}</span>
           </div>
-          {ranked.length > 0 && <h2 className="tiles__title">{t("Sur ses 20 dernières parties")}</h2>}
+          {ranked.length > 0 && <h2 className="tiles__title">{t("Sur ses {n} dernières parties", { n: ranked.length })}</h2>}
           {ranked.length > 0 && (
             <div className="tiles">
               <Tile label={t("Winrate récent")} value={pct(wins / ranked.length)} tone={wrTone(wins / ranked.length)}
@@ -457,16 +405,16 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
                     detail={roles[mainRole] ? t("{n} sur {total}", { n: plural(roles[mainRole], "{n} partie", "{n} parties"), total: ranked.length }) : ""} />
             </div>
           )}
-          <ProfileTabs tab={tab} onTab={setTab} tabs={["history", "stats"]} />
+          <ProfileTabs tab={tab} onTab={setTab} tabs={["history", "stats"]}
+                       extra={<QueueFilter queue={queue} onQueue={setQueue} count={tab === "history" ? queueCount : undefined} />} />
           <div key={tab} className="profile-view fade-in">
           {tab === "stats" && (
-            <BestPicks stats={stats} picks={picks}
-                       empty={t("Pas assez de parties sur un même champion pour ce filtre.")}
-                       filter={<RoleFilter role={pickRole} onRole={setPickRole} />} />
+            // mêmes stats que ton profil, calculées sur ses dernières parties renvoyées par le client
+            <StatsView stats={stats} data={statsOf(inQueue)} laneGames={inQueue} me={puuid} guess={guess} recentNote={null} other />
           )}
           {tab === "history" && (
             <History stats={stats} games={player.games} assets={assets} role={role} onRole={setRole} me={me}
-                     intro={null}
+                     intro={null} queue={queue}
                      onOpenPlayer={onOpenPlayer} subject={puuid} />
           )}
           </div>
@@ -923,18 +871,6 @@ function QueueFilter({ queue, onQueue, count }: { queue: "all" | QueueKind; onQu
       {QUEUES.map((q) => (
         <button key={q} role="tab" aria-selected={queue === q} className={queue === q ? "is-active" : ""} onClick={() => onQueue(q)}>
           {q === "all" ? t("Toutes") : QUEUE_LABELS[q]}{count && <> <span className="count">{count(q)}</span></>}
-        </button>
-      ))}
-    </Segmented>
-  );
-}
-
-function RoleFilter({ role, onRole }: { role: number | null; onRole: (r: number | null) => void }) {
-  return (
-    <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
-      {[null, 0, 1, 2, 3, 4].map((r) => (
-        <button key={String(r)} role="tab" aria-selected={role === r} className={role === r ? "is-active" : ""} onClick={() => onRole(r)}>
-          {r == null ? t("Tous") : ROLE_LABELS[r]}
         </button>
       ))}
     </Segmented>

@@ -1,6 +1,14 @@
 // Traductions anglaises : texte français (tel qu'écrit dans le code, avec ses {variables}) → anglais.
 // Un texte absent reste en français. Les noms de champions, objets, sorts et runes viennent de Riot (Data Dragon).
 export const EN: Record<string, string> = {
+  "Sur ses {n} dernières parties": "Over their last {n} games",
+  "Ses champions": "Their champions",
+  "Score sur 100 : winrate lissé, puis KDA, CS et or comparés à sa moyenne dans ce rôle. 50 = son niveau habituel.": "Score out of 100: smoothed win rate, then KDA, CS and gold compared with their average in this role. 50 = their usual level.",
+  "Son meilleur jour : {day} ({wr}, {n}).": "Their best day: {day} ({wr}, {n}).",
+  "Face à son vis-à-vis": "Against their lane opponent",
+  "Lance le client LoL : l’écart se lit dans le détail de ses dernières parties.": "Open the LoL client: the gap is read from the details of their last games.",
+  "Prend l’avantage tôt mais le perd ensuite.": "Gets ahead early but loses it later.",
+  "Commence en retard mais rattrape sur la durée.": "Starts behind but catches up over time.",
   "Départ": "Start",
   "Build": "Build",
   "Recommandées": "Recommended",
@@ -675,7 +683,6 @@ export const EN: Record<string, string> = {
   "Blind picks recommandés en autofill {v}": "Recommended blind picks in autofill {v}",
   "Voir moins": "Show less",
   "Voir les {n} champions": "Show all {n} champions",
-  "Sur ses 20 dernières parties": "Over their last 20 games",
   "{v} · Pour déplacer Spec : désinstalle-le puis réinstalle-le en choisissant le dossier. Ton pool et tes réglages sont gardés.": "{v} · To move Spec: uninstall it, then reinstall it and pick the folder. Your pool and settings are kept.",
   "au-dessus de 50 %": "above 50%",
   "en dessous": "below",
