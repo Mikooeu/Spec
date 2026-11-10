@@ -1175,3 +1175,89 @@ html.is-overlay, html.is-overlay body, html.is-overlay #root { background: trans
 .ov-stats.is-low .ov-stats__done { bottom: auto; top: -5.2vh; }
 .ov-stats__done--alone { position: fixed; top: 50%; bottom: auto; }
 .ov-stats__done kbd { font: inherit; font-size: 0.85em; opacity: 0.75; padding: 0.1vh 0.5vh; border-radius: 0.4vh; background: rgba(0,0,0,.25); }
+
+/* ---- récap de partie ---- */
+.grecap { container-type: inline-size; display: flex; flex-direction: column; gap: 1rem; }
+.grecap h2 { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.9375rem; font-weight: 600; }
+.grecap h2 small { font-size: 0.75rem; font-weight: 400; color: var(--text-3); }
+.grecap-card { display: flex; flex-direction: column; gap: 0.875rem; padding: 1.125rem 1.25rem 1.25rem; }
+.grecap-tile { display: flex; flex-direction: column; gap: 0.375rem; padding: 0.75rem 0.875rem; border-radius: 0.75rem; background: rgba(255, 255, 255, 0.04); }
+.grecap-tile small { font-size: 0.6875rem; color: var(--text-3); }
+.grecap-tile--empty { justify-content: center; font-size: 0.8125rem; color: var(--text-3); }
+.grecap-hero { display: flex; align-items: center; gap: 1rem; padding: 1.125rem 1.25rem; border-radius: 1rem; border: 1px solid; }
+.grecap-hero--win { border-color: rgba(48, 209, 88, 0.25); background: linear-gradient(90deg, rgba(48, 209, 88, 0.18), var(--bg-surface)); }
+.grecap-hero--loss { border-color: rgba(255, 69, 58, 0.25); background: linear-gradient(90deg, rgba(255, 69, 58, 0.18), var(--bg-surface)); }
+.grecap-hero__title { flex: 1 1 12rem; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.grecap-hero__title p { display: flex; align-items: baseline; gap: 0.625rem; flex-wrap: wrap; }
+.grecap-hero__title strong { font-size: 1.5rem; font-weight: 700; }
+.grecap-hero__title span { font-size: 1rem; font-weight: 500; }
+.grecap-hero__title small { font-size: 0.75rem; color: var(--text-3); }
+.grecap-hero__kpis { display: flex; gap: 0.5rem; }
+.grecap-kpi { display: flex; flex-direction: column; align-items: center; gap: 0.125rem; min-width: 5.5rem; padding: 0.5rem 0.875rem;
+             border-radius: 0.75rem; background: rgba(255, 255, 255, 0.05); }
+.grecap-kpi small { font-size: 0.6875rem; color: var(--text-3); }
+.grecap-kpi strong { font-size: 1rem; font-weight: 600; white-space: nowrap; }
+.grecap-lane { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.grecap-duel { gap: 0.625rem; padding: 0.875rem 1rem; }
+.grecap-duel__row { display: grid; grid-template-columns: 1fr 4rem 4rem 4.5rem; align-items: center; gap: 0.25rem; font-size: 0.75rem; }
+.grecap-duel__row > :not(:first-child) { justify-self: end; text-align: right; }
+.grecap-duel__head { padding-bottom: 0.625rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.6875rem; font-weight: 500; color: var(--text-3); }
+.grecap-duel__head strong { font-size: 0.8125rem; font-weight: 600; color: var(--text); }
+.grecap-duel__label { color: var(--text-2); }
+.grecap-duel__row > strong { font-weight: 600; }
+.grecap-pill { display: inline-block; padding: 0.125rem 0.4375rem; border-radius: 0.375rem; font-size: 0.6875rem; font-weight: 600; white-space: nowrap; }
+.grecap-pill.tone-good { background: rgba(48, 209, 88, 0.14); }
+.grecap-pill.tone-bad { background: rgba(255, 69, 58, 0.14); }
+.grecap-team { display: grid; grid-template-columns: repeat(2, minmax(11rem, 1.6fr)) repeat(5, minmax(0, 1fr)); gap: 0.625rem; }
+.grecap-gold strong { font-size: 1.25rem; font-weight: 600; }
+.grecap-vs p { display: flex; align-items: baseline; gap: 0.25rem; }
+.grecap-vs p strong { font-size: 1rem; font-weight: 600; }
+.grecap-vs p span { font-size: 0.8125rem; color: var(--text-3); }
+.grecap-vs__ally { color: var(--accent); }
+.grecap-vs__bar { display: flex; gap: 2px; height: 4px; }
+.grecap-vs__bar span { min-width: 3px; border-radius: 2px; background: var(--accent); }
+.grecap-vs__bar span + span { background: var(--bad); }
+.grecap-row { display: grid; grid-template-columns: minmax(0, 1fr) 23rem; gap: 1rem; align-items: start; }
+.grecap-brief p { font-size: 0.8125rem; line-height: 1.4; }
+.grecap-why { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.grecap-points { display: flex; flex-direction: column; gap: 0.5rem; }
+.grecap-points__title { display: flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; font-weight: 600; }
+.grecap-points__title .dot-mark { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: currentColor; }
+.grecap-point { display: flex; flex-direction: column; gap: 0.1875rem; padding: 0.625rem 0.75rem; border-radius: 0.75rem; border: 1px solid; }
+.grecap-point strong { font-size: 0.75rem; font-weight: 600; }
+.grecap-point small { font-size: 0.6875rem; color: var(--text-2); line-height: 1.35; }
+.grecap-point--good { background: rgba(48, 209, 88, 0.07); border-color: rgba(48, 209, 88, 0.18); }
+.grecap-point--bad { background: rgba(255, 69, 58, 0.07); border-color: rgba(255, 69, 58, 0.18); }
+.grecap-period { align-self: flex-start; }
+.grecap-period button { font-size: 0.6875rem; padding: 0.3125rem 0.625rem; }
+.grecap-period button:disabled { opacity: 0.4; cursor: default; }
+.grecap-map { position: relative; aspect-ratio: 1; border-radius: 0.75rem; overflow: hidden; background: #0d0d12; }
+.grecap-map img, .grecap-map canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.grecap-map img { opacity: 0.55; }
+.grecap-map__dot { position: absolute; width: 0.5rem; height: 0.5rem; margin: -0.25rem 0 0 -0.25rem; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.6); }
+.grecap-map__dot--kill { background: var(--good); }
+.grecap-map__dot--death { background: var(--bad); }
+.grecap-map__empty { position: absolute; inset: auto 0 45%; text-align: center; font-size: 0.75rem; color: var(--text-2); }
+.grecap-legend { display: flex; flex-wrap: wrap; gap: 0.375rem 0.875rem; font-size: 0.6875rem; color: var(--text-3); }
+.grecap-legend span { display: inline-flex; align-items: center; gap: 0.3125rem; }
+.grecap-legend i { width: 0.5rem; height: 0.5rem; border-radius: 50%; }
+.grecap-legend__heat { background: #ff8c1a; }
+.grecap-legend__kill { background: var(--good); }
+.grecap-legend__death { background: var(--bad); }
+.grecap-moves > small { font-size: 0.6875rem; }
+/* largeur réduite (détail d'une partie, petite fenêtre) */
+@container (max-width: 56rem) {
+  .grecap-row { grid-template-columns: 1fr; }
+  .grecap-moves { max-width: 26rem; }
+  .grecap-team { grid-template-columns: repeat(6, 1fr); }
+  .grecap-team .grecap-gold { grid-column: span 3; }
+  .grecap-team .grecap-vs { grid-column: span 2; }
+  .grecap-hero { flex-wrap: wrap; }
+  .grecap-hero__kpis { order: 3; flex-basis: 100%; }
+  .grecap-kpi { flex: 1; min-width: 0; }
+}
+@container (max-width: 40rem) {
+  .grecap-lane, .grecap-why { grid-template-columns: 1fr; }
+}
+.grecap--embedded { padding: 1rem; }
+.grecap--embedded .grecap-card { background: rgba(255, 255, 255, 0.02); }

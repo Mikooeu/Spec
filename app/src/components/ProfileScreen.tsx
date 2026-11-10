@@ -5,6 +5,7 @@ import { champName, dec1, int, pct, pctN, usePersistent, wrTone } from "../lib/u
 import type { PersonalState, Personal } from "../lib/api";
 import type { Account } from "../lib/lcu";
 import { ChampionIcon } from "./ChampionIcon";
+import { RecapView } from "./RecapView";
 import { Rune, useRuneData, type RuneData } from "./Runes";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
 import { IMPACT_MIN, IMPACT_RELIABLE, impact, recaps, settle, type Recap } from "../lib/impact";
@@ -688,7 +689,9 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
   const guess = useGuess(stats);
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [error, setError] = useState(false);
-  const [view, setView] = usePersistent<"general" | "runes">("spec.gameDetailView", "general");
+  const [savedView, setView] = usePersistent<"general" | "runes" | "recap">("spec.gameDetailView", "general");
+  const canRecap = me != null && !game.remake;
+  const view = savedView === "recap" && !canRecap ? "general" : savedView;
   useEffect(() => {
     let alive = true;
     loadGameDetail(game.id, guess).then((d) => alive && setDetail(d)).catch(() => alive && setError(true));
@@ -705,13 +708,14 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
   return (
     <>
     <div className="gtabs" role="tablist" aria-label={t("Vue du détail")}>
-      {(["general", "runes"] as const).map((v) => (
+      {(canRecap ? ["general", "runes", "recap"] as const : ["general", "runes"] as const).map((v) => (
         <button key={v} role="tab" aria-selected={view === v} className={view === v ? "is-active" : ""} onClick={() => setView(v)}>
-          {v === "general" ? t("Général") : t("Runes")}
+          {v === "general" ? t("Général") : v === "runes" ? t("Runes") : t("Récap")}
         </button>
       ))}
     </div>
-    <div className="game-detail">
+    {view === "recap" && me && <RecapView stats={stats} game={game} me={me} embedded />}
+    {view !== "recap" && <div className="game-detail">
       {view === "runes" && <PlayedRunesView stats={stats} teams={teams} runes={assets.runes} me={me} />}
       {view === "general" && teams.map((team) => {
         const k = team.players.reduce((a, p) => a + p.kills, 0), d = team.players.reduce((a, p) => a + p.deaths, 0);
@@ -741,7 +745,7 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
       })}
       {view === "general" && <p className="muted small">{t("Note sur 20 calculée par rapport aux 9 autres joueurs, avec un barème propre à chaque rôle. MVP : meilleure note de l’équipe gagnante · ACE : meilleure note de l’équipe perdante. Clique sur un joueur pour ouvrir son profil.")}
       </p>}
-    </div>
+    </div>}
     </>
   );
 }

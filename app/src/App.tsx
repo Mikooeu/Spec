@@ -9,7 +9,7 @@ import { ProfileScreen } from "./components/ProfileScreen";
 import { PoolScreen, type Pools } from "./components/PoolScreen";
 import { TierListScreen } from "./components/TierListScreen";
 import { ChampionScreen } from "./components/ChampionScreen";
-import { useLpTracking } from "./lib/history";
+import { loadHistory, useLpTracking, type Game } from "./lib/history";
 import { recommend, topForRole, type Result, type Stats } from "./lib/score";
 import { analyzeTeam, bumpForComposition } from "./lib/composition";
 import { recordPick } from "./lib/impact";
@@ -21,6 +21,7 @@ import { REGION_LABEL, RegionSelect } from "./components/RegionSelect";
 import { applyCompact, setOnTop, watchCompactExpand } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { InGameView, type GameStart } from "./components/InGameScreen";
+import { RecapView } from "./components/RecapView";
 import { useLiveGame } from "./lib/live";
 import { OverlayScreen } from "./components/OverlayScreen";
 import { LoadingCards } from "./components/LoadingCards";
@@ -90,8 +91,28 @@ export default function App() {
       lastPick.current = { champ: live.myChamp, role: live.role, enemies: live.enemies.filter((c): c is number => c != null) };
     }
   });
+  // récap de la partie qui vient de se terminer (affiché dans l'onglet Draft jusqu'à la prochaine draft)
+  const [recap, setRecap] = useState<Game | null>(null);
+  const played = useRef<number | null>(null);
+  const recapToken = useRef(0);   // début de la partie en cours (ms), pour retrouver la bonne partie ensuite
+  useEffect(() => { if (inGame && played.current == null) played.current = Date.now(); }, [inGame]);
   useEffect(() => {
-    if (phase === "champselect") { setInGame(null); setScreen("draft"); lastPick.current = null; return; }
+    if (!["PreEndOfGame", "EndOfGame", "WaitingForStats"].includes(phase) || played.current == null) return;
+    const since = played.current - 15 * 60_000;
+    played.current = null;
+    const token = ++recapToken.current;   // une nouvelle draft annule la recherche
+    let tries = 0;
+    // la partie met quelques secondes à arriver dans l'historique du client
+    const look = async () => {
+      const g = (await loadHistory(1).catch(() => [] as Game[]))[0];
+      if (token !== recapToken.current) return;
+      if (g && g.created >= since) { if (!g.remake) { setRecap(g); setScreen("draft"); } return; }
+      if (tries++ < 12) window.setTimeout(look, 5000);
+    };
+    window.setTimeout(look, 3000);
+  }, [phase]);
+  useEffect(() => {
+    if (phase === "champselect") { setInGame(null); setRecap(null); recapToken.current++; setScreen("draft"); lastPick.current = null; return; }
     if (phase === "InProgress" || phase === "GameStart") {
       // Spec ouvert en pleine partie : champion et rôle viennent de la partie elle-même
       const start = lastPick.current;
@@ -314,7 +335,12 @@ export default function App() {
           </div>
         )}
         {stats && screen === "draft" && !live && inGame && !(loadingPhase && loading) && <InGameView stats={stats} start={inGame} game={liveGame} />}
-        {stats && screen === "draft" && !live && !inGame && !draft && (
+        {stats && screen === "draft" && !live && !inGame && !draft && recap && me?.puuid && (
+          <div className="content">
+            <RecapView stats={stats} game={recap} me={me.puuid} lpVersion={lpVersion} onClose={() => setRecap(null)} />
+          </div>
+        )}
+        {stats && screen === "draft" && !live && !inGame && !draft && !(recap && me?.puuid) && (
           <div className="content">
             <div className="empty-state">
               <div className="spinner" />

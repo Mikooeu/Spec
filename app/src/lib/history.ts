@@ -178,7 +178,7 @@ const SMITE = 11;
  * souvent JUNGLE pour tout le monde), donc : le poste officiel s'il est présent, sinon Châtiment = jungle,
  * sinon le poste le plus joué de ce champion en Master+ (hors jungle, puisqu'il n'avait pas Châtiment).
  */
-function roleOf(p: { teamPosition?: string; individualPosition?: string; spell1Id?: number; spell2Id?: number; championId: number },
+export function roleOf(p: { teamPosition?: string; individualPosition?: string; spell1Id?: number; spell2Id?: number; championId: number },
                 guess?: Guess): number | null {
   const pos = p.teamPosition || p.individualPosition;
   if (pos && pos in POSITIONS) return POSITIONS[pos];
@@ -190,6 +190,9 @@ function roleOf(p: { teamPosition?: string; individualPosition?: string; spell1I
 function readLp(): Record<string, number> {
   try { return JSON.parse(localStorage.getItem(LP_KEY) ?? "{}"); } catch { return {}; }
 }
+
+/** LP gagnés ou perdus sur une partie suivie par Spec (null sinon). */
+export const gameLp = (gameId: number): number | null => readLp()[String(gameId)] ?? null;
 
 /** Rôle le plus probable d'un champion ; `dist` (parties par rôle) permet de répartir une équipe entière. */
 export type Guess = ((champ: number, notJungle: boolean) => number | null) & { dist?: (champ: number) => number[] | null };
@@ -230,15 +233,15 @@ type RawStats = {
   statPerk0?: number; statPerk1?: number; statPerk2?: number; perkPrimaryStyle?: number; perkSubStyle?: number; goldEarned?: number; totalDamageDealtToChampions?: number;
   visionScore?: number; pentaKills?: number; gameEndedInSurrender?: boolean;
 };
-type RawParticipant = {
+export type RawParticipant = {
   participantId?: number; teamId?: number; championId: number; teamPosition?: string; individualPosition?: string;
   spell1Id?: number; spell2Id?: number; timeline?: { lane?: string; role?: string }; stats: RawStats;
 };
-type RawGame = {
+export type RawGame = {
   gameId: number; queueId: number; gameCreation: number; gameDuration: number; mapId?: number;
   participants: RawParticipant[];
   participantIdentities?: { participantId: number; player?: { gameName?: string; tagLine?: string; puuid?: string; summonerName?: string; profileIcon?: number } }[];
-  teams?: { teamId: number; win?: string | boolean }[];
+  teams?: { teamId: number; win?: string | boolean; towerKills?: number; dragonKills?: number; baronKills?: number; riftHeraldKills?: number; hordeKills?: number }[];
 };
 export type RawHistory = { games?: { games?: RawGame[] } };
 
