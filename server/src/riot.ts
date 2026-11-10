@@ -44,9 +44,25 @@ export class Riot {
       `/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`);
   }
 
+  /** Partie en cours (spectator-v5, routage par plateforme : euw1…). */
+  activeGame(puuid: string) {
+    return this.get<ActiveGameDto>(`/lol/spectator/v5/active-games/by-summoner/${encodeURIComponent(puuid)}`);
+  }
+
   match(id: string) {
     return this.get<MatchDto>(`/lol/match/v5/matches/${encodeURIComponent(id)}`);
   }
+}
+
+export interface ActiveGameDto {
+  participants?: { championId?: number; teamId?: number; perks?: { perkIds?: number[]; perkStyle?: number; perkSubStyle?: number } }[];
+}
+
+/** Runes de la partie en cours, réduites à ce que l'écran de chargement affiche : aucun PUUID, aucun pseudo. */
+export function liveRunes(g: ActiveGameDto): [number, number, number, number][] {
+  return (g.participants ?? [])
+    .map((p) => [p.championId ?? 0, p.teamId ?? 0, p.perks?.perkIds?.[0] ?? 0, p.perks?.perkSubStyle ?? 0] as [number, number, number, number])
+    .filter(([c, , k]) => c > 0 && k > 0);
 }
 
 export interface MatchDto {

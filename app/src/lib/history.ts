@@ -240,7 +240,7 @@ type RawGame = {
   participantIdentities?: { participantId: number; player?: { gameName?: string; tagLine?: string; puuid?: string; summonerName?: string; profileIcon?: number } }[];
   teams?: { teamId: number; win?: string | boolean }[];
 };
-type RawHistory = { games?: { games?: RawGame[] } };
+export type RawHistory = { games?: { games?: RawGame[] } };
 
 const n = (x: number | undefined) => (Number.isFinite(x) ? Math.max(0, Math.round(x as number)) : 0);
 const seconds = (d: number) => (d > 10_000 ? Math.round(d / 1000) : d);
@@ -253,7 +253,7 @@ function runesOf(s: RawStats): PlayedRunes | null {
 const itemsOf = (s: RawStats) => [s.item0, s.item1, s.item2, s.item3, s.item4, s.item5, s.item6, s.roleBoundItem].map(n);
 
 /** Parties d'un historique du client (celui du joueur connecté ou d'un joueur cherché). */
-async function parseHistory(raw: RawHistory, guess?: Guess): Promise<Game[]> {
+export async function parseHistory(raw: RawHistory, guess?: Guess): Promise<Game[]> {
   const [info, lp] = [await queues(), readLp()];
   const out: Game[] = [];
   for (const g of raw.games?.games ?? []) {

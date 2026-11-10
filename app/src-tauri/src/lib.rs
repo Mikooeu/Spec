@@ -47,6 +47,46 @@ async fn live_game(state: tauri::State<'_, Lcu>) -> Result<Value, String> {
     state.live_game().await
 }
 
+/// Fenêtres par-dessus le jeu : « overlay » (stats en partie) et « loading » (écran de chargement).
+/// Plein écran sur l'écran principal, transparentes, toujours au premier plan, et les clics passent au travers :
+/// l'interface se place elle-même selon la taille de l'écran. Le jeu doit être en Sans bordure ou Fenêtré.
+fn overlay_label(kind: &str) -> Result<&'static str, String> {
+    match kind { "overlay" => Ok("overlay"), "loading" => Ok("loading"), _ => Err("bad_kind".into()) }
+}
+
+#[tauri::command]
+async fn overlay_open(app: tauri::AppHandle, kind: String) -> Result<(), String> {
+    let label = overlay_label(&kind)?;
+    if let Some(w) = app.get_webview_window(label) {
+        return w.show().map_err(|e| e.to_string());
+    }
+    let monitor = app.primary_monitor().map_err(|e| e.to_string())?.ok_or("no_monitor")?;
+    let (size, pos, scale) = (monitor.size(), monitor.position(), monitor.scale_factor());
+    let url = tauri::WebviewUrl::App(format!("index.html?view={label}").into());
+    let builder = tauri::WebviewWindowBuilder::new(&app, label, url)
+        .title("Spec")
+        .decorations(false)
+        .shadow(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .focused(false)
+        .position(pos.x as f64 / scale, pos.y as f64 / scale)
+        .inner_size(size.width as f64 / scale, size.height as f64 / scale);
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.transparent(true);
+    let w = builder.build().map_err(|e| e.to_string())?;
+    w.set_ignore_cursor_events(true).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn overlay_close(app: tauri::AppHandle, kind: String) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window(overlay_label(&kind)?) {
+        w.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Cherche un joueur par son Riot ID (via le client LoL).
 #[tauri::command]
 async fn lcu_find_player(state: tauri::State<'_, Lcu>, game_name: String, tag_line: String) -> Result<Value, String> {
@@ -94,7 +134,7 @@ pub fn run() {
         .manage(Lcu::new())
         .invoke_handler(tauri::generate_handler![
             lcu_get, lcu_preselect, lcu_set_rune_page, lcu_match_history,
-            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, live_game, install_path
+            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, live_game, overlay_open, overlay_close, install_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

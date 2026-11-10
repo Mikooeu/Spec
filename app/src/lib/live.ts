@@ -15,6 +15,9 @@ export interface LiveGame {
   time: number;              // secondes de jeu au moment de la lecture
   items: number[];
   enemies: LiveEnemy[];
+  scores?: { kills: number; deaths: number; assists: number; cs: number; ward: number };
+  teamKills?: number;
+  oppItems?: number[];        // objets du vis-à-vis (même poste), pour l'écart d'or de l'overlay
   at: number;                // Date.now() au moment de la lecture (pour faire avancer le chrono entre deux lectures)
 }
 
@@ -22,7 +25,7 @@ const POLL_MS = 3000;   // assez pour suivre niveau, or et achats sans charger l
 export const POSITION_ROLE: Record<string, number> = { TOP: 0, JUNGLE: 1, MIDDLE: 2, BOTTOM: 3, UTILITY: 4 };
 
 /** Ce qui change l'affichage (tout sauf le chrono, qui avance tout seul entre deux lectures). */
-const shown = (g: Omit<LiveGame, "at">) => JSON.stringify([g.champion, g.position, g.level, g.spent, Math.floor(g.gold), g.items, g.enemies]);
+const shown = (g: Omit<LiveGame, "at">) => JSON.stringify([g.champion, g.position, g.level, g.spent, Math.floor(g.gold), g.items, g.enemies, g.scores, g.teamKills, g.oppItems]);
 
 /** Lit la partie toutes les 3 s tant que `active` ; null pendant l'écran de chargement.
  *  Fenêtre réduite : aucune lecture. Rien de changé : aucun nouveau rendu. */

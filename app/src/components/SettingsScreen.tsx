@@ -100,7 +100,7 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="settings__section">
       <h2>{title}</h2>
@@ -109,7 +109,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Row({ label, desc, error = false, children }: { label: string; desc: string; error?: boolean; children: React.ReactNode }) {
+export function Row({ label, desc, error = false, children }: { label: string; desc: string; error?: boolean; children: React.ReactNode }) {
   return (
     <div className="settings__row">
       <div className="settings__text">
@@ -121,7 +121,7 @@ function Row({ label, desc, error = false, children }: { label: string; desc: st
   );
 }
 
-function Toggle({ on, onChange, disabled = false, label }: { on: boolean; onChange: () => void; disabled?: boolean; label: string }) {
+export function Toggle({ on, onChange, disabled = false, label }: { on: boolean; onChange: () => void; disabled?: boolean; label: string }) {
   return (
     <button className={`toggle${on ? " is-on" : ""}`} role="switch" aria-checked={on} aria-label={label}
             onClick={onChange} disabled={disabled}>
@@ -130,7 +130,7 @@ function Toggle({ on, onChange, disabled = false, label }: { on: boolean; onChan
   );
 }
 
-function Choice<T extends string>({ value, onChange, options, disabled = [] }:
+export function Choice<T extends string>({ value, onChange, options, disabled = [] }:
   { value: T; onChange: (v: T) => void; options: [T, string][]; disabled?: T[] }) {
   return (
     <Segmented className="segmented" role="radiogroup">

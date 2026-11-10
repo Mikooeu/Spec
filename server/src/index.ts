@@ -2,12 +2,13 @@
 //
 // Sécurité :
 // - la clé Riot, le jeton admin et le code d'invitation sont des secrets Cloudflare ;
-// - les routes publiques ne déclenchent jamais d'appel Riot (seul le cron en fait) ;
+// - les routes publiques ne déclenchent jamais d'appel Riot (seul le cron en fait), sauf deux, réservées aux appareils
+//   inscrits : l'inscription et les runes de la partie en cours (une réponse par joueur et par minute au plus) ;
 // - inscription sur code d'invitation, nombre de joueurs plafonné ;
 // - aucun pseudo stocké : le Riot ID sert une fois à l'inscription, puis seuls le PUUID,
 //   l'identifiant du client LoL (haché) et les champions joués sont gardés.
 
-import { Riot } from "./riot";
+import { Riot, liveRunes } from "./riot";
 import { syncRun } from "./sync";
 
 export interface Env {
@@ -17,6 +18,7 @@ export interface Env {
   ADMIN_TOKEN: string;
   INVITE_CODE: string;
   RIOT_REGION: string;
+  RIOT_PLATFORM?: string;
   SEASON_START: string;
   MAX_PLAYERS: string;
   RIOT_BUDGET_PER_RUN: string;
@@ -209,6 +211,27 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       return json({
         matches: results.map((m) => [m.id, m.t, m.c, m.r, m.o, m.w, m.x, m.d ? JSON.parse(m.d) : null]),
       }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // Écran de chargement : runes des 10 joueurs de la partie en cours (spectator-v5), sans PUUID ni pseudo.
+    const lv = /^\/v1\/players\/([^/]+)\/live$/.exec(path);
+    if (method === "GET" && lv) {
+      const client = decodeURIComponent(lv[1]);
+      if (!CLIENT_RE.test(client)) return error(400, "bad_client");
+      const clientHash = await sha256Hex(client);
+      const player = await env.DB.prepare(`SELECT puuid FROM devices WHERE client_hash = ?1`).bind(clientHash).first<{ puuid: string }>();
+      if (!player) return error(404, "not_registered");
+      // une réponse par joueur et par minute : le cache du Worker absorbe les relectures de l'appli
+      const cache = typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null;
+      const cacheKey = new Request(`https://spec-cache.invalid/live/${clientHash}`);
+      const hit = cache ? await cache.match(cacheKey) : undefined;
+      if (hit) return hit;
+      const riot = new Riot(env.RIOT_API_KEY, env.RIOT_PLATFORM || "euw1", 1, fetcher);
+      const g = await riot.activeGame(player.puuid);
+      if (!g.ok) return g.status === 404 ? error(404, "not_in_game") : error(503, "riot_unavailable");
+      const res = json({ runes: liveRunes(g.data) }, 200, { "Cache-Control": "max-age=60" });
+      if (cache) await cache.put(cacheKey, res.clone());
+      return res;
     }
 
     // Duo : parties classées solo jouées dans la même équipe qu'un autre joueur inscrit.

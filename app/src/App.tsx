@@ -22,6 +22,10 @@ import { applyCompact, setOnTop, watchCompactExpand } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { InGameView, type GameStart } from "./components/InGameScreen";
 import { useLiveGame } from "./lib/live";
+import { OverlayScreen } from "./components/OverlayScreen";
+import { LoadingCards } from "./components/LoadingCards";
+import { closeOverlay, openOverlay, useOverlaySettings } from "./lib/overlay";
+import { loadLoading, saveLoading, type LoadingData } from "./lib/loading";
 import { useUpdate, type UpdateState } from "./lib/updater";
 import { Logo } from "./components/Logo";
 import { localizeChampions } from "./lib/ddragon";
@@ -30,9 +34,9 @@ import { Onboarding } from "./components/Onboarding";
 import { useDefaultRegion, useOnboarded, useRoles } from "./lib/settings";
 import { t } from "./lib/i18n";
 
-type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "settings";
+type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "overlay" | "settings";
 interface ChampView { champ: number; role: number }
-const SCREENS: [Screen, string][] = [["draft", t("Draft")], ["profile", t("Profil")], ["tier", t("Tier list")], ["pool", t("Champion pool")], ["settings", t("Réglages")]];
+const SCREENS: [Screen, string][] = [["draft", t("Draft")], ["profile", t("Profil")], ["tier", t("Tier list")], ["pool", t("Champion pool")], ["overlay", t("Overlay")], ["settings", t("Réglages")]];
 
 /** Draft fictive de démonstration (remplacée plus tard par la lecture du client LoL). */
 function demoDraft(stats: Stats): Draft {
@@ -100,6 +104,28 @@ export default function App() {
     if (["PreEndOfGame", "EndOfGame", "WaitingForStats", t("Lobby"), t("None"), "offline"].includes(phase)) setInGame(null);
   }, [phase]);
   const liveGame = useLiveGame(inGame != null);
+  const [overlay, setOverlay] = useOverlaySettings();
+  // écran de chargement : les 10 joueurs, lus une fois la draft terminée (la partie n'a pas encore commencé)
+  const [loading, setLoading] = useState<LoadingData | null>(null);
+  const loadingPhase = inGame != null && liveGame == null;
+  useEffect(() => {
+    if (!inGame) { setLoading(null); saveLoading(null); return; }
+    if (!stats || loading) return;
+    let alive = true, tries = 0;
+    const read = async () => {
+      const d = await loadLoading(stats, account?.puuid ?? savedAccount?.puuid ?? null).catch(() => null);
+      if (!alive) return;
+      if (d) { setLoading(d); saveLoading(d); } else if (tries++ < 10) setTimeout(read, 3000);
+    };
+    read();
+    return () => { alive = false; };
+  }, [inGame != null, stats != null]); // eslint-disable-line react-hooks/exhaustive-deps
+  // fenêtres par-dessus le jeu : l'écran de chargement, puis les stats dès que la partie a commencé
+  useEffect(() => {
+    if (loadingPhase && loading && overlay.loading) openOverlay("loading"); else closeOverlay("loading");
+    if (inGame && liveGame && overlay.enabled) openOverlay("overlay"); else closeOverlay("overlay");
+  }, [loadingPhase, loading != null, liveGame != null, inGame != null, overlay.loading, overlay.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (stats) localStorage.setItem("spec.ddragon", stats.ddragon); }, [stats]);
   // « Spec t'aide-t-il à gagner ? » : au lock, on note la place du champion dans les recos de Spec
   useEffect(() => {
     if (!stats || !live?.myLocked || live.myChamp == null) return;
@@ -264,6 +290,7 @@ export default function App() {
                           region={regionSelect} regionLabel={REGION_LABEL[region]} />
         )}
         {stats && screen === "pool" && <PoolScreen stats={stats} pools={pools} onChange={setPools} perso={perso} initialRole={roles.main ?? 2} />}
+        {screen === "overlay" && <OverlayScreen settings={overlay} onChange={setOverlay} />}
         {screen === "settings" && (
           <SettingsScreen account={me} registered={perso.kind === "ready"}
                           compact={compact} onCompact={setCompact} onTop={onTop} onOnTop={setOnTopPref}
@@ -274,7 +301,14 @@ export default function App() {
                        onChange={(d) => setRoleOverride(d.role)}
                        onPreselect={doPreselect} onBan={doBan} perso={perso} />
         )}
-        {stats && screen === "draft" && !live && inGame && <InGameView stats={stats} start={inGame} game={liveGame} />}
+        {stats && screen === "draft" && !live && inGame && loadingPhase && loading && (
+          <div className="content">
+            <header className="page-head"><div><h1>{t("Chargement de la partie")}</h1>
+              <p className="muted small">{loading.queue ? `${loading.queue} · ` : ""}{t("Patch {v}", { v: patchLabel(stats.meta.patch) })}</p></div></header>
+            <LoadingCards data={loading} />
+          </div>
+        )}
+        {stats && screen === "draft" && !live && inGame && !(loadingPhase && loading) && <InGameView stats={stats} start={inGame} game={liveGame} />}
         {stats && screen === "draft" && !live && !inGame && !draft && (
           <div className="content">
             <div className="empty-state">

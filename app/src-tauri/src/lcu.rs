@@ -30,9 +30,11 @@ pub const READ_PATHS: &[&str] = &[
     "/lol-champ-select/v1/session",
     "/lol-ranked/v1/current-ranked-stats",   // rang et LP (profil, suivi des LP)
     "/lol-game-queues/v1/queues",            // noms des files (Solo/Duo, Flex, 5c5)
+    "/lol-gameflow/v1/session",              // les 10 joueurs de la partie, à l'écran de chargement
+    "/lol-perks/v1/currentpage",             // tes runes, à l'écran de chargement
 ];
 
-/// Historique de parties du joueur connecté, au plus 50 parties (chemin construit ici, jamais par l'appli).
+/// Profil, rang et historique (au plus 100 parties) d'un joueur (chemin construit ici, jamais par l'appli).
 pub fn match_history_path(count: u32) -> String {
     let end = count.clamp(1, 50);
     format!("/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex={end}")
@@ -83,7 +85,7 @@ pub fn lookup_paths(name: &str, tag: &str) -> Result<[String; 2], String> {
 
 pub fn player_paths(puuid: &str, count: u32) -> Result<[String; 3], String> {
     if !valid_puuid(puuid) { return Err("bad_puuid".into()); }
-    let end = count.clamp(1, 20);
+    let end = count.clamp(1, 100);
     Ok([
         format!("/lol-summoner/v2/summoners/puuid/{puuid}"),
         format!("/lol-ranked/v1/ranked-stats/{puuid}"),
@@ -211,7 +213,20 @@ pub fn trim_live(v: &Value) -> Option<Value> {
     let spent: Option<u64> = ["Q", "W", "E", "R"].iter()
         .map(|k| active.pointer(&format!("/abilities/{k}/abilityLevel")).and_then(Value::as_u64))
         .sum();
+    // stats en direct de l'overlay : score du joueur, kills de son équipe, objets de son vis-à-vis
+    let num = |p: &Value, k: &str| p.pointer(&format!("/scores/{k}")).and_then(Value::as_f64).unwrap_or(0.0);
+    let team_kills: f64 = players.iter().filter(|p| p.get("team").and_then(Value::as_str) == Some(team)).map(|p| num(p, "kills")).sum();
+    let my_pos = me.get("position").and_then(Value::as_str).unwrap_or("");
+    let opp_items: Vec<u64> = players.iter()
+        .find(|p| p.get("team").and_then(Value::as_str) != Some(team) && !my_pos.is_empty() && p.get("position").and_then(Value::as_str) == Some(my_pos))
+        .and_then(|p| p.get("items").and_then(Value::as_array))
+        .map(|a| a.iter().filter_map(|i| i.get("itemID").and_then(Value::as_u64)).collect())
+        .unwrap_or_default();
     Some(json!({
+        "scores": { "kills": num(me, "kills"), "deaths": num(me, "deaths"), "assists": num(me, "assists"),
+                    "cs": num(me, "creepScore"), "ward": num(me, "wardScore") },
+        "teamKills": team_kills,
+        "oppItems": opp_items,
         "champion": key(me),
         "position": me.get("position").and_then(Value::as_str).unwrap_or(""),
         "level": active.get("level").and_then(Value::as_u64).unwrap_or(1),
@@ -598,7 +613,7 @@ mod tests {
         let [s, r, h] = player_paths(uuid, 500).unwrap();
         assert_eq!(s, format!("/lol-summoner/v2/summoners/puuid/{uuid}"));
         assert_eq!(r, format!("/lol-ranked/v1/ranked-stats/{uuid}"));
-        assert!(h.ends_with("begIndex=0&endIndex=20"));
+        assert!(h.ends_with("begIndex=0&endIndex=100"));
         assert!(player_paths("../x", 20).is_err());
         assert!(player_paths("a/b/c/d/e/f/g/h/i/j/k/l", 20).is_err());
     }
@@ -630,9 +645,9 @@ mod tests {
                 "abilities": { "Q": { "abilityLevel": 5 }, "W": { "abilityLevel": 3 }, "E": { "abilityLevel": 1 }, "R": { "abilityLevel": 1 } } },
             "allPlayers": [
                 { "riotId": "Moi#EUW", "team": "ORDER", "position": "MIDDLE", "rawChampionName": "game_character_displayname_Ahri",
-                  "items": [{ "itemID": 6655 }, { "itemID": 3340 }] },
+                  "items": [{ "itemID": 6655 }, { "itemID": 3340 }], "scores": { "kills": 5, "deaths": 2, "assists": 3, "creepScore": 120, "wardScore": 9.5 } },
                 { "riotId": "Autre#EUW", "team": "ORDER", "position": "TOP", "rawChampionName": "game_character_displayname_Darius", "items": [] },
-                { "riotId": "Face#KR", "team": "CHAOS", "position": "MIDDLE", "rawChampionName": "game_character_displayname_Zed", "items": [] }
+                { "riotId": "Face#KR", "team": "CHAOS", "position": "MIDDLE", "rawChampionName": "game_character_displayname_Zed", "items": [{ "itemID": 3142 }] }
             ],
             "gameData": { "gameTime": 754.2 }
         });
@@ -641,6 +656,9 @@ mod tests {
         assert_eq!(out["level"], 11);
         assert_eq!(out["position"], "MIDDLE");
         assert_eq!(out["spent"], 10);
+        assert_eq!(out["scores"]["cs"], 120.0);
+        assert_eq!(out["teamKills"], 5.0);
+        assert_eq!(out["oppItems"], json!([3142]));
         assert_eq!(out["items"], json!([6655, 3340]));
         assert_eq!(out["enemies"], json!([{ "champion": "Zed", "position": "MIDDLE" }]));
         assert!(!out.to_string().contains('#'), "aucun Riot ID ne doit sortir");

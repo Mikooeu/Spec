@@ -413,3 +413,26 @@ test("migration 0006 : les parties d'avant la 0.5 sont remises en file pour êtr
   db.exec(readFileSync(new URL("../migrations/0006_stats_fields.sql", import.meta.url).pathname, "utf8"));
   assert.deepEqual(db.prepare(`SELECT match_id FROM pending`).all().map((x) => (x as { match_id: string }).match_id), ["EUW1_OLD"]);
 });
+
+test("runes de la partie en cours : inscrits seulement, spectator sur la plateforme, aucun PUUID renvoyé", async () => {
+  const e = env();
+  await reg(e, C1, "MIKO#KCORP");
+  const urls: string[] = [];
+  const spect = (async (input: RequestInfo | URL) => {
+    const url = String(input); urls.push(url);
+    if (url.includes("/spectator/v5/active-games/by-summoner/")) return Response.json({ participants: [
+      { puuid: P1, riotId: "MIKO#KCORP", championId: 103, teamId: 100, perks: { perkIds: [8112, 8126], perkStyle: 8100, perkSubStyle: 8200 } },
+      { puuid: P2, riotId: "Autre#EUW", championId: 122, teamId: 200, perks: { perkIds: [8010], perkStyle: 8000, perkSubStyle: 8400 } },
+    ] });
+    return new Response("", { status: 404 });
+  }) as typeof fetch;
+  const get = (client: string) => handle(new Request(`${BASE}/v1/players/${client}/live`), e, 1_800_000_000_000, spect);
+  assert.equal((await get(C2)).status, 404);
+  assert.equal(urls.length, 0);                                  // pas d'appel Riot pour un appareil inconnu
+  const r = await get(C1);
+  assert.equal(r.status, 200);
+  assert.ok(urls[0].startsWith("https://euw1.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/"));
+  const text = await r.text();
+  assert.deepEqual(JSON.parse(text), { runes: [[103, 100, 8112, 8200], [122, 200, 8010, 8400]] });
+  assert.ok(!text.includes(P1) && !text.includes("MIKO"));
+});

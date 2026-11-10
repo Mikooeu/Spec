@@ -1091,3 +1091,76 @@ button.dcard:hover { box-shadow: inset 0 0 0 1px var(--separator); }
 .ingame__pair .ingame__named:last-child small { white-space: normal; }
 .ingame--compact .ingame__icons .item-ic--md { width: 2rem; height: 2rem; }
 .ingame--compact .ingame__named { gap: 0.5rem; }
+
+/* écran de chargement : cartes des 10 joueurs (page de l'appli et version plein écran par-dessus le jeu) */
+.lcards { display: flex; flex-direction: column; gap: 0.75rem; --cw: clamp(9.5rem, calc((100vw - 240px - 8rem) / 5), 14rem); }
+.lcards__row, .lcards__duels { display: grid; grid-template-columns: repeat(5, var(--cw)); gap: 0.75rem; }
+.lcards__label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 600; color: var(--text-2); }
+.lcards__dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; }
+.lcards__dot--ally { background: var(--accent); }
+.lcards__dot--enemy { background: var(--bad); }
+.lcard { position: relative; width: var(--cw); aspect-ratio: 0.524; border-radius: 0.875rem; overflow: hidden;
+         background: var(--bg-surface); border: 1px solid var(--border); font-size: calc(var(--cw) * 0.068); }
+.lcard.is-me { border: 2px solid var(--accent); }
+.lcard__art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; }
+.lcard__shade { position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(18,18,22,.95) 0%, rgba(18,18,22,.7) 10%, rgba(18,18,22,0) 22%, rgba(18,18,22,.15) 62%, rgba(24,24,28,.94) 78%, rgb(24,24,28) 100%); }
+.lcard__top { position: absolute; left: 0; right: 0; top: 0.6em; display: flex; flex-direction: column; align-items: center; gap: 0.55em; text-align: center;
+              text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+.lcard__champ { font-size: 0.85em; color: rgba(255,255,255,.55); }
+.lcard__games { font-size: 0.92em; color: rgba(255,255,255,.75); font-weight: 500; }
+.lcard__games strong { font-weight: 600; color: var(--text); }
+.lcard__games strong.tone-good { color: var(--good); }
+.lcard__games strong.tone-bad { color: var(--bad); }
+.lcard__sep { color: rgba(255,255,255,.4); }
+.lcard__tags { display: flex; gap: 0.3em; flex-wrap: wrap; justify-content: center; padding: 0 0.4em; }
+.lcard__tag { font-size: 0.72em; font-weight: 500; padding: 0.15em 0.6em; border-radius: 99px; background: rgba(18,18,22,.85); border: 1px solid currentColor; text-shadow: none; }
+.lcard__tag.tone-neutral { color: var(--text-2); border-color: var(--border); }
+.lcard__streak { position: absolute; top: 0.45em; right: 0.45em; display: inline-flex; align-items: center; gap: 0.2em; padding: 0.15em 0.45em;
+                 border-radius: 0.5em; background: rgba(12,12,16,.78); font-weight: 600; font-size: 1em; }
+.lcard__streak svg { width: 0.7em; height: 0.85em; }
+.lcard__streak.is-win { color: #fa9933; }
+.lcard__streak.is-loss { color: #66a6ff; }
+.lcard__bottom { position: absolute; left: 0; right: 0; bottom: 0.9em; display: flex; flex-direction: column; align-items: center; gap: 0.3em; text-align: center; }
+.lcard__spells { display: flex; gap: 0.3em; margin-bottom: 0.2em; padding-bottom: 0; }
+.lcard__spells { align-items: center; }
+.lcard__spells img, .lcard__spells > span { width: 1.35em; height: 1.35em; border-radius: 50%; display: block; }
+.lcard__spells .lcard__divider { width: 1px; height: 0.9em; border-radius: 0; background: rgba(255,255,255,.18); margin: 0 0.15em; }
+.lcard__spells .lcard__keystone { width: 1.5em; height: 1.5em; background: rgba(12,12,16,.9); padding: 0.08em; }
+.lcard__spells .lcard__substyle { width: 1.05em; height: 1.05em; background: rgba(12,12,16,.9); padding: 0.12em; }
+.lcard__name { font-size: 1.75em; font-weight: 600; line-height: 1.15; max-width: 92%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcard__rank { display: flex; align-items: center; justify-content: center; gap: 0.3em; font-size: 0.82em; flex-wrap: wrap; padding: 0 0.4em; }
+.lcard__rank img { width: 1.2em; height: 1.2em; }
+.lcard__rank strong { font-weight: 600; }
+.lcard__wl { color: var(--text-3); }
+.lduel { display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-size: 0.75rem; font-weight: 500; }
+.lduel svg { width: 1.25rem; height: 1.25rem; }
+.lduel--good { color: var(--good); } .lduel--bad { color: var(--bad); } .lduel--eq { color: var(--text-2); }
+
+/* fenêtres par-dessus le jeu : transparentes, tout en vh / vw pour suivre la résolution */
+html.is-overlay, html.is-overlay body, html.is-overlay #root { background: transparent !important; overflow: hidden; }
+/* écran de chargement par-dessus celui du jeu : fond transparent, nos cartes posées sur les siennes.
+   Repère 2560 × 1440 (cartes de 344 × 656 à x = 313 + 397 × colonne, y = 45 et 745), mis à l'échelle et centré. */
+.ov-loading { position: fixed; inset: 0; overflow: hidden; }
+.ov-loading__stage { position: absolute; left: 50%; top: 50%; width: 2560px; height: 1440px;
+                     transform: translate(-50%, -50%) scale(var(--s)); transform-origin: center; }
+.lcards--full { --cw: 344px; position: absolute; left: 313px; top: 45px; gap: 0; }
+.lcards--full .lcards__row { grid-template-columns: repeat(5, 344px); gap: 53px; }
+.lcards--full .lcards__duels { grid-template-columns: repeat(5, 344px); gap: 53px; height: 44px; align-items: center; }
+.lcards--full .lduel svg { width: 40px; height: 40px; }
+.lcards--full .lcard__name { font-size: 2em; }
+.lcards--full .lcard { box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+.ov-stats { position: fixed; display: flex; background: rgba(10,11,15,.82); border: 1px solid rgba(255,255,255,.08); border-radius: 1vh;
+            color: var(--text); font-size: 1.35vh; font-variant-numeric: tabular-nums; }
+.ov-stats--tr { top: 4.2vh; right: 0.8vh; } .ov-stats--tl { top: 0.8vh; left: 0.8vh; }
+.ov-stats--br { bottom: 26vh; right: 0.8vh; } .ov-stats--bl { bottom: 26vh; left: 0.8vh; }
+.ov-stats--vertical { flex-direction: column; gap: 0.6vh; padding: 1vh 1.2vh 1.2vh; width: 16vh; }
+.ov-stats--horizontal { flex-direction: row; align-items: center; gap: 1.4vh; padding: 0.8vh 1.4vh 0.8vh 1vh; }
+.ov-stats__head { display: flex; align-items: center; gap: 0.6vh; font-size: 1.1vh; font-weight: 600; color: var(--text-2); }
+.ov-stats__logo { width: 1.6vh; height: 1.6vh; }
+.ov-stats--vertical .ov-stats__item { display: flex; justify-content: space-between; align-items: baseline; }
+.ov-stats--horizontal .ov-stats__item { display: flex; flex-direction: column-reverse; align-items: center; gap: 0.1vh; }
+.ov-stats__label { color: var(--text-2); font-size: 0.9em; }
+.ov-stats--horizontal .ov-stats__label { font-size: 0.75em; color: var(--text-3); }
+.ov-stats strong { font-weight: 600; }
+.ov-stats--horizontal strong { font-size: 1.12em; }
