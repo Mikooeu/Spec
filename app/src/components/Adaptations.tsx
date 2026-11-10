@@ -7,7 +7,7 @@ import { pctN } from "../lib/ui";
 import { ItemIcon } from "./ChampionScreen";
 import { Rune, useRuneData } from "./Runes";
 
-const LABEL: Record<Situation, () => string> = {
+export const SITUATION_LABEL: Record<Situation, () => string> = {
   ap: () => t("Beaucoup de dégâts magiques en face"),
   ad: () => t("Beaucoup de dégâts physiques en face"),
   tank: () => t("Plusieurs tanks en face"),
@@ -26,7 +26,7 @@ export function Adaptations({ stats, champ, role, enemies }: { stats: Stats; cha
       <p className="overline">{t("Face à leur équipe")}</p>
       {list.map((a) => (
         <div key={a.situation} className="adapt__row">
-          <span className="adapt__label">{LABEL[a.situation]()}</span>
+          <span className="adapt__label">{SITUATION_LABEL[a.situation]()}</span>
           <span className="adapt__picks">
             {a.items.map(([id, rin, rout]) => (
               <span key={`i${id}`} className="adapt__pick" title={why(rin, rout)}>

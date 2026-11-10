@@ -20,6 +20,8 @@ import { RuneImportContext, SpellImportContext } from "./components/Runes";
 import { REGION_LABEL, RegionSelect } from "./components/RegionSelect";
 import { applyCompact, setOnTop, watchCompactExpand } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
+import { InGameView, type GameStart } from "./components/InGameScreen";
+import { useLiveGame } from "./lib/live";
 import { useUpdate, type UpdateState } from "./lib/updater";
 import { Logo } from "./components/Logo";
 import { localizeChampions } from "./lib/ddragon";
@@ -29,7 +31,7 @@ import { useDefaultRegion, useOnboarded, useRoles } from "./lib/settings";
 import { t } from "./lib/i18n";
 
 type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "settings";
-interface ChampView { champ: number; role: number; inGame: boolean }
+interface ChampView { champ: number; role: number }
 const SCREENS: [Screen, string][] = [["draft", t("Draft")], ["profile", t("Profil")], ["tier", t("Tier list")], ["pool", t("Champion pool")], ["settings", t("Réglages")]];
 
 /** Draft fictive de démonstration (remplacée plus tard par la lecture du client LoL). */
@@ -72,32 +74,32 @@ export default function App() {
   const regionSelect = <RegionSelect value={region} onChange={setRegion} />;
   const [champView, setChampView] = useState<ChampView | null>(null);
   const lpVersion = useLpTracking(client);
-  const openChamp = (champ: number, role: number) => { setChampView({ champ, role, inGame: false }); setScreen("champion"); };
+  const openChamp = (champ: number, role: number) => { setChampView({ champ, role }); setScreen("champion"); };
 
-  // pick verrouillé pendant la draft : sa page champion s'ouvre au lancement de la partie
+  // pick verrouillé pendant la draft : le menu de build s'ouvre dans l'onglet Draft au lancement de la partie
   // (noté à chaque rendu : un effet séparé se ferait écraser par la remise à zéro du début de draft)
-  const lastPick = useRef<{ champ: number; role: number } | null>(null);
+  const lastPick = useRef<GameStart | null>(null);
+  const [inGame, setInGame] = useState<GameStart | null>(null);
   const phase = client.status === "idle" ? client.phase : client.status;
   useEffect(() => {
-    if (live?.myLocked && live.myChamp != null) lastPick.current = { champ: live.myChamp, role: live.role };
+    if (live?.myLocked && live.myChamp != null) {
+      lastPick.current = { champ: live.myChamp, role: live.role, enemies: live.enemies.filter((c): c is number => c != null) };
+    }
   });
   useEffect(() => {
-    if (phase === "champselect") { setScreen("draft"); lastPick.current = null; return; }
-    if ((phase === "InProgress" || phase === "GameStart") && lastPick.current) {
-      setChampView({ ...lastPick.current, inGame: true });
-      setRegion("euw");   // en partie : mêmes stats que la draft
-      setScreen("champion");
+    if (phase === "champselect") { setInGame(null); setScreen("draft"); lastPick.current = null; return; }
+    if (phase === "InProgress" || phase === "GameStart") {
+      // Spec ouvert en pleine partie : champion et rôle viennent de la partie elle-même
+      const start = lastPick.current;
+      setInGame((g) => g ?? start ?? { champ: null, role: null, enemies: [] });
+      if (start) setScreen("draft");
       lastPick.current = null;
       return;
     }
     // partie terminée : retour sur l'écran d'attente de la draft
-    if (["PreEndOfGame", "EndOfGame", "WaitingForStats", t("Lobby"), t("None"), "offline"].includes(phase)) {
-      setChampView((v) => {
-        if (v?.inGame) setScreen((sc) => (sc === "champion" ? "draft" : sc));
-        return v?.inGame ? { ...v, inGame: false } : v;
-      });
-    }
+    if (["PreEndOfGame", "EndOfGame", "WaitingForStats", t("Lobby"), t("None"), "offline"].includes(phase)) setInGame(null);
   }, [phase]);
+  const liveGame = useLiveGame(inGame != null);
   // « Spec t'aide-t-il à gagner ? » : au lock, on note la place du champion dans les recos de Spec
   useEffect(() => {
     if (!stats || !live?.myLocked || live.myChamp == null) return;
@@ -186,12 +188,8 @@ export default function App() {
 
   if (compact && stats) {
     const current = live ?? draft;
-    // en partie : la page du champion joué s'ouvre aussi dans la petite fenêtre
-    const game = screen === "champion" && champView?.inGame && regionStats.kind === "ready" ? (
-      <ChampionScreen stats={regionStats.stats} champ={champView.champ} role={champView.role} inGame
-                      onRole={(role) => setChampView({ ...champView, role })}
-                      onBack={() => setScreen("draft")} regionLabel={REGION_LABEL[region]} />
-    ) : null;
+    // en partie : le menu de build remplace la draft dans la petite fenêtre
+    const game = inGame ? <InGameView stats={stats} start={inGame} game={liveGame} compact /> : null;
     return (
       <RuneImportContext.Provider value={runeImporter}>
       <SpellImportContext.Provider value={spellImporter}>
@@ -260,9 +258,9 @@ export default function App() {
                           region={regionSelect} regionLabel={REGION_LABEL[region]} />
         )}
         {stats && screen === "champion" && champView && regionStats.kind === "ready" && (
-          <ChampionScreen stats={regionStats.stats} champ={champView.champ} role={champView.role} inGame={champView.inGame}
+          <ChampionScreen stats={regionStats.stats} champ={champView.champ} role={champView.role}
                           onRole={(role) => setChampView({ ...champView, role })}
-                          onBack={() => setScreen(champView.inGame ? "draft" : "tier")}
+                          onBack={() => setScreen("tier")}
                           region={regionSelect} regionLabel={REGION_LABEL[region]} />
         )}
         {stats && screen === "pool" && <PoolScreen stats={stats} pools={pools} onChange={setPools} perso={perso} initialRole={roles.main ?? 2} />}
@@ -276,7 +274,8 @@ export default function App() {
                        onChange={(d) => setRoleOverride(d.role)}
                        onPreselect={doPreselect} onBan={doBan} perso={perso} />
         )}
-        {stats && screen === "draft" && !live && !draft && (
+        {stats && screen === "draft" && !live && inGame && <InGameView stats={stats} start={inGame} game={liveGame} />}
+        {stats && screen === "draft" && !live && !inGame && !draft && (
           <div className="content">
             <div className="empty-state">
               <div className="spinner" />
@@ -292,7 +291,7 @@ export default function App() {
             </div>
           </div>
         )}
-        {stats && screen === "draft" && !live && draft && (
+        {stats && screen === "draft" && !live && !inGame && draft && (
           <DraftScreen stats={stats} draft={draft} pool={pools[draft.role]} wide={wide}
                        onChange={setDraft} onEnd={() => setDraft(null)} perso={perso} />
         )}

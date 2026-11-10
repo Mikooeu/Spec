@@ -184,6 +184,40 @@ fn from_lockfile() -> Option<Creds> {
         .find_map(|d| std::fs::read_to_string(lockfile_in(d)).ok().and_then(|s| parse_lockfile(&s)))
 }
 
+/// API locale du jeu, ouverte seulement pendant une partie (aucune authentification, 127.0.0.1 uniquement).
+pub const LIVE_URL: &str = "https://127.0.0.1:2999/liveclientdata/allgamedata";
+
+/// Partie en cours, réduite à ce que Spec affiche : ton champion, ton niveau, ton or, tes objets et les
+/// champions adverses (avec leur poste). Aucun nom de joueur ne sort d'ici.
+pub fn trim_live(v: &Value) -> Option<Value> {
+    let active = v.get("activePlayer")?;
+    let ids = |p: &Value| [p.get("riotId"), p.get("summonerName")].into_iter().flatten().filter_map(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned).collect::<Vec<_>>();
+    let mine = ids(active);
+    if mine.is_empty() {
+        return None;
+    }
+    let players = v.get("allPlayers")?.as_array()?;
+    let me = players.iter().find(|p| ids(p).iter().any(|i| mine.contains(i)))?;
+    let team = me.get("team")?.as_str()?;
+    let key = |p: &Value| p.get("rawChampionName").and_then(Value::as_str).map(|s| s.trim_start_matches("game_character_displayname_").to_owned());
+    let items: Vec<u64> = me.get("items").and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(|i| i.get("itemID").and_then(Value::as_u64)).collect())
+        .unwrap_or_default();
+    let enemies: Vec<Value> = players.iter()
+        .filter(|p| p.get("team").and_then(Value::as_str) != Some(team))
+        .map(|p| json!({ "champion": key(p), "position": p.get("position").and_then(Value::as_str).unwrap_or("") }))
+        .collect();
+    Some(json!({
+        "champion": key(me),
+        "position": me.get("position").and_then(Value::as_str).unwrap_or(""),
+        "level": active.get("level").and_then(Value::as_u64).unwrap_or(1),
+        "gold": active.get("currentGold").and_then(Value::as_f64).unwrap_or(0.0),
+        "time": v.pointer("/gameData/gameTime").and_then(Value::as_f64).unwrap_or(0.0),
+        "items": items,
+        "enemies": enemies,
+    }))
+}
+
 pub struct Lcu {
     client: reqwest::Client,
     creds: Mutex<Option<Creds>>,
@@ -275,6 +309,16 @@ impl Lcu {
 
     pub async fn timeline(&self, game_id: u64) -> Result<Value, String> {
         self.read(&timeline_path(game_id)?).await
+    }
+
+    /// Partie en cours (voir trim_live). « loading » tant que le jeu n'a pas encore chargé la partie.
+    pub async fn live_game(&self) -> Result<Value, String> {
+        let resp = self.client.get(LIVE_URL).send().await.map_err(|_| "not_running".to_string())?;
+        if !resp.status().is_success() {
+            return Err("loading".into());
+        }
+        let v: Value = resp.json().await.map_err(|_| "loading".to_string())?;
+        trim_live(&v).ok_or_else(|| "loading".into())
     }
 
     /// Joueur cherché par son Riot ID.
@@ -572,5 +616,27 @@ mod tests {
         assert_eq!(lcu.player("../../x", 20).await, Err("bad_puuid".into()));
         assert_eq!(lcu.find_player("a", "b").await, Err("bad_riot_id".into()));
         assert_eq!(lcu.game(0).await, Err("bad_game".into()));
+    }
+
+    #[test]
+    fn live_game_keeps_only_what_spec_shows() {
+        let v = json!({
+            "activePlayer": { "riotId": "Moi#EUW", "level": 11, "currentGold": 450.5, "abilities": {} },
+            "allPlayers": [
+                { "riotId": "Moi#EUW", "team": "ORDER", "position": "MIDDLE", "rawChampionName": "game_character_displayname_Ahri",
+                  "items": [{ "itemID": 6655 }, { "itemID": 3340 }] },
+                { "riotId": "Autre#EUW", "team": "ORDER", "position": "TOP", "rawChampionName": "game_character_displayname_Darius", "items": [] },
+                { "riotId": "Face#KR", "team": "CHAOS", "position": "MIDDLE", "rawChampionName": "game_character_displayname_Zed", "items": [] }
+            ],
+            "gameData": { "gameTime": 754.2 }
+        });
+        let out = trim_live(&v).unwrap();
+        assert_eq!(out["champion"], "Ahri");
+        assert_eq!(out["level"], 11);
+        assert_eq!(out["position"], "MIDDLE");
+        assert_eq!(out["items"], json!([6655, 3340]));
+        assert_eq!(out["enemies"], json!([{ "champion": "Zed", "position": "MIDDLE" }]));
+        assert!(!out.to_string().contains('#'), "aucun Riot ID ne doit sortir");
+        assert!(trim_live(&json!({ "activePlayer": {}, "allPlayers": [] })).is_none());
     }
 }

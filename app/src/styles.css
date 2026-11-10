@@ -1042,3 +1042,52 @@ button.dcard:hover { box-shadow: inset 0 0 0 1px var(--separator); }
 .tiles__title { font-size: 0.9375rem; font-weight: 600; margin: 0.25rem 0 -0.25rem; }
 .stable__more { align-self: center; }
 .stable__score { font-size: 0.9375rem; font-weight: 700; }
+
+/* menu de build en partie (onglet Draft pendant la partie) */
+.ingame__head { display: flex; align-items: center; gap: 1rem; }
+.ingame__title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.125rem; }
+.ingame__title h1 { font-size: 1.5rem; }
+.ingame__pill { display: inline-flex; align-items: center; padding: 0.3125rem 0.75rem; border-radius: 99px; background: var(--accent-tint);
+                color: var(--accent); font-size: 0.75rem; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ingame__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: stretch; }
+.ingame__card { gap: 0.75rem; }
+.ingame__pair { display: flex; align-items: center; gap: 1.5rem; }
+.ingame__sep { width: 1px; align-self: stretch; background: var(--border); }
+.ingame__icons { display: flex; gap: 0.25rem; }
+.ingame__named { display: inline-flex; align-items: center; gap: 0.625rem; min-width: 0; }
+.ingame__named-text { display: flex; flex-direction: column; gap: 0.0625rem; min-width: 0; }
+.ingame__named-text strong { font-size: 0.8125rem; font-weight: 500; }
+.ingame__named-text small { font-size: 0.6875rem; color: var(--text-2); }
+.ingame__named.is-accent .item-ic { box-shadow: 0 0 0 2px var(--accent); }
+.ingame__named.is-accent small { color: var(--accent); }
+.ingame__list { display: flex; flex-direction: column; gap: 0.75rem; }
+.ingame__path { display: flex; align-items: flex-start; flex-wrap: wrap; row-gap: 0.5rem; }
+.ingame__step { display: inline-flex; align-items: flex-start; }
+.ingame__arrow { height: 3rem; display: grid; place-items: center; width: 1.25rem; color: var(--text-3); }
+.ingame__item { display: inline-flex; flex-direction: column; align-items: center; gap: 0.375rem; }
+.ingame__item .item-ic--md { width: 3rem; height: 3rem; }
+.ingame__item small { font-size: 0.6875rem; color: var(--text-2); }
+.ingame__item.is-done .item-ic { opacity: 0.45; }
+.ingame__item.is-done small { color: var(--text-3); }
+.ingame__item.is-next .item-ic { box-shadow: 0 0 0 2px var(--accent); }
+.ingame__item.is-next small { color: var(--accent); }
+.ingame__next { margin-top: auto; padding-top: 0.75rem; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem;
+                font-size: 0.8125rem; }
+.ingame__next strong { font-weight: 500; }
+.ingame__note { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-2); }
+.skills__cell.is-now { box-shadow: inset 0 0 0 1.5px var(--text); }
+.skills__cell.is-later { opacity: 0.45; }
+.ingame--compact .ingame__grid { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+.ingame--compact .ingame__head { gap: 0.75rem; }
+.ingame--compact .ingame__title h1 { font-size: 1.125rem; }
+.ingame--compact .ingame__pair { gap: 0.75rem; flex-wrap: nowrap; }
+.ingame--compact .ingame__item .item-ic--md { width: 2.5rem; height: 2.5rem; }
+.ingame--compact .ingame__arrow { height: 2.5rem; width: 1rem; }
+.ingame--compact .skills__cell { height: 1.375rem; font-size: 0.625rem; border-radius: 0.25rem; }
+.ingame--compact .skills__row { gap: 0.125rem; }
+.ingame__named-text strong { white-space: nowrap; }
+.ingame__named-text small { white-space: nowrap; }
+.ingame__pair .ingame__named:last-child { flex: 1; }
+.ingame__pair .ingame__named:last-child small { white-space: normal; }
+.ingame--compact .ingame__icons .item-ic--md { width: 2rem; height: 2rem; }
+.ingame--compact .ingame__named { gap: 0.5rem; }

@@ -41,6 +41,12 @@ async fn lcu_timeline(state: tauri::State<'_, Lcu>, game_id: u64) -> Result<Valu
     state.timeline(game_id).await
 }
 
+/// Partie en cours : ton niveau, ton or, tes objets et les champions adverses (API locale du jeu).
+#[tauri::command]
+async fn live_game(state: tauri::State<'_, Lcu>) -> Result<Value, String> {
+    state.live_game().await
+}
+
 /// Cherche un joueur par son Riot ID (via le client LoL).
 #[tauri::command]
 async fn lcu_find_player(state: tauri::State<'_, Lcu>, game_name: String, tag_line: String) -> Result<Value, String> {
@@ -88,7 +94,7 @@ pub fn run() {
         .manage(Lcu::new())
         .invoke_handler(tauri::generate_handler![
             lcu_get, lcu_preselect, lcu_set_rune_page, lcu_match_history,
-            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, install_path
+            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, live_game, install_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

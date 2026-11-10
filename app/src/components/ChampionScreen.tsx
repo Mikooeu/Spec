@@ -197,7 +197,7 @@ function runeSub(stats: Stats, champ: number, role: number): string | undefined 
 // Balises de départ (totem, lentille, longue-vue) : elles ne font pas partie du combo. Les stats déjà en ligne
 // les comptent encore ; on les retire ici et on fusionne les combos devenus identiques (Doran avec ou sans totem).
 const TRINKETS = new Set([3340, 3363, 3364]);
-function mergeStarts(start: [string, number, number][]): [string, number, number][] {
+export function mergeStarts(start: [string, number, number][]): [string, number, number][] {
   const merged = new Map<string, [string, number, number]>();
   for (const [ids, g, w] of start) {
     const key = ids.split(",").map(Number).filter((id) => !TRINKETS.has(id)).sort((a, b) => a - b).join(",");
@@ -208,7 +208,7 @@ function mergeStarts(start: [string, number, number][]): [string, number, number
   return [...merged.values()].sort((a, b) => b[1] - a[1]).slice(0, 3);
 }
 
-function groupIcons(ids: string): [number, number][] {
+export function groupIcons(ids: string): [number, number][] {
   const out: [number, number][] = [];
   for (const id of ids.split(",").map(Number)) {
     const last = out.find(([x]) => x === id);
@@ -292,14 +292,16 @@ function Combo({ icons, data, wr, pr }: { icons: [number, number][]; data: InfoM
 }
 
 /** Grille niveaux × sorts : la case du sort monté à chaque niveau est remplie. */
-function SkillGrid({ order }: { order: string }) {
+export function SkillGrid({ order, current }: { order: string; current?: number }) {
+  // en partie : la colonne de ton niveau est encadrée, les niveaux à venir sont atténués
+  const col = (i: number) => current == null ? "" : i + 1 === current ? " is-now" : i + 1 > current ? " is-later" : "";
   return (
     <div className="skills" role="table" aria-label={t("Ordre des sorts")}>
       {["Q", "W", "E", "R"].map((s) => (
         <div key={s} className="skills__row" role="row">
           <span className="skills__key">{s}</span>
           {order.split("").map((x, i) => (
-            <span key={i} className={`skills__cell${x === s ? (s === "R" ? " is-ult" : " is-on") : ""}`} role="cell">
+            <span key={i} className={`skills__cell${x === s ? (s === "R" ? " is-ult" : " is-on") : ""}${col(i)}`} role="cell">
               {x === s ? i + 1 : ""}
             </span>
           ))}
