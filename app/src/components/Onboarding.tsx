@@ -162,7 +162,7 @@ function PoolStep({ stats, roles, role, onRole, pools, onPools, clientOn }:
           <div className="chips">
             {played.map(([c, n]) => (
               <button key={c} className={`chip${pool.includes(c) ? " is-on" : ""}`} aria-pressed={pool.includes(c)} onClick={() => toggle(c)}>
-                <ChampionIcon stats={stats} champ={c} size={1.5} />
+                <ChampionIcon stats={stats} champ={c} size={1.5} round />
                 {pool.includes(c) ? "✓ " : "+ "}{champName(stats, c)}<span className="muted small">{plural(n, "{n} partie", "{n} parties")}</span>
               </button>
             ))}

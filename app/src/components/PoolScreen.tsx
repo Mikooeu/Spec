@@ -86,7 +86,7 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
           {pool.length === 0 && <p className="muted small">{t("Aucun champion pour l’instant : en autofill, Spec proposera les meilleurs choix du rôle.")}</p>}
           {[...pool].sort((a, b) => (roleWr(b) ?? -1) - (roleWr(a) ?? -1)).map((c) => (
             <button key={c} className="chip" onClick={() => toggle(c)} aria-label={t("Retirer {champName}", { champName: champName(stats, c) })}>
-              <ChampionIcon stats={stats} champ={c} size={1.75} />
+              <ChampionIcon stats={stats} champ={c} size={1.75} round />
               {champName(stats, c)}
               {roleWr(c) != null && <span className={`chip__wr tone-${wrTone(roleWr(c)!)}`}>{pct(roleWr(c)!)}<Trend tone={wrTone(roleWr(c)!)} /></span>}
               <span className="chip__x" aria-hidden>×</span>
