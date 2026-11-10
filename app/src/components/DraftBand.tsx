@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { enemyDisplay, roleDistribution, type Stats } from "../lib/score";
-import { champName, loadingUrl, iconUrl, pctN, tileUrl } from "../lib/ui";
+import { champName, freshLoadingUrl, freshTileUrl, loadingUrl, iconUrl, pctN, tileUrl } from "../lib/ui";
 import { analyzeTeam, type TeamComp } from "../lib/composition";
 import { winProbability } from "../lib/winprob";
 import { RoleIcon } from "./RoleIcon";
@@ -97,6 +97,9 @@ function WinBar({ p, picks }: { p: number | null; picks: number }) {
   );
 }
 
+// splash art en entier (portrait de chargement à jour, puis Data Dragon), puis vignette en secours
+const ART = [freshLoadingUrl, loadingUrl, freshTileUrl, tileUrl];
+
 function DraftCard({ stats, champ, role, me = false, picking, locked, guess, onClick }: {
   stats: Stats; champ: number | null; role: number | null; me?: boolean; picking: boolean; locked: boolean;
   guess?: string; onClick?: () => void;
@@ -106,9 +109,9 @@ function DraftCard({ stats, champ, role, me = false, picking, locked, guess, onC
   const cls = `dcard${champ == null ? " dcard--empty" : ""}${me ? " is-me" : ""}${picking ? " is-picking" : ""}${champ != null && !locked ? " is-hover" : ""}`;
   const body = (
     <>
-      {champ != null && step < 2 && (
-        <img key={`${champ}-${step}`} className={`dcard__art${step ? " dcard__art--tile" : ""}`} alt="" draggable={false}
-             src={step === 0 ? loadingUrl(stats, champ) : tileUrl(stats, champ)} onError={() => setStep(step + 1)} />
+      {champ != null && step < ART.length && (
+        <img key={`${champ}-${step}`} className={`dcard__art${step >= 2 ? " dcard__art--tile" : ""}`} alt="" draggable={false}
+             src={ART[step](stats, champ)} onError={() => setStep(step + 1)} />
       )}
       {champ == null && role != null && <RoleIcon role={role} className="dcard__ghost" />}
       {me && <span className="dcard__badge">{t("Toi")}</span>}

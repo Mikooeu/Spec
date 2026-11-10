@@ -76,7 +76,7 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
 
       <Card title={t("Ordre des sorts")}
             sub={page?.skills ? t("Priorité {replace} · {share} des parties", { replace: page.skills[1].replace(/ > /g, " › "), share: page.tg ? pct(page.skills[2] / page.tg) : "—" }) : undefined}>
-        {page?.skills ? <SkillGrid order={page.skills[0]} current={game?.level} /> : <Collecting />}
+        {page?.skills ? <SkillGrid order={page.skills[0]} current={game?.level} spent={game?.spent} /> : <Collecting />}
       </Card>
 
       <div className="ingame__grid">

@@ -10,6 +10,7 @@ export interface LiveGame {
   champion: string | null;   // clé Data Dragon (« Ahri »)
   position: string;          // TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY (vide hors classée)
   level: number;
+  spent: number | null;      // points de sorts déjà dépensés (null si le jeu ne les donne pas)
   gold: number;
   time: number;              // secondes de jeu au moment de la lecture
   items: number[];
@@ -21,7 +22,7 @@ const POLL_MS = 3000;   // assez pour suivre niveau, or et achats sans charger l
 export const POSITION_ROLE: Record<string, number> = { TOP: 0, JUNGLE: 1, MIDDLE: 2, BOTTOM: 3, UTILITY: 4 };
 
 /** Ce qui change l'affichage (tout sauf le chrono, qui avance tout seul entre deux lectures). */
-const shown = (g: Omit<LiveGame, "at">) => JSON.stringify([g.champion, g.position, g.level, Math.floor(g.gold), g.items, g.enemies]);
+const shown = (g: Omit<LiveGame, "at">) => JSON.stringify([g.champion, g.position, g.level, g.spent, Math.floor(g.gold), g.items, g.enemies]);
 
 /** Lit la partie toutes les 3 s tant que `active` ; null pendant l'écran de chargement.
  *  Fenêtre réduite : aucune lecture. Rien de changé : aucun nouveau rendu. */

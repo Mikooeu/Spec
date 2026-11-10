@@ -23,6 +23,12 @@ export const iconUrl = (stats: Stats, champ: number) => {
 };
 
 /** Vignette carrée du splash art (380 × 380), recadrée par Riot sur le visage : base des mini-cartes. */
+// Data Dragon ne met plus à jour ses vignettes et portraits sans version : un champion refait (Fiddlesticks…)
+// garde son ancien splash. CommunityDragon suit le jeu ; Data Dragon reste en secours s'il ne répond pas.
+const CDRAGON = "https://cdn.communitydragon.org/latest/champion";
+export const freshTileUrl = (_stats: Stats, champ: number) => `${CDRAGON}/${champ}/tile`;
+export const freshLoadingUrl = (_stats: Stats, champ: number) => `${CDRAGON}/${champ}/portrait`;
+
 export const tileUrl = (stats: Stats, champ: number) => {
   const c = stats.champions.get(champ);
   return c ? `https://ddragon.leagueoflegends.com/cdn/img/champion/tiles/${c.key}_0.jpg` : "";

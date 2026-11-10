@@ -292,16 +292,17 @@ function Combo({ icons, data, wr, pr }: { icons: [number, number][]; data: InfoM
 }
 
 /** Grille niveaux × sorts : la case du sort monté à chaque niveau est remplie. */
-export function SkillGrid({ order, current }: { order: string; current?: number }) {
-  // en partie : la colonne de ton niveau est encadrée, les niveaux à venir sont atténués
-  const col = (i: number) => current == null ? "" : i + 1 === current ? " is-now" : i + 1 > current ? " is-later" : "";
+export function SkillGrid({ order, current, spent }: { order: string; current?: number; spent?: number | null }) {
+  // en partie : seule la case du sort à monter est encadrée (le prochain point dans l'ordre), les niveaux à venir sont atténués
+  const next = current == null ? -1 : spent == null ? current - 1 : spent < current ? spent : -1;
+  const col = (i: number, on: boolean) => current == null ? "" : (i === next && on ? " is-now" : "") + (i + 1 > current ? " is-later" : "");
   return (
     <div className="skills" role="table" aria-label={t("Ordre des sorts")}>
       {["Q", "W", "E", "R"].map((s) => (
         <div key={s} className="skills__row" role="row">
           <span className="skills__key">{s}</span>
           {order.split("").map((x, i) => (
-            <span key={i} className={`skills__cell${x === s ? (s === "R" ? " is-ult" : " is-on") : ""}${col(i)}`} role="cell">
+            <span key={i} className={`skills__cell${x === s ? (s === "R" ? " is-ult" : " is-on") : ""}${col(i, x === s)}`} role="cell">
               {x === s ? i + 1 : ""}
             </span>
           ))}

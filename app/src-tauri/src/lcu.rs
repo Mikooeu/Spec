@@ -207,10 +207,15 @@ pub fn trim_live(v: &Value) -> Option<Value> {
         .filter(|p| p.get("team").and_then(Value::as_str) != Some(team))
         .map(|p| json!({ "champion": key(p), "position": p.get("position").and_then(Value::as_str).unwrap_or("") }))
         .collect();
+    // points de sorts déjà dépensés (Q + W + E + R) : le prochain dans l'ordre est celui à monter
+    let spent: Option<u64> = ["Q", "W", "E", "R"].iter()
+        .map(|k| active.pointer(&format!("/abilities/{k}/abilityLevel")).and_then(Value::as_u64))
+        .sum();
     Some(json!({
         "champion": key(me),
         "position": me.get("position").and_then(Value::as_str).unwrap_or(""),
         "level": active.get("level").and_then(Value::as_u64).unwrap_or(1),
+        "spent": spent,
         "gold": active.get("currentGold").and_then(Value::as_f64).unwrap_or(0.0),
         "time": v.pointer("/gameData/gameTime").and_then(Value::as_f64).unwrap_or(0.0),
         "items": items,
@@ -621,7 +626,8 @@ mod tests {
     #[test]
     fn live_game_keeps_only_what_spec_shows() {
         let v = json!({
-            "activePlayer": { "riotId": "Moi#EUW", "level": 11, "currentGold": 450.5, "abilities": {} },
+            "activePlayer": { "riotId": "Moi#EUW", "level": 11, "currentGold": 450.5,
+                "abilities": { "Q": { "abilityLevel": 5 }, "W": { "abilityLevel": 3 }, "E": { "abilityLevel": 1 }, "R": { "abilityLevel": 1 } } },
             "allPlayers": [
                 { "riotId": "Moi#EUW", "team": "ORDER", "position": "MIDDLE", "rawChampionName": "game_character_displayname_Ahri",
                   "items": [{ "itemID": 6655 }, { "itemID": 3340 }] },
@@ -634,6 +640,7 @@ mod tests {
         assert_eq!(out["champion"], "Ahri");
         assert_eq!(out["level"], 11);
         assert_eq!(out["position"], "MIDDLE");
+        assert_eq!(out["spent"], 10);
         assert_eq!(out["items"], json!([6655, 3340]));
         assert_eq!(out["enemies"], json!([{ "champion": "Zed", "position": "MIDDLE" }]));
         assert!(!out.to_string().contains('#'), "aucun Riot ID ne doit sortir");
