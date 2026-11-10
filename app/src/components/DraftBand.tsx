@@ -101,14 +101,14 @@ function DraftCard({ stats, champ, role, me = false, picking, locked, guess, onC
   stats: Stats; champ: number | null; role: number | null; me?: boolean; picking: boolean; locked: boolean;
   guess?: string; onClick?: () => void;
 }) {
-  const [step, setStep] = useState(0);   // vignette centrée sur le visage, puis portrait de chargement
+  const [step, setStep] = useState(0);   // splash art en entier (portrait de chargement), puis vignette en secours
   useEffect(() => setStep(0), [champ]);
   const cls = `dcard${champ == null ? " dcard--empty" : ""}${me ? " is-me" : ""}${picking ? " is-picking" : ""}${champ != null && !locked ? " is-hover" : ""}`;
   const body = (
     <>
       {champ != null && step < 2 && (
-        <img key={`${champ}-${step}`} className={`dcard__art${step ? " dcard__art--loading" : ""}`} alt="" draggable={false}
-             src={step === 0 ? tileUrl(stats, champ) : loadingUrl(stats, champ)} onError={() => setStep(step + 1)} />
+        <img key={`${champ}-${step}`} className={`dcard__art${step ? " dcard__art--tile" : ""}`} alt="" draggable={false}
+             src={step === 0 ? loadingUrl(stats, champ) : tileUrl(stats, champ)} onError={() => setStep(step + 1)} />
       )}
       {champ == null && role != null && <RoleIcon role={role} className="dcard__ghost" />}
       {me && <span className="dcard__badge">{t("Toi")}</span>}

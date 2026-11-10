@@ -66,16 +66,37 @@ export function statsOf(games: Game[]): SeasonStats {
   return { source: "recent", games: played.length, champions: [...by.values()], sides, surrender, duration, days };
 }
 
-export type SortKey = "games" | "wr" | "kda" | "cs" | "gold" | "pentas";
+export type SortKey = "score" | "games" | "wr" | "kda" | "cs" | "gold" | "pentas";
 
 export const kdaOf = (c: Pick<ChampLine, "kills" | "deaths" | "assists">) =>
   c.deaths ? (c.kills + c.assists) / c.deaths : c.kills + c.assists;
 export const perMinute = (x: number, seconds: number) => (seconds > 60 ? x / (seconds / 60) : 0);
 
+/**
+ * Score d'un champion sur 100 (50 = ton niveau habituel) : winrate lissé (peu de parties = rapproché de 50 %),
+ * puis KDA, CS/min et or/min comparés à ta moyenne dans le même rôle. Le winrate compte le plus ; les trois autres
+ * pèsent d'autant moins que le champion a peu de parties.
+ */
+export function champScore(c: ChampLine, all: ChampLine[]): number {
+  const same = all.filter((x) => x.role === c.role);
+  const sum = (f: (x: ChampLine) => number) => same.reduce((a, x) => a + f(x), 0);
+  const secs = sum((x) => x.seconds);
+  const refKda = kdaOf({ kills: sum((x) => x.kills), deaths: sum((x) => x.deaths), assists: sum((x) => x.assists) }) || 2.5;
+  const refCs = perMinute(sum((x) => x.cs), secs), refGold = perMinute(sum((x) => x.gold), secs);
+  const clip = (x: number, m: number) => Math.max(-m, Math.min(m, x));
+  const wr = (c.wins + SCORE_K * 0.5) / (c.games + SCORE_K);
+  const trust = c.games / (c.games + 5);
+  const kda = clip(Math.log((kdaOf(c) || 0.1) / refKda) * 8, 8);
+  const cs = c.role === 4 || !refCs ? 0 : clip(((perMinute(c.cs, c.seconds) - refCs) / refCs) * 25, 6);
+  const gold = !refGold ? 0 : clip(((perMinute(c.gold, c.seconds) - refGold) / refGold) * 25, 6);
+  return Math.round(Math.max(0, Math.min(100, 50 + (wr - 0.5) * 200 + trust * (kda + cs + gold))));
+}
+const SCORE_K = 10;   // lissage du winrate : 10 parties « à 50 % » ajoutées
+
 /** Lignes du tableau : rôle choisi (null : tous, une ligne par champion et par rôle), minimum de parties, tri. */
 export function champRows(s: SeasonStats, role: number | null, min: number, sort: SortKey, asc: boolean): ChampLine[] {
   const value = (c: ChampLine) =>
-    sort === "games" ? c.games : sort === "wr" ? c.wins / c.games : sort === "kda" ? kdaOf(c)
+    sort === "score" ? champScore(c, s.champions) : sort === "games" ? c.games : sort === "wr" ? c.wins / c.games : sort === "kda" ? kdaOf(c)
       : sort === "cs" ? perMinute(c.cs, c.seconds) : sort === "gold" ? perMinute(c.gold, c.seconds) : c.pentas;
   return s.champions
     .filter((c) => c.games >= min && (role == null || c.role === role))

@@ -1,7 +1,7 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ROLE_LABELS, type Stats } from "../lib/score";
-import { champName, dec1, int, pct, usePersistent, wrTone } from "../lib/ui";
+import { champName, dec1, int, pct, pctN, usePersistent, wrTone } from "../lib/ui";
 import type { PersonalState, Personal } from "../lib/api";
 import type { Account } from "../lib/lcu";
 import { ChampionIcon } from "./ChampionIcon";
@@ -10,7 +10,7 @@ import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
 import { IMPACT_MIN, IMPACT_RELIABLE, impact, recaps, settle, type Recap } from "../lib/impact";
 import { Trend } from "./Trend";
 import {
-  QUEUE_LABELS, duoPartner, loadDuos, type Duo, findPlayer, loadGameDetail, loadHistory, loadPlayer, loadServerHistory, mergeHistory, rankText,
+  QUEUE_LABELS, duoPartner, loadDuos, type Duo, findPlayer, loadGameDetail, loadHistory, loadPlayer, loadServerHistory, mergeHistory, rankText, rankTier,
   readRanked, readLpSeries, noteSoloLp, lpLabel, type LpPoint, type Game, type GameDetail, type OtherPlayer, type PlayerLine, type QueueKind,
 } from "../lib/history";
 import { noteText, noteTone, rateGame, sortedParts, summaryParts, type Contribution, type Criterion, type Rating } from "../lib/rating";
@@ -31,17 +31,17 @@ interface Props {
   lpVersion: number;
 }
 
-type Guess = (champ: number, notJungle: boolean) => number | null;
+type Guess = import("../lib/history").Guess;
 
 /** Poste probable d'après les parties Master+, quand le client ne le donne pas. */
 function useGuess(stats: Stats): Guess {
-  return useCallback((champ: number, notJungle: boolean) => {
+  return useMemo(() => Object.assign((champ: number, notJungle: boolean) => {
     const dist = stats.roleGames.get(champ);
     if (!dist) return null;
     let best: number | null = null;
     dist.forEach((g, r) => { if ((!notJungle || r !== 1) && g > 0 && (best == null || g > dist[best])) best = r; });
     return best;
-  }, [stats]);
+  }, { dist: (champ: number) => stats.roleGames.get(champ) ?? null }), [stats]);
 }
 
 /** Données d'affichage partagées par les lignes d'historique et le détail des parties. */
@@ -118,6 +118,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   const [serverGames, setServerGames] = useState<Game[]>([]);
   const [more, setMore] = useState<"idle" | "loading" | "end">("idle");
   const [rank, setRank] = useState<string | null>(null);
+  const [tier, setTier] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState(false);
   const [historyRetry, setHistoryRetry] = useState(0);
   const [code, setCode] = useState("");
@@ -157,7 +158,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
     fetchClient(0);
     readRanked().then((r) => {
       noteSoloLp(r).then(() => alive && setSeriesTick((n) => n + 1));   // la courbe suit le compte connecté
-      if (alive) setRank(rankText(r?.queueMap?.RANKED_SOLO_5x5));
+      if (alive) { setRank(rankText(r?.queueMap?.RANKED_SOLO_5x5)); setTier(rankTier(r?.queueMap?.RANKED_SOLO_5x5)); }
     });
     return () => { alive = false; window.clearTimeout(timer); };
   }, [clientOn, lpVersion, guess, historyRetry]);
@@ -228,7 +229,6 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
     <>
       <header className="page-head">
         <div>
-          <p className="overline">{t("Profil")}</p>
           <h1>{t("Ton profil")}</h1>
         </div>
       </header>
@@ -237,7 +237,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
         <ProfileIcon version={stats.ddragon} icon={account?.icon ?? null} />
         <div className="grow">
           <p className="account__name">{account ? `${account.name}${account.region ? ` · ${account.region}` : ""}` : t("Aucun compte lié")}</p>
-          {rank && <p className="account__rank">{t("Classé Solo/Duo · ")}{rank}</p>}
+          {rank && <RankLine tier={tier} rank={rank} />}
           <p className="muted small">{persoText(perso)}</p>
         </div>
         <span className="pill">
@@ -271,8 +271,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
         <History stats={stats} games={duo ? duoGames : games} assets={assets} role={role} onRole={setRole} me={account?.puuid ?? null}
                  queue={duo ? undefined : queue}
                  intro={duo ? t("Vos {games} parties ensemble en Solo/Duo, de la plus récente à la plus ancienne.", { games: duo.games })
-                   : registered
-                   ? t("Tes parties de la saison. Clique sur une partie pour voir le détail des 10 joueurs. Les LP s’affichent pour les parties jouées avec Spec ouvert.")
+                   : registered ? null
                    : t("Tes dernières parties. Clique sur une partie pour voir le détail des 10 joueurs. Active tes stats perso pour retrouver toute ta saison.")}
                  empty={!clientOn && !games ? t("Lance le client LoL pour voir ton historique.") : null}
                  error={historyError && !serverGames.length ? t("Le client LoL n’a pas renvoyé ton historique. Réessaie dans un instant.") : null}
@@ -368,12 +367,12 @@ function bestPicks(rows: [number, number, number, number][], role: number | null
     .slice(0, 3);
 }
 
-function BestPicks({ stats, picks, sub, empty, filter }: { stats: Stats; picks: Pick[]; sub: string; empty: string; filter?: React.ReactNode }) {
+function BestPicks({ stats, picks, sub, empty, filter }: { stats: Stats; picks: Pick[]; sub?: string; empty: string; filter?: React.ReactNode }) {
   return (
     <section className="best">
       <div>
         <h2>{t("Meilleurs picks")}</h2>
-        <p className="muted small">{sub}</p>
+        {sub && <p className="muted small">{sub}</p>}
       </div>
       {filter}
       {picks.length ? (
@@ -433,7 +432,6 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
       <button className="link-back" onClick={onBack}>{t("← Ton profil")}</button>
       <header className="page-head">
         <div>
-          <p className="overline">{t("Profil d’un joueur")}</p>
           <h1>{player?.name ?? (error ? t("Joueur introuvable") : "Chargement…")}</h1>
         </div>
       </header>
@@ -444,11 +442,11 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
             <ProfileIcon version={stats.ddragon} icon={player.icon} />
             <div className="grow">
               <p className="account__name">{player.name}</p>
-              <p className="account__rank">{player.rank ? t("Classé Solo/Duo · {rank}", { rank: player.rank }) : t("Non classé en Solo/Duo")}</p>
-              <p className="muted small">{t("Calculé sur ses 20 dernières parties, comme dans le client LoL.")}</p>
+              {player.rank ? <RankLine tier={player.tier} rank={player.rank} /> : <p className="account__rank">{t("Non classé en Solo/Duo")}</p>}
             </div>
             <span className="pill"><span className="dot" />{t("Via le client LoL")}</span>
           </div>
+          {ranked.length > 0 && <h2 className="tiles__title">{t("Sur ses 20 dernières parties")}</h2>}
           {ranked.length > 0 && (
             <div className="tiles">
               <Tile label={t("Winrate récent")} value={pct(wins / ranked.length)} tone={wrTone(wins / ranked.length)}
@@ -463,13 +461,12 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
           <div key={tab} className="profile-view fade-in">
           {tab === "stats" && (
             <BestPicks stats={stats} picks={picks}
-                       sub={t("Sur ses 20 dernières parties (le client LoL ne donne pas plus) · minimum 3 parties")}
                        empty={t("Pas assez de parties sur un même champion pour ce filtre.")}
                        filter={<RoleFilter role={pickRole} onRole={setPickRole} />} />
           )}
           {tab === "history" && (
             <History stats={stats} games={player.games} assets={assets} role={role} onRole={setRole} me={me}
-                     intro={t("Ses 20 dernières parties visibles dans le client LoL. Clique sur une partie pour voir le détail.")}
+                     intro={null}
                      onOpenPlayer={onOpenPlayer} subject={puuid} />
           )}
           </div>
@@ -498,7 +495,7 @@ interface HistoryProps {
   stats: Stats; games: Game[] | null; assets: Assets;
   role: number | null; onRole: (r: number | null) => void;
   me: string | null; subject?: string;
-  title?: string; intro: string; empty?: string | null; error?: string | null;
+  title?: string; intro?: string | null; empty?: string | null; error?: string | null;
   footer?: React.ReactNode; notice?: React.ReactNode; showLp?: boolean;
   onOpenPlayer: (puuid: string | null) => void;
   /** Historique filtré sur un partenaire de duo. */
@@ -529,7 +526,7 @@ function History({ stats, games, assets, role, onRole, me, subject, title, intro
     <section className="history">
       <div>
         {title && <h2>{title}</h2>}
-        <p className="muted small">{intro}</p>
+        {intro && <p className="muted small">{intro}</p>}
       </div>
       {duo && (
         <div className="duo-filter">
@@ -953,7 +950,6 @@ function ImpactCard({ version }: { version: number }) {
     <section className="best">
       <div>
         <h2>{t("Spec t’aide-t-il à gagner ?")}</h2>
-        <p className="muted small">{t("Tes parties classées jouées avec Spec ouvert : le pick que Spec classait n°1, ou un autre.")}</p>
       </div>
       <div className="card impact">
         {data.total < IMPACT_MIN ? (
@@ -1045,7 +1041,6 @@ function DuoList({ stats, client, selected, onOpen }:
   if (!duos) return <div className="skeleton">{[0, 1, 2].map((i) => <span key={i} />)}</div>;
   return (
     <section className="best">
-      <p className="muted small">{t("Tes parties en Solo/Duo avec d’autres joueurs qui ont lié leur compte Spec. Clique sur un profil pour voir vos parties ensemble dans l’onglet Historique.")}</p>
       {duos.length === 0 ? (
         <p className="hint">{t("Aucune partie en duo avec un joueur Spec pour l’instant.")}</p>
       ) : (
@@ -1079,7 +1074,6 @@ function DuoList({ stats, client, selected, onOpen }:
           })}
         </div>
       )}
-      <p className="muted small">{t("Les pseudos sont lus dans le client LoL (le serveur Spec n’en garde aucun) : ouvre le client pour les voir.")}</p>
     </section>
   );
 }
@@ -1110,6 +1104,7 @@ function ProgressView({ stats, games, perso, version, onOpenGame }:
     }
     return [...by.entries()];
   }, [perso, games]);
+  const weekTotal = weeks.reduce<[number, number]>((a, [, [g, w]]) => [a[0] + g, a[1] + w], [0, 0]);
   const list = useMemo(() => recaps(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map((games ?? []).map((g) => [g.id, g])), [games]);
   const month = list.filter((r) => Date.now() - r.at < 30 * 86400_000);
@@ -1121,7 +1116,6 @@ function ProgressView({ stats, games, perso, version, onOpenGame }:
         <div className="section-head">
           <div>
             <h2>{t("Évolution des LP")}</h2>
-            <p className="muted small">{t("Solo/Duo · chaque point = une partie classée suivie par Spec")}</p>
           </div>
           {series.length > 0 && <span className="muted small">{t("Depuis le ")}{shortDate(series[0].at)}</span>}
         </div>
@@ -1132,29 +1126,27 @@ function ProgressView({ stats, games, perso, version, onOpenGame }:
         <div className="section-head">
           <div>
             <h2>{t("Winrate par semaine")}</h2>
-            <p className="muted small">{t("Solo/Duo · la ligne pointillée marque 50 %")}</p>
           </div>
-          <span className="muted small">{t("8 dernières semaines")}</span>
+          <span className="weeks__sum">
+            <span className="muted small">{t("8 dernières semaines")}</span>
+            {weekTotal[0] > 0 && <span className={`weeks__pill tone-${wrTone(weekTotal[1] / weekTotal[0])}`}>
+              {pct(weekTotal[1] / weekTotal[0])} · {plural(weekTotal[0], "{n} partie", "{n} parties")}</span>}
+          </span>
         </div>
         <WeekBars weeks={weeks} />
       </section>
 
-      <section className="best">
+      {list.length > 0 && <section className="best">
         <div className="section-head">
           <div>
             <h2>{t("Après chaque partie")}</h2>
-            <p className="muted small">{t("Ce que Spec t’avait conseillé, ce que tu as joué, et le résultat. Clique sur une partie pour ouvrir son détail.")}</p>
           </div>
           {month.length > 0 && <span className="muted small">{t("Ce mois-ci : conseil suivi {n} fois sur {total}", { n: followed, total: month.length })}</span>}
         </div>
-        {list.length === 0 ? (
-          <p className="hint">{t("Joue une partie classée avec Spec ouvert pendant la sélection des champions : son bilan s’affichera ici.")}</p>
-        ) : (
-          <div className="recaps stagger">
-            {list.slice(0, 15).map((r) => <RecapRow key={r.game} stats={stats} recap={r} game={byId.get(r.game)} onOpen={() => onOpenGame(r.game)} />)}
-          </div>
-        )}
-      </section>
+        <div className="recaps stagger">
+          {list.slice(0, 15).map((r) => <RecapRow key={r.game} stats={stats} recap={r} game={byId.get(r.game)} onOpen={() => onOpenGame(r.game)} />)}
+        </div>
+      </section>}
     </>
   );
 }
@@ -1220,29 +1212,41 @@ function LpChart({ series }: { series: LpPoint[] }) {
   );
 }
 
+/** Moins de parties que ça dans une semaine : barre estompée, le winrate y est trop incertain. */
+const WEEK_FEW = 5;
+
+/** Winrate par semaine : barres qui partent de 50 % (vert au-dessus, rouge en dessous), écart plafonné à ±30 pt. */
 function WeekBars({ weeks }: { weeks: [number, [number, number]][] }) {
   const total = weeks.reduce((a, [, [g]]) => a + g, 0);
   if (!total) return <div className="card"><p className="hint">{t("Aucune partie classée Solo/Duo ces 8 dernières semaines.")}</p></div>;
   return (
     <div className="card weeks">
       <div className="weeks__plot">
-        <span className="weeks__half" aria-hidden />
+        <span className="weeks__mid" aria-hidden />
         {weeks.map(([start, [g, w]]) => {
-          const wr = g ? w / g : 0;
-          const tone = !g ? "neutral" : wrTone(wr);
-          // échelle 30 % → 70 % : les écarts autour de 50 % restent lisibles
-          const h = g ? Math.max(4, Math.min(100, ((wr - 0.3) / 0.4) * 100)) : 0;
+          const wr = g ? w / g : 0.5;
+          const dev = Math.max(-0.3, Math.min(0.3, wr - 0.5));
+          const tone = !g || Math.abs(wr - 0.5) <= 0.02 ? "neutral" : dev > 0 ? "good" : "bad";
+          const h = g ? Math.max(3, (Math.abs(dev) / 0.3) * 100) : 0;
           return (
             <div key={start} className="weeks__col" title={g ? t("{n} sur {total}", { n: plural(w, "{n} victoire", "{n} victoires"), total: plural(g, "{n} partie", "{n} parties") }) : t("Aucune partie")}>
-              <div className="weeks__bar-wrap">
-                {g > 0 && <span className={`weeks__value tone-${tone}`}>{pct(wr)}<Trend tone={tone} /></span>}
-                <span className={`weeks__bar tone-bg-${tone}`} style={{ height: `${h}%` }} />
+              <div className="weeks__area">
+                {g > 0 ? <span className={`weeks__bar tone-bg-${tone}${dev >= 0 ? " is-up" : " is-down"}${g < WEEK_FEW ? " is-few" : ""}`}
+                               style={{ height: `${h / 2}%` }} />
+                       : <span className="weeks__none" />}
               </div>
+              <strong className={`weeks__value ${g ? `tone-${tone}` : "muted"}`}>{g ? pctN(Math.round(wr * 100)) : "—"}</strong>
               <span className="weeks__label">{shortDate(start)}</span>
-              <span className="weeks__games">{g ? plural(g, "{n} partie", "{n} parties") : "—"}</span>
+              <span className="weeks__games">{g ? plural(g, "{n} partie", "{n} parties") : t("aucune partie")}</span>
             </div>
           );
         })}
+      </div>
+      <div className="weeks__legend">
+        <span><i className="tone-bg-good" />{t("au-dessus de 50 %")}</span>
+        <span><i className="tone-bg-bad" />{t("en dessous")}</span>
+        {weeks.some(([, [g]]) => g > 0 && g < WEEK_FEW) &&
+          <span><i className="tone-bg-neutral is-few" />{t("moins de {n} parties : à prendre avec prudence", { n: WEEK_FEW })}</span>}
       </div>
     </div>
   );
@@ -1369,5 +1373,19 @@ function RatingBreakdown({ rating }: { rating: Rating }) {
         );
       })}
     </span>
+  );
+}
+
+/** Rang Solo/Duo avec l'emblème Riot (Community Dragon) ; le texte seul si l'image ne charge pas. */
+function RankLine({ tier, rank }: { tier: string | null; rank: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <p className="account__rank rank-line">
+      {tier && !failed && (
+        <img src={`https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/${tier}.svg`}
+             alt="" aria-hidden draggable={false} onError={() => setFailed(true)} />
+      )}
+      {rank}
+    </p>
   );
 }

@@ -48,7 +48,6 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
     <div className="content settings">
       <header className="page-head">
         <div>
-          <p className="overline">{t("Réglages")}</p>
           <h1>{t("Réglages")}</h1>
         </div>
       </header>
@@ -90,7 +89,7 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
           <button className="btn btn--secondary" onClick={onReplayOnboarding}>{t("Revoir l’accueil")}</button>
         </Row>
         <Row label={t("Dossier d’installation")}
-             desc={t("{v} — pour le changer, désinstalle Spec puis réinstalle-le dans un autre dossier : ton pool et tes réglages sont gardés (ne coche pas la suppression des données).", { v: folder ?? t("Choisi à l’installation") })}>
+             desc={t("{v} · Pour déplacer Spec : désinstalle-le puis réinstalle-le en choisissant le dossier. Ton pool et tes réglages sont gardés.", { v: folder ?? t("Choisi à l’installation") })}>
           <button className="btn btn--secondary" onClick={() => path && revealInstall(path)} disabled={!path}>{t("Ouvrir le dossier")}</button>
         </Row>
         <Row label={t("Version")} desc={t("Spec {v}{v2}", { v: version ?? "—", v2: checkText ? ` · ${checkText}` : "" })}>

@@ -109,7 +109,9 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
             </>
           )}
           <div className={`section-head${draft.banPhase ? " section-head--spaced" : ""}`}>
-            <h2>{draft.myLocked ? t("Ton pick est verrouillé") : autofill ? t("Picks recommandés en autofill {v}", { v: ROLE_LABELS[draft.role] }) : t("Picks recommandés pour toi")}</h2>
+            <h2>{draft.myLocked ? t("Ton pick est verrouillé")
+              : autofill ? (blind ? t("Blind picks recommandés en autofill {v}", { v: ROLE_LABELS[draft.role] }) : t("Picks recommandés en autofill {v}", { v: ROLE_LABELS[draft.role] }))
+              : blind ? t("Blind picks recommandés pour toi") : t("Picks recommandés pour toi")}</h2>
             <span className="muted small">
               {t("{n} parties Master+ · patch {patch}", { n: int(Number(stats.meta.matches ?? 0)), patch: patchLabel(stats.meta.patch) })}
             </span>
@@ -117,9 +119,6 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
           {draft.myChamp != null && (draft.myLocked || !myInList) && <MyPick stats={stats} draft={draft} />}
           {draft.myLocked && (
             <p className="hint">{t("Plus de présélection à faire : importe tes runes et tes sorts ci-dessus.")}</p>
-          )}
-          {!draft.myLocked && blind && rows.length > 0 && (
-            <p className="hint hint--blind">{t("Ton vis-à-vis n’a pas encore choisi : les champions faciles à contrer descendent dans la liste.")}</p>
           )}
           {!draft.myLocked && autofill && (
             <p className="hint">{t("Ton pool est vide pour ce rôle : voici les meilleurs choix de cette draft.")}</p>

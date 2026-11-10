@@ -129,6 +129,11 @@ const TIER_FR: Record<string, string> = {
   IRON: t("Fer"), BRONZE: t("Bronze"), SILVER: t("Argent"), GOLD: t("Or"), PLATINUM: t("Platine"), EMERALD: t("Émeraude"),
   DIAMOND: t("Diamant"), MASTER: t("Maître"), GRANDMASTER: t("Grand Maître"), CHALLENGER: t("Challenger"),
 };
+/** Palier en minuscules (« diamond ») pour l'emblème Riot, ou null sans classement. */
+export function rankTier(r: Ranked | undefined): string | null {
+  return !r || !r.tier || r.tier === "NONE" ? null : r.tier.toLowerCase();
+}
+
 export function rankText(r: Ranked | undefined): string | null {
   if (!r || !r.tier || r.tier === "NONE" || r.tier === "") return null;
   const apex = !TIERS.includes(r.tier);
@@ -186,7 +191,37 @@ function readLp(): Record<string, number> {
   try { return JSON.parse(localStorage.getItem(LP_KEY) ?? "{}"); } catch { return {}; }
 }
 
-type Guess = (champ: number, notJungle: boolean) => number | null;
+/** Rôle le plus probable d'un champion ; `dist` (parties par rôle) permet de répartir une équipe entière. */
+export type Guess = ((champ: number, notJungle: boolean) => number | null) & { dist?: (champ: number) => number[] | null };
+
+/**
+ * Rôles d'une équipe quand le client ne les donne pas : un joueur par rôle, la répartition la plus probable
+ * d'après les parties Master+ de chaque champion. Les postes connus (et le Châtiment pour le jungler) sont gardés.
+ */
+function assignTeamRoles(champs: number[], fixed: (number | null)[], dist: (champ: number) => number[] | null): number[] {
+  const out = fixed.map((r) => r ?? -1);
+  const free = [0, 1, 2, 3, 4].filter((r) => !out.includes(r));
+  const open = out.map((r, i) => (r < 0 ? i : -1)).filter((i) => i >= 0);
+  if (!open.length || open.length > free.length) return out.map((r) => (r < 0 ? 9 : r));
+  const prob = (c: number, r: number) => {
+    const d = dist(c); const tot = d ? d.reduce((a, b) => a + b, 0) : 0;
+    return (tot ? d![r] / tot : 0.2) + 0.02;
+  };
+  let best: number[] = [], bestW = -1;
+  const used = new Set<number>(), pick: number[] = [];
+  const walk = (i: number, w: number) => {
+    if (i === open.length) { if (w > bestW) { bestW = w; best = [...pick]; } return; }
+    for (const r of free) {
+      if (used.has(r)) continue;
+      used.add(r); pick.push(r);
+      walk(i + 1, w * prob(champs[open[i]], r));
+      used.delete(r); pick.pop();
+    }
+  };
+  walk(0, 1);
+  open.forEach((i, k) => { out[i] = best[k]; });
+  return out;
+}
 type RawStats = {
   win: boolean; kills: number; deaths: number; assists: number; totalMinionsKilled?: number;
   neutralMinionsKilled?: number; gameEndedInEarlySurrender?: boolean;
@@ -293,6 +328,16 @@ export function mergeHistory(client: Game[], server: Game[]): Game[] {
   return [...byId.values()].sort((a, b) => b.created - a.created);
 }
 
+/** Rôles devinés pour toute l'équipe (un par rôle) quand le client n'en donne pas assez ou en double. */
+function withTeamRoles(players: (PlayerLine & { known?: number | null })[], guess?: Guess): PlayerLine[] {
+  const strip = (x: PlayerLine & { known?: number | null }): PlayerLine => { const { known: _k, ...rest } = x; return rest; };
+  const fixed = players.map((x) => x.known ?? null);
+  const dupes = fixed.some((r, i) => r != null && fixed.indexOf(r) !== i);
+  if (!guess?.dist || players.length !== 5 || dupes || fixed.every((r) => r != null)) return players.map(strip);
+  const roles = assignTeamRoles(players.map((x) => x.champ), fixed, guess.dist);
+  return players.map((x, i) => ({ ...strip(x), role: roles[i] < 5 ? roles[i] : x.role }));
+}
+
 const detailCache = new Map<number, Promise<GameDetail>>();
 
 /** Détail d'une partie terminée : les 10 joueurs, comme dans le client (gardé en mémoire : une partie ne change plus). */
@@ -312,8 +357,10 @@ async function fetchGameDetail(gameId: number, guess?: Guess): Promise<GameDetai
     const who = ids.get(p.participantId ?? -1);
     const name = who?.gameName ? `${who.gameName}#${who.tagLine ?? ""}` : who?.summonerName ?? t("Joueur");
     const s = p.stats;
-    const line: PlayerLine = {
-      puuid: who?.puuid || null, name, icon: who?.profileIcon ?? null, champ: p.championId, role: roleOf(p, guess),
+    const pos = p.teamPosition || p.individualPosition;
+    const known = pos && pos in POSITIONS ? POSITIONS[pos] : p.spell1Id === SMITE || p.spell2Id === SMITE ? 1 : null;
+    const line: PlayerLine & { known?: number | null } = {
+      puuid: who?.puuid || null, name, icon: who?.profileIcon ?? null, champ: p.championId, role: roleOf(p, guess), known,
       spells: [n(p.spell1Id), n(p.spell2Id)], keystone: n(s.perk0), subStyle: n(s.perkSubStyle), items: itemsOf(s),
       runes: runesOf(s),
       kills: s.kills, deaths: s.deaths, assists: s.assists,
@@ -329,14 +376,14 @@ async function fetchGameDetail(gameId: number, guess?: Guess): Promise<GameDetai
     duration: seconds(g.gameDuration),
     teams: [...teams.entries()].sort((a, b) => a[0] - b[0]).map(([teamId, players]) => ({
       teamId, win: wins.get(teamId) ?? players.length > 0,
-      players: players.sort((a, b) => order.indexOf(a.role ?? 9) - order.indexOf(b.role ?? 9)),
+      players: withTeamRoles(players, guess).sort((a, b) => order.indexOf(a.role ?? 9) - order.indexOf(b.role ?? 9)),
     })),
   };
 }
 
 export interface OtherPlayer {
   puuid: string; name: string; icon: number | null; level: number | null;
-  rank: string | null; games: Game[];
+  rank: string | null; tier: string | null; games: Game[];
 }
 
 /** Riot ID « Pseudo#TAG » → identifiant du joueur dans le client, ou un message d'erreur. */
@@ -362,7 +409,7 @@ export async function loadPlayer(puuid: string, guess?: Guess): Promise<OtherPla
   return {
     puuid, name: s.gameName ? `${s.gameName}#${s.tagLine ?? ""}` : s.displayName ?? t("Joueur"),
     icon: s.profileIconId ?? null, level: s.summonerLevel ?? null,
-    rank: rankText(raw.ranked?.queueMap?.RANKED_SOLO_5x5),
+    rank: rankText(raw.ranked?.queueMap?.RANKED_SOLO_5x5), tier: rankTier(raw.ranked?.queueMap?.RANKED_SOLO_5x5),
     games: raw.history ? await parseHistory(raw.history, guess) : [],
   };
 }

@@ -3,7 +3,7 @@ import { ROLE_LABELS, type Stats } from "../lib/score";
 import { champName, dec1, int, pct, pctN, wrTone } from "../lib/ui";
 import { t, plural } from "../lib/i18n";
 import { laneDiff, type Game, type LaneDiff } from "../lib/history";
-import { champRows, kdaOf, perMinute, type GW, type SeasonStats, type SortKey } from "../lib/seasonStats";
+import { champRows, champScore, kdaOf, perMinute, type GW, type SeasonStats, type SortKey } from "../lib/seasonStats";
 import { ChampionIcon } from "./ChampionIcon";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
@@ -70,12 +70,15 @@ function SideTile({ label, gw, missing }: { label: string; gw: GW; missing: stri
   );
 }
 
-const COLS: [SortKey, string][] = [["games", "Parties"], ["wr", "Winrate"], ["kda", "KDA"], ["cs", "CS/min"], ["gold", "Or/min"], ["pentas", "Pentas"]];
+const SHOWN = 5;
+const scoreTone = (x: number) => (x >= 55 ? "good" : x <= 45 ? "bad" : "neutral");
+const COLS: [SortKey, string][] = [["score", "Score"], ["games", "Parties"], ["wr", "Winrate"], ["kda", "KDA"], ["cs", "CS/min"], ["gold", "Or/min"], ["pentas", "Pentas"]];
 
 function ChampionTable({ stats, data }: { stats: Stats; data: SeasonStats }) {
   const [role, setRole] = useState<number | null>(null);
   const [sort, setSort] = useState<SortKey>("games");
   const [asc, setAsc] = useState(false);
+  const [all, setAll] = useState(false);   // 5 lignes d'abord, pour voir les stats en dessous sans défiler
   const min = data.source === "season" ? 3 : 1;
   const rows = useMemo(() => champRows(data, role, min, sort, asc), [data, role, min, sort, asc]);
   const count = (r: number | null) => data.champions.filter((c) => r == null || c.role === r).reduce((a, c) => a + c.games, 0);
@@ -103,7 +106,7 @@ function ChampionTable({ stats, data }: { stats: Stats; data: SeasonStats }) {
               </button>
             ))}
           </div>
-          {rows.map((c) => {
+          {(all ? rows : rows.slice(0, SHOWN)).map((c) => {
             const wr = c.wins / c.games;
             return (
               <div key={`${c.champ}:${c.role}`} className="stable__row" role="row">
@@ -114,6 +117,9 @@ function ChampionTable({ stats, data }: { stats: Stats; data: SeasonStats }) {
                     <small>{c.role >= 0 ? ROLE_LABELS[c.role] : t("Rôle inconnu")}</small>
                   </span>
                 </span>
+                <strong className={`stable__score tone-${scoreTone(champScore(c, data.champions))}`}
+                        title={t("Score sur 100 : winrate lissé, puis KDA, CS et or comparés à ta moyenne dans ce rôle. 50 = ton niveau habituel.")}>
+                  {champScore(c, data.champions)}</strong>
                 <span>{int(c.games)}</span>
                 <strong className={`tone-${wrTone(wr)}`}>{pct(wr)}</strong>
                 <span>{dec1(kdaOf(c))}</span>
@@ -125,7 +131,11 @@ function ChampionTable({ stats, data }: { stats: Stats; data: SeasonStats }) {
           })}
         </div>
       ) : <p className="hint">{t("Aucun champion avec au moins {min} parties dans ce rôle.", { min: min })}</p>}
-      {data.source === "season" && <p className="muted small">{t("Minimum 3 parties par champion et par rôle.")}</p>}
+      {rows.length > SHOWN && (
+        <button className="btn btn--secondary stable__more" onClick={() => setAll(!all)} aria-expanded={all}>
+          {all ? t("Voir moins") : t("Voir les {n} champions", { n: rows.length })}
+        </button>
+      )}
     </section>
   );
 }
@@ -208,7 +218,6 @@ function LaneCard({ games, me, guess }: { games: Game[]; me: string | null; gues
     <section className="card slane">
       <div>
         <h2>{t("Face à ton vis-à-vis")}</h2>
-        <p className="muted small">{t("Écart moyen de CS et d’or avec ton adversaire direct, sur tes {n} dernières parties", { n: list.length || LANE_MAX })}</p>
       </div>
       {!list.length || !me ? <p className="hint">{t("Lance le client LoL : l’écart se lit dans le détail de tes dernières parties.")}</p>
         : failed && !ok.length ? <p className="hint">{t("Le client LoL n’a pas renvoyé le détail des parties. Réessaie dans un instant.")}</p>

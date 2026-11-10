@@ -1,7 +1,7 @@
 import { EloBadge } from "./EloBadge";
 import { useMemo, useState, type ReactNode } from "react";
 import { ROLE_LABELS, tierList, type Stats, type TierRow } from "../lib/score";
-import { champName, dec1, normalize, patchLabel, pct, wrTone } from "../lib/ui";
+import { champName, dec1, normalize, pct, wrTone } from "../lib/ui";
 import { RoleIcon } from "./RoleIcon";
 import { ChampionIcon } from "./ChampionIcon";
 import { Segmented } from "./Segmented";
@@ -12,7 +12,7 @@ type SortKey = "score" | "winrate" | "pickrate" | "banrate";
 const SORTS: [SortKey, string][] = [["score", t("Score")], ["winrate", t("Winrate")], ["pickrate", t("Pickrate")], ["banrate", t("Banrate")]];
 
 /** Tier list solo/duo Master+ par rôle. Un clic sur l'en-tête d'une colonne trie (re-clic : ordre inversé). */
-export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabel = "EUW" }:
+export function TierListScreen({ stats, role, onRole, onOpen, region }:
   { stats: Stats; role: number; onRole: (role: number) => void; onOpen: (champ: number, role: number) => void;
     region?: ReactNode; regionLabel?: string }) {
   const [sort, setSort] = useState<SortKey>("score");
@@ -41,7 +41,6 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, regionLabe
     <div className="content">
       <header className="page-head">
         <div>
-          <p className="overline">{t("Tier list · solo/duo Master+ {region} · patch {patch}", { region: regionLabel, patch: patchLabel(stats.meta.patch) })}</p>
           <h1>{t("Tier list")}</h1>
         </div>
         <div className="head-actions"><EloBadge />{region}</div>

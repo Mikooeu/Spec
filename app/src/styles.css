@@ -685,16 +685,25 @@ button.game:hover { border-color: var(--separator); }
 .lp-chart__line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .lp-chart__dot { fill: var(--accent); opacity: 0.6; }
 .lp-chart__last { fill: var(--accent); stroke: var(--bg-surface); stroke-width: 2; }
-.weeks { padding: 1.25rem 1.125rem 1rem; }
+.weeks { padding: 1.25rem 1.125rem 1rem; display: flex; flex-direction: column; gap: 0.875rem; }
 .weeks__plot { position: relative; display: grid; grid-template-columns: repeat(8, 1fr); gap: 0.5rem; }
-.weeks__half { position: absolute; left: 0; right: 0; top: calc(9rem * 0.5); border-top: 1px dashed var(--text-3); opacity: 0.6; pointer-events: none; }
+.weeks__mid { position: absolute; left: 0; right: 0; top: 5rem; border-top: 1px solid rgba(255, 255, 255, 0.22); pointer-events: none; }
 .weeks__col { display: flex; flex-direction: column; align-items: center; gap: 0.125rem; }
-.weeks__bar-wrap { position: relative; height: 9rem; width: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
-.weeks__bar { width: min(2.75rem, 70%); border-radius: 0.375rem 0.375rem 0 0; opacity: 0.85;
-              transition: height 0.5s cubic-bezier(.2,.8,.2,1); }
-.weeks__value { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; white-space: nowrap; }
-.weeks__label { margin-top: 0.5rem; font-size: 0.6875rem; font-weight: 500; color: var(--text-2); }
+.weeks__area { position: relative; height: 10rem; width: 100%; margin-bottom: 0.625rem; }
+.weeks__bar { position: absolute; left: 50%; width: min(2.25rem, 70%); transform: translateX(-50%); border-radius: 0.3125rem; }
+.weeks__bar.is-up { bottom: 50%; }
+.weeks__bar.is-down { top: 50%; }
+.is-few { opacity: 0.35; }
+.weeks__none { position: absolute; left: 50%; top: calc(50% - 1px); width: min(2.25rem, 70%); height: 2px; transform: translateX(-50%);
+               border-radius: 1px; background: rgba(255, 255, 255, 0.15); }
+.weeks__value { font-size: 0.8125rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.weeks__label { font-size: 0.75rem; font-weight: 500; color: var(--text-2); }
 .weeks__games { font-size: 0.6875rem; color: var(--text-3); }
+.weeks__legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.6875rem; color: var(--text-3); }
+.weeks__legend > span { display: inline-flex; align-items: center; gap: 0.375rem; }
+.weeks__legend i { width: 0.625rem; height: 0.625rem; border-radius: 0.1875rem; display: inline-block; }
+.weeks__sum { display: inline-flex; align-items: center; gap: 0.75rem; }
+.weeks__pill { padding: 0.25rem 0.625rem; border-radius: 999px; background: var(--bg-surface-2); font-size: 0.75rem; font-weight: 600; }
 .recaps { display: flex; flex-direction: column; gap: 0.5rem; }
 .recap { display: flex; align-items: center; gap: 1rem; width: 100%; padding: 0.625rem 1.25rem 0.625rem 1rem; border-radius: 0.75rem;
          background: var(--bg-surface); border: 1px solid var(--border); font: inherit; color: var(--text); text-align: left; cursor: pointer;
@@ -930,7 +939,7 @@ button.game--loss:hover, .recap--loss:hover:not(:disabled) { border-color: color
 .stable { display: flex; flex-direction: column; gap: 0.75rem; }
 .stable__head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .stable__table { display: flex; flex-direction: column; }
-.stable__row { display: grid; grid-template-columns: 1fr repeat(6, 5rem); align-items: center; gap: 0 0.5rem;
+.stable__row { display: grid; grid-template-columns: 1fr repeat(7, 4.75rem); align-items: center; gap: 0 0.5rem;
                padding: 0.5rem 0.5rem; border-radius: 0.5rem; font-size: 0.875rem; text-align: right; font-variant-numeric: tabular-nums; }
 .stable__row:not(.stable__row--head):nth-child(odd) { background: rgba(255, 255, 255, 0.03); }
 .stable__row--head { font-size: 0.75rem; color: var(--text-3); border-bottom: 1px solid var(--separator); border-radius: 0; padding-bottom: 0.5rem; }
@@ -983,8 +992,8 @@ button.game--loss:hover, .recap--loss:hover:not(:disabled) { border-color: color
          background: var(--bg-surface-2); display: flex; align-items: center; justify-content: center; font: inherit; color: inherit; }
 button.dcard { cursor: pointer; }
 button.dcard:hover { box-shadow: inset 0 0 0 1px var(--separator); }
-.dcard__art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
-.dcard__art--loading { object-position: 50% 15%; }
+.dcard__art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.dcard__art--tile { object-position: 50% 30%; }
 .dcard::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
                 background: linear-gradient(transparent 55%, rgba(0, 0, 0, 0.85)); }
 .dcard--empty::after { background: none; }
@@ -1026,4 +1035,10 @@ button.dcard:hover { box-shadow: inset 0 0 0 1px var(--separator); }
 .adapt__picks { display: flex; gap: 0.625rem; }
 .adapt__pick { display: flex; flex-direction: column; align-items: center; gap: 0.125rem; }
 .adapt__pick small { font-size: 0.6875rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.hint--blind { margin-top: -0.25rem; }
+
+/* rang Solo/Duo avec emblème */
+.rank-line { display: flex; align-items: center; gap: 0.375rem; }
+.rank-line img { width: 1.25rem; height: 1.25rem; }
+.tiles__title { font-size: 0.9375rem; font-weight: 600; margin: 0.25rem 0 -0.25rem; }
+.stable__more { align-self: center; }
+.stable__score { font-size: 0.9375rem; font-weight: 700; }

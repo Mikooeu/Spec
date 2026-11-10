@@ -59,7 +59,6 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
     <div className="content">
       <header className="page-head">
         <div>
-          <p className="overline">{t("Champion pool")}</p>
           <h1>{t("Ton champion pool")}</h1>
         </div>
       </header>
