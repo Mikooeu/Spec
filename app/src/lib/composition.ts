@@ -50,7 +50,16 @@ const TABLE: Record<string, string> = {
   Zaahen: "A111", Zac: "p222", Zed: "A000", Zeri: "A000", Ziggs: "P000", Zilean: "p001", Zoe: "P001", Zyra: "P002",
 };
 
-export interface Traits { ad: number; ap: number; tru: number; weight: number; front: number; engage: number; cc: number }
+/**
+ * Champions qui soignent beaucoup (eux-mêmes ou leurs alliés) : contre 2 d'entre eux, les joueurs Master+ achètent
+ * de l'anti-soin. Liste faite à la main, lue aussi par la VM (scoring/traits.py) : garder le format une clé par entrée.
+ */
+export const HEALERS = new Set([
+  "Aatrox", "Briar", "DrMundo", "Fiddlesticks", "Gwen", "Illaoi", "Milio", "Nami", "Olaf", "Sona", "Soraka",
+  "Swain", "Sylas", "Vladimir", "Warwick", "Yuumi", "Zac", "Seraphine", "Renata",
+]);
+
+export interface Traits { ad: number; ap: number; tru: number; weight: number; front: number; engage: number; cc: number; healer: boolean }
 
 /** Au-delà de ce nombre de parties Master+, les vrais dégâts infligés remplacent la table faite à la main. */
 const DAMAGE_MIN_GAMES = 30;
@@ -63,7 +72,8 @@ export function traitsOf(stats: Stats, champ: number): Traits | null {
   const measured = stats.damage.get(champ);
   const [ad, ap, tru] = measured && measured[3] >= DAMAGE_MIN_GAMES ? measured
     : d.toUpperCase() === "A" ? [0.9, 0.1, 0] : d.toUpperCase() === "P" ? [0.1, 0.9, 0] : [0.5, 0.5, 0];
-  return { ad, ap, tru, weight: d === d.toUpperCase() ? 1 : 0.4, front: +code[1], engage: +code[2], cc: +code[3] };
+  return { ad, ap, tru, weight: d === d.toUpperCase() ? 1 : 0.4, front: +code[1], engage: +code[2], cc: +code[3],
+           healer: HEALERS.has(key!) };
 }
 
 export type Gap = "ap" | "ad" | "front" | "engage" | "cc";
@@ -74,7 +84,7 @@ export interface TeamComp {
   ad: number; ap: number;             // part des dégâts (0 à 1)
   /** Part des dégâts bruts (0 à 1) ; ad + ap + tru = 1. 0 quand Spec n'a pas encore les dégâts Master+. */
   tru: number;
-  front: number; engage: number; cc: number;
+  front: number; engage: number; cc: number; healers: number;
   /** Alertes, de la plus grave à la moins grave. */
   issues: { gap: Gap; level: "bad" | "warn"; short: string; text: string }[];
 }
@@ -101,7 +111,42 @@ export function analyzeTeam(stats: Stats, champs: number[]): TeamComp {
     if (cc < 3) issues.push({ gap: "cc", level: "warn", short: t("Contrôle"),
       text: t("Peu de contrôle : difficile d’attraper ou de bloquer l’adversaire.") });
   }
-  return { known: ts.length, ad, ap, tru, front, engage, cc, issues };
+  return { known: ts.length, ad, ap, tru, front, engage, cc, healers: ts.filter((x) => x.healer).length, issues };
+}
+
+/** Manques d'une équipe de 0 à 1 (dégâts d'un seul type, frontline, engage, contrôle) : même calcul que la VM
+ *  (scoring/traits.py), dont le calibrage règle le poids de chacun. Rien sous `minKnown` champions connus. */
+export function compFeatures(team: TeamComp, minKnown = 3): [number, number, number, number] {
+  if (team.known < minKnown) return [0, 0, 0, 0];
+  const dmg = Math.max(0, team.ad - 0.75) / 0.25 + Math.max(0, team.ap - 0.75) / 0.25;
+  return [Math.min(dmg, 1), Math.max(0, 2 - team.front) / 2, Math.max(0, 2 - team.engage) / 2, Math.max(0, 3 - team.cc) / 3];
+}
+
+/** Manques pondérés (logit de victoire d'équipe) ; 0 tant que le calibrage n'a gardé aucun poids. */
+export function compPenalty(stats: Stats, champs: number[], minKnown = 3): number {
+  const w = stats.params.comp;
+  if (!w || !w.some(Boolean)) return 0;
+  const f = compFeatures(analyzeTeam(stats, champs), minKnown);
+  return f.reduce((a, x, i) => a + x * (w[i] ?? 0), 0);
+}
+
+/** Effet d'un champion sur les manques de son équipe, en points de winrate (≈ logit / 4). */
+export function compositionTerm(stats: Stats, champ: number, allies: number[]): number {
+  if (allies.length < 2) return 0;
+  return (compPenalty(stats, allies, 2) - compPenalty(stats, [...allies, champ], 2)) / 4;
+}
+
+export type Situation = "ap" | "ad" | "tank" | "heal";
+
+/** Situations de l'équipe adverse (au moins 3 champions connus) : mêmes seuils que la VM. */
+export function situationsOf(team: TeamComp): Situation[] {
+  if (team.known < 3) return [];
+  const out: Situation[] = [];
+  if (team.ap >= 0.6) out.push("ap");
+  if (team.ad >= 0.75) out.push("ad");
+  if (team.front >= 4) out.push("tank");
+  if (team.healers >= 2) out.push("heal");
+  return out;
 }
 
 /** Manques de l'équipe (sans toi) que ce champion comble. Vide si l'équipe n'a pas encore assez de picks. */

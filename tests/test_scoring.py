@@ -363,3 +363,67 @@ def test_export_includes_damage_profile(tmp_path, champions):
     ahri = next(r for r in data["damage"] if r[0] == 1 and r[1] == 2)
     assert ahri[2:5] == [0.1, 0.8, 0.1] and ahri[5] > 0
     assert data["params"]["team"] == 0.4
+
+
+def test_blind_pick_prefers_champions_hard_to_counter(tmp_path, champions):
+    from scoring.score import Params, blind_exposure, lane_opponent_known, rank_value
+    db = tmp_path / "draft.duckdb"
+    synthetic_db(db)
+    build_stats(db, tmp_path / "stats.duckdb")
+    stats = Stats.load(tmp_path / "stats.duckdb")
+    # Syndra perd 70 % face à Ahri : risquée à l'aveugle ; Orianna n'a pas de mauvais vis-à-vis
+    assert blind_exposure(stats, 2, "MIDDLE") < -0.03
+    assert blind_exposure(stats, 3, "MIDDLE") > -0.01
+    assert not lane_opponent_known(stats, "MIDDLE", [4, 6]) and lane_opponent_known(stats, "MIDDLE", [2])
+    best, _ = recommend(stats, "MIDDLE", pool=[2, 3], allies=[], enemies=[4])
+    assert best[0].champ == 3 and best[1].exposure < 0
+    r = best[1]
+    assert rank_value(r, True, Params()) < r.score == rank_value(r, False, Params())
+
+
+def test_composition_term_rewards_filling_a_gap(tmp_path, champions):
+    from scoring.score import Params, composition_term
+    db = tmp_path / "draft.duckdb"
+    synthetic_db(db, n_matches=300)
+    build_stats(db, tmp_path / "stats.duckdb")
+    stats = Stats.load(tmp_path / "stats.duckdb")
+    assert stats.traits and stats.traits[6].front == 2        # table de l'appli relue
+    p = Params(comp_front=1.0)
+    # Ahri + Jinx : aucune frontline ; Nautilus la comble, Syndra non
+    assert composition_term(stats, 6, [1, 9], p) > 0.1
+    assert composition_term(stats, 2, [1, 9], p) <= 0
+    assert composition_term(stats, 6, [1, 9], Params()) == 0  # poids nuls tant que le calibrage ne les a pas validés
+
+
+def test_composition_fit_finds_a_real_effect_and_ignores_noise():
+    from scoring.calibrate import _fit, _loss
+    rng = random.Random(3)
+    rows = []
+    for _ in range(3000):
+        x = [rng.choice([-1, 0, 1]) * rng.random() for _ in range(4)]
+        logit = 1.2 * x[1]                      # seul le manque de frontline compte
+        rows.append((0.0, x, rng.random() < 1 / (1 + 2.718281828 ** -logit)))
+    w = _fit(rows)
+    assert w[1] > 0.6 and max(w[0], w[2], w[3]) < 0.3
+    assert _loss(rows, w) < _loss(rows, [0, 0, 0, 0])
+
+
+def test_situational_items_follow_the_enemy_draft():
+    from scoring.items import Items
+    from scoring.situational import compute_situational
+    from scoring.traits import Trait
+    ap = Trait(0.1, 0.9, 1, 0, 0, 0, False)
+    ad = Trait(0.9, 0.1, 1, 0, 0, 0, False)
+    traits = {i: ap for i in range(10, 15)} | {i: ad for i in range(20, 25)}
+    rows = []
+    for i in range(200):
+        vs_ap = i % 2 == 0
+        merc = (i % 10 < 7) if vs_ap else (i % 10 == 1)       # 80 % face à l’AP, 20 % sinon
+        items = "3111,3031" if merc else "3006,3031"
+        enemies = ",".join(map(str, range(10, 15) if vs_ap else range(20, 25)))
+        rows.append((7, "TOP", 1.0, items, [8010, 8299, 5008], enemies))
+    out = compute_situational(rows, traits, Items(None))
+    ap_row = next(r for r in out if r[2] == "ap")
+    assert ap_row[0] == 7 and ap_row[3] == 100
+    assert ap_row[4][0] == [3111, 0.8, 0.2]
+    assert all(x[0] != 3031 for x in ap_row[4])              # objet pris partout : pas une adaptation

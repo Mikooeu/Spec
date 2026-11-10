@@ -3,13 +3,17 @@
 // (winrate, vis-à-vis, counters, synergies) ; la force d'une équipe est la somme des logits de ces scores ;
 // l'écart des deux forces devient une probabilité avec l'échelle calibrée sur les parties mises de côté.
 import { enemyRoles, scoreChampion, type Stats } from "./score";
+import { compPenalty } from "./composition";
 
 const logit = (p: number) => { const q = Math.min(Math.max(p, 0.02), 0.98); return Math.log(q / (1 - q)); };
 
 function strength(stats: Stats, team: { champ: number; role: number }[], enemies: number[]): number {
   const champs = team.map((x) => x.champ);
-  return team.reduce((a, { champ, role }) =>
-    a + logit(scoreChampion(stats, champ, role, champs.filter((c) => c !== champ), enemies).score), 0);
+  // la composition est comptée une fois pour toute l'équipe (winProbability), pas champion par champion
+  return team.reduce((a, { champ, role }) => {
+    const r = scoreChampion(stats, champ, role, champs.filter((c) => c !== champ), enemies);
+    return a + logit(r.score - r.composition);
+  }, 0);
 }
 
 /**
@@ -22,5 +26,6 @@ export function winProbability(stats: Stats, allies: { champ: number; role: numb
   const { best } = enemyRoles(stats, enemies);
   const them = enemies.map((champ, i) => ({ champ, role: best[i] ?? 2 }));
   const diff = strength(stats, allies, enemies) - strength(stats, them, allies.map((a) => a.champ));
-  return 1 / (1 + Math.exp(-scale * diff));
+  const comp = compPenalty(stats, enemies) - compPenalty(stats, allies.map((a) => a.champ));
+  return 1 / (1 + Math.exp(-(scale * diff + comp)));
 }

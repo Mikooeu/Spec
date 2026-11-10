@@ -7,6 +7,7 @@
 // comme un vis-à-vis (poids 1 au lieu de α) et la synergie avec ton partenaire de lane compte double.
 import { dec1, pct } from "./ui";
 import { t } from "./i18n";
+import { compositionTerm } from "./composition";
 
 export const ROLES = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"] as const;
 export const ROLE_LABELS = [t("Top"), t("Jungle"), t("Mid"), "ADC", t("Support")];
@@ -28,6 +29,10 @@ export interface Params {
   k_delta: number;
   /** Échelle de la probabilité de victoire d'équipe (calibrée sur le serveur) ; 0 ou absent : pas encore validée. */
   team?: number;
+  /** Poids des manques de composition (dégâts d'un seul type, frontline, engage, contrôle) ; absents ou 0 : pas validés. */
+  comp?: [number, number, number, number];
+  /** Part de la perte d'un counter retirée quand ton vis-à-vis choisit après toi. */
+  blind?: number;
 }
 
 export interface Champion {
@@ -54,7 +59,13 @@ export interface Stats {
   champPages: Map<string, ChampPage>; // `${champ}|${rôle}` -> sorts, objets, ordre des sorts
   /** Dégâts infligés aux champions par type, en Master+ : champion -> [part AD, part AP, part brute, parties] (tous rôles). */
   damage: Map<number, [number, number, number, number]>;
+  /** Objets et runes adaptés à la draft adverse : `${champ}|${rôle}` -> une entrée par situation. */
+  situ: Map<string, SituEntry[]>;
 }
+
+/** [id, part des joueurs qui le prennent dans cette situation, part ailleurs] */
+export type SituPick = [number, number, number];
+export interface SituEntry { situation: "ap" | "ad" | "tank" | "heal"; games: number; items: SituPick[]; runes: SituPick[] }
 
 type GW = [games: number, wins: number];
 /** Page champion (voir scoring/builds.py). g : parties détaillées, tg : parties avec déroulé. */
@@ -94,6 +105,7 @@ interface RawStats {
   bans?: [number, number][];
   champ?: [number, number, ChampPage][];
   damage?: [number, number, number, number, number, number][];
+  situ?: [number, number, SituEntry["situation"], number, SituPick[], SituPick[]][];
 }
 
 const k2 = (c: number, r: number) => `${c}|${r}`;
@@ -117,7 +129,12 @@ export function parseStats(raw: RawStats): Stats {
     matchesWeighted: 0,
     champPages: new Map((raw.champ ?? []).map(([c, r, e]) => [k2(c, r), e])),
     damage: new Map(),
+    situ: new Map(),
   };
+  for (const [c, r, situation, games, items, runes] of raw.situ ?? []) {
+    const key = k2(c, r);
+    stats.situ.set(key, [...(stats.situ.get(key) ?? []), { situation, games, items, runes }]);
+  }
   // profil de dégâts par champion, tous rôles confondus (pondéré par les parties de chaque rôle)
   for (const [c, , ad, ap, tru, g] of raw.damage ?? []) {
     const cur = stats.damage.get(c) ?? [0, 0, 0, 0];
@@ -261,6 +278,10 @@ export interface Result {
   synergies: number;
   games: number;
   details: LaneDetail[]; // triés du vis-à-vis le plus probable au moins probable
+  /** Effet sur les manques de composition de l'équipe (0 tant que le calibrage ne l'a pas validé). */
+  composition: number;
+  /** Perte moyenne face à ses 3 pires vis-à-vis courants (≤ 0) : proche de 0 = sûr à l'aveugle. */
+  exposure: number;
 }
 
 export function scoreChampion(
@@ -297,19 +318,70 @@ export function scoreChampion(
     synergies += boost * params.beta * (smoothed(ag, aw, base, params.k_delta) - base);
   }
   details.sort((x, y) => y.p - x.p);
-  return { champ, score: base + lane + counters + synergies, base, lane, counters, synergies,
-           games: g, details };
+  const composition = compositionTerm(stats, champ, allies);
+  return { champ, score: base + lane + counters + synergies + composition, base, lane, counters, synergies,
+           games: g, details, composition, exposure: blindExposure(stats, champ, role, params) };
+}
+
+// Ordre de pick (même calcul que scoring/score.py). Riot ne dit pas qui a choisi avant qui : le poids (0,5 par
+// défaut) ne peut pas être calibré sur les parties ; il compte la moitié de la perte d'un vrai counter.
+const BLIND_WORST = 3, BLIND_MIN_SHARE = 0.01, BLIND_MIN_GAMES = 20;
+const exposureCache = new WeakMap<Stats, Map<string, number>>();
+
+export function blindExposure(stats: Stats, champ: number, role: number, params: Params = stats.params): number {
+  let cache = exposureCache.get(stats);
+  if (!cache) { cache = new Map(); exposureCache.set(stats, cache); }
+  const key = `${champ}|${role}|${params.k_base}|${params.k_delta}`;
+  const hit = cache.get(key);
+  if (hit != null) return hit;
+  const [g, w] = stats.base.get(k2(champ, role)) ?? [0, 0];
+  const base = smoothed(g, w, 0.5, params.k_base);
+  let total = 0;
+  const inRole: [number, number][] = [];
+  for (const [k, [gg]] of stats.base) {
+    const [cs, rs] = k.split("|");
+    if (Number(rs) !== role) continue;
+    total += gg;
+    inRole.push([Number(cs), gg]);
+  }
+  const deltas: number[] = [];
+  for (const [c, gg] of inRole) {
+    if (c === champ || !total || gg / total < BLIND_MIN_SHARE) continue;
+    const [lg, lw] = stats.lane.get(k3(champ, role, c)) ?? [0, 0];
+    if (lg >= BLIND_MIN_GAMES) deltas.push(smoothed(lg, lw, base, params.k_delta) - base);
+  }
+  const worst = deltas.sort((a, b) => a - b).slice(0, BLIND_WORST);
+  const value = worst.length ? worst.reduce((a, d) => a + Math.min(0, d), 0) / BLIND_WORST : 0;
+  cache.set(key, value);
+  return value;
+}
+
+/** Ton vis-à-vis a-t-il déjà choisi ? (un adversaire joue ton rôle dans au moins la moitié de ses parties) */
+export function laneOpponentKnown(stats: Stats, role: number, enemies: number[]): boolean {
+  return enemies.some((e) => roleProbability(stats, e, role) >= 0.5);
+}
+
+/** Pick à l'aveugle : ton vis-à-vis n'a pas encore choisi et il reste des adversaires à choisir. */
+export function isBlind(stats: Stats, role: number, enemies: number[]): boolean {
+  return enemies.length < 5 && !laneOpponentKnown(stats, role, enemies);
+}
+
+/** Valeur de classement : le score, moins une part de l'exposition quand on pick à l'aveugle. */
+export function rankValue(stats: Stats, r: Result, blind: boolean): number {
+  return r.score + (blind ? (stats.params.blind ?? 0.5) * r.exposure : 0);
 }
 
 export function recommend(
   stats: Stats, role: number, pool: number[], allies: number[], enemies: number[],
   bans: number[] = [], top = 3, discoveries = 6,
-): { pool: Result[]; discoveries: Result[] } {
+): { pool: Result[]; discoveries: Result[]; blind: boolean } {
+  const blind = isBlind(stats, role, enemies);
+  const rank = (a: Result, b: Result) => rankValue(stats, b, blind) - rankValue(stats, a, blind);
   const taken = new Set([...allies, ...enemies, ...bans]);
   const poolResults = pool
     .filter((c) => !taken.has(c))
     .map((c) => scoreChampion(stats, c, role, allies, enemies))
-    .sort((a, b) => b.score - a.score);
+    .sort(rank);
 
   const poolSet = new Set(pool);
   const others: Result[] = [];
@@ -319,8 +391,8 @@ export function recommend(
     if (Number(rs) !== role || g < DISCOVERY_MIN_GAMES || !playedInRole(stats, g) || poolSet.has(c) || taken.has(c)) continue;
     others.push(scoreChampion(stats, c, role, allies, enemies));
   }
-  others.sort((a, b) => b.score - a.score);
-  return { pool: poolResults.slice(0, top), discoveries: others.slice(0, discoveries) };
+  others.sort(rank);
+  return { pool: poolResults.slice(0, top), discoveries: others.slice(0, discoveries), blind };
 }
 
 /** Pick rate dans ce rôle d'au moins 3 % (sans données de parties, on ne filtre pas). */
@@ -339,7 +411,8 @@ export function topForRole(stats: Stats, role: number, allies: number[], enemies
     if (Number(rs) !== role || g < DISCOVERY_MIN_GAMES || !playedInRole(stats, g) || taken.has(c)) continue;
     out.push(scoreChampion(stats, c, role, allies, enemies));
   }
-  return out.sort((a, b) => b.score - a.score).slice(0, n);
+  const blind = isBlind(stats, role, enemies);
+  return out.sort((a, b) => rankValue(stats, b, blind) - rankValue(stats, a, blind)).slice(0, n);
 }
 
 /** Page conseillée : la meilleure du champion, ou celle qui marche mieux face au vis-à-vis probable. */
@@ -418,8 +491,11 @@ export function banSuggestions(stats: Stats, role: number, myChamp: number | nul
 /** Phrase courte qui explique pourquoi un champion est (ou n'est pas) un bon choix dans cette draft. */
 const NOTABLE = 0.003; // écart mentionné à partir de 0,3 point (les écarts calibrés restent petits)
 
+/** Exposition à l'aveugle notable (≥ 3 pt perdus face aux pires vis-à-vis) ou faible (< 1 pt). */
+const BLIND_NOTABLE = 0.03, BLIND_SAFE = 0.01;
+
 export function explain(stats: Stats, res: Result, role: number, allies: number[],
-                        params: Params = stats.params): string {
+                        params: Params = stats.params, blind = false): string {
   const name = (c: number) => stats.champions.get(c)?.name ?? t("ce champion");
   const pt = (x: number) => `${x >= 0 ? "+" : "−"}${dec1(Math.abs(x * 100))} pt`;
   const good: string[] = [], bad: string[] = [];
@@ -443,6 +519,17 @@ export function explain(stats: Stats, res: Result, role: number, allies: number[
   if (best && Math.abs(best.d) >= NOTABLE) {
     (best.d > 0 ? good : bad).push(best.d > 0 ? t("s'accorde bien avec {name}", { name: name(best.ally) })
                                               : t("s'accorde mal avec {name}", { name: name(best.ally) }));
+  }
+  if (Math.abs(res.composition) >= NOTABLE) {
+    (res.composition > 0 ? good : bad).push(res.composition > 0
+      ? t("comble un manque de ton équipe ({pt})", { pt: pt(res.composition) })
+      : t("aggrave un manque de ton équipe ({pt})", { pt: pt(res.composition) }));
+  }
+  // pick à l'aveugle : le vis-à-vis choisira après toi
+  if (blind && res.exposure <= -BLIND_NOTABLE) {
+    bad.push(t("est facile à contrer tant que ton vis-à-vis n’a pas choisi ({pt} face à ses pires matchups)", { pt: pt(res.exposure) }));
+  } else if (blind && res.exposure > -BLIND_SAFE) {
+    good.push(t("reste sûr à l’aveugle (peu de mauvais matchups)"));
   }
   const join = (xs: string[]) => xs.length > 1 ? t("{a} et {b}", { a: xs.slice(0, -1).join(", "), b: xs[xs.length - 1] }) : xs[0];
   const verdict = res.score >= 0.51 ? t("Bon choix") : res.score <= 0.49 ? t("Choix risqué") : t("Choix correct");

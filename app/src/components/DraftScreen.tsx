@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  LOW_DATA_GAMES, ROLE_LABELS, banSuggestions, explain, recommend,
+  LOW_DATA_GAMES, ROLE_LABELS, banSuggestions, explain, isBlind, recommend,
   scoreChampion, topForRole, type Result, type Stats,
 } from "../lib/score";
 import { RunePage } from "./Runes";
@@ -11,6 +11,7 @@ import { ChampionPicker } from "./ChampionPicker";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
 import { DraftBand } from "./DraftBand";
+import { Adaptations } from "./Adaptations";
 import { GAP_LABEL, analyzeTeam, bumpForComposition, fills, type Gap } from "../lib/composition";
 import { t, plural } from "../lib/i18n";
 
@@ -52,7 +53,7 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
   const [openChamp, setOpenChamp] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const { allies, enemies, autofill, rows, team } = useRecos(stats, draft, pool);
+  const { allies, enemies, autofill, rows, team, blind } = useRecos(stats, draft, pool);
 
   const selected = rows.find((r) => r.res.champ === openChamp)?.res ?? null;
   // ton champion présélectionné : sa ligne s'ouvre, avec l'explication (pas de carte en double au-dessus)
@@ -117,6 +118,9 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
           {draft.myLocked && (
             <p className="hint">{t("Plus de présélection à faire : importe tes runes et tes sorts ci-dessus.")}</p>
           )}
+          {!draft.myLocked && blind && rows.length > 0 && (
+            <p className="hint hint--blind">{t("Ton vis-à-vis n’a pas encore choisi : les champions faciles à contrer descendent dans la liste.")}</p>
+          )}
           {!draft.myLocked && autofill && (
             <p className="hint">{t("Ton pool est vide pour ce rôle : voici les meilleurs choix de cette draft.")}</p>
           )}
@@ -130,8 +134,8 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
                            onToggle={() => setOpenChamp(openChamp === res.champ ? null : res.champ)}
                            onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
                            role={draft.role} mine={res.champ === draft.myChamp}
-                           why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies) : undefined}
-                           fill={fills(stats, res.champ, team)} />
+                           why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies, stats.params, blind) : undefined}
+                           fill={fills(stats, res.champ, team)} enemies={enemies} />
                 </div>
               ))}
             </div>
@@ -161,9 +165,11 @@ interface RecoRowProps {
   mine?: boolean; why?: string;
   /** Manques de ton équipe que ce champion comble. */
   fill?: Gap[];
+  /** Adversaires déjà choisis : objets et runes adaptés à leur équipe dans le détail. */
+  enemies?: number[];
 }
 
-export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [] }: RecoRowProps) {
+export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [], enemies = [] }: RecoRowProps) {
   const laner = res.details[0];
   return (
     <div className={`reco${open ? " is-open" : ""}`}>
@@ -206,6 +212,7 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
           <Factor label={t("Avec tes alliés")} value={res.synergies} />
           </div>
           <RunePage stats={stats} champ={res.champ} role={role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
+          {!compact && <Adaptations stats={stats} champ={res.champ} role={role} enemies={enemies} />}
           {!mine && <button className="btn btn--primary" onClick={onPreselect}>{t("Présélectionner dans le client")}</button>}
         </div>
       )}
@@ -272,12 +279,15 @@ export function useRecos(stats: Stats, draft: Draft, pool: number[]) {
     const autofill = r.pool.length === 0;
     // composition de ton équipe sans toi : un pick qui comble un manque gagne au plus une place
     const team = analyzeTeam(stats, allies);
-    const bump = (list: Result[]) => bumpForComposition(stats, list.map((res) => ({ champ: res.champ, res })), team).map((x) => x.res);
+    // composition validée par le calibrage : déjà comptée dans le score ; sinon, l'ancien petit bonus d'une place
+    const calibrated = (stats.params.comp ?? []).some(Boolean);
+    const bump = (list: Result[]) => calibrated ? list
+      : bumpForComposition(stats, list.map((res) => ({ champ: res.champ, res })), team).map((x) => x.res);
     const rows: RecoItem[] = autofill
       ? bump(topForRole(stats, draft.role, allies, enemies, draft.bans, 6)).map((res) => ({ res, kind: "discovery" as const }))
       : [...bump(r.pool).map((res) => ({ res, kind: "pool" as const })),
          ...bump(r.discoveries).map((res) => ({ res, kind: "discovery" as const }))];
-    return { allies, enemies, autofill, rows, team };
+    return { allies, enemies, autofill, rows, team, blind: r.blind };
   }, [stats, draft, pool]);
 }
 
@@ -377,7 +387,8 @@ export function MyPick({ stats, draft, compact = false }: { stats: Stats; draft:
           <span className="reco__label">{t("Dans cette draft")}</span>
         </span>
       </div>
-      <p className="mypick__why">{explain(stats, res, draft.role, allies)}</p>
+      <p className="mypick__why">{explain(stats, res, draft.role, allies, stats.params, !draft.myLocked && isBlind(stats, draft.role, enemies))}</p>
+      <Adaptations stats={stats} champ={champ} role={draft.role} enemies={enemies} />
       <RunePage stats={stats} champ={champ} role={draft.role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
     </div>
   );

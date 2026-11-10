@@ -14,7 +14,7 @@ import os
 from dotenv import load_dotenv
 
 from .champions import Champions
-from .score import LOW_DATA_GAMES, Params, Stats, parse_role, recommend
+from .score import LOW_DATA_GAMES, Params, Stats, lane_opponent_known, parse_role, recommend
 
 ROLE_LABELS = {"TOP": "Top", "JUNGLE": "Jungle", "MIDDLE": "Mid", "BOTTOM": "ADC", "UTILITY": "Support"}
 
@@ -37,7 +37,8 @@ def print_result(i: str, r, champions: Champions) -> None:
     flag = "  ⚠ peu de données" if r.games < LOW_DATA_GAMES else ""
     print(f" {i:>2}  {champions.name(r.champ):<14} {pct(r.score):>8}   "
           f"(base {pct(r.base)} · vis-à-vis {pts(r.lane)} · counters {pts(r.counters)} · "
-          f"synergies {pts(r.synergies)}) · {int(r.games)} parties{flag}")
+          f"synergies {pts(r.synergies)} · composition {pts(r.composition)}) · {int(r.games)} parties{flag}")
+    print(f"      à l'aveugle : {pts(r.exposure)} face à ses 3 pires vis-à-vis")
     likely = [d for d in r.lane_detail if d[1] >= 0.15]
     for e, p, d, g in likely[:2]:
         print(f"      face à {champions.name(e)} (vis-à-vis probable à {round(p * 100)} %) : {pts(d)} sur {int(g)} parties")
@@ -46,7 +47,7 @@ def print_result(i: str, r, champions: Champions) -> None:
 
 def run_calibration(db_path: Path, data_dir: Path, force: bool) -> None:
     from dataclasses import replace
-    from .calibrate import MIN_TEST_MATCHES, calibrate, calibrate_team
+    from .calibrate import COMP_LABELS, MIN_TEST_MATCHES, calibrate, calibrate_composition, calibrate_team
     results, info = calibrate(db_path, data_dir / "stats_train.duckdb")
     n = info["test_matches"]
     print(f"\nCalibrage · patch {info['patch']} · {info['train_matches']} parties pour apprendre, "
@@ -80,6 +81,20 @@ def run_calibration(db_path: Path, data_dir: Path, force: bool) -> None:
     params = team_best.params if team_gain > 0 else replace(chosen.params, team=0.0)
     print(f"La probabilité d'équipe améliore la prédiction de {team_gain:.2f} % par rapport à 50 %.".replace(".", ",", 1)
           if team_gain > 0 else "La probabilité d'équipe ne fait pas mieux que 50 % : la barre restera à 50 / 50.")
+    # composition : gardée seulement si elle prédit mieux, testée sur des moitiés de parties qu'elle n'a pas vues
+    without, with_comp, params = calibrate_composition(info["stats"], info["test"], params)
+    if without:
+        comp_gain = (without - with_comp) / without * 100
+        print(f"\n{'Composition':<42} {'log loss':>9}")
+        print(f"{'Équipe sans composition':<42} {without:>9.4f}")
+        print(f"{'Équipe avec composition':<42} {with_comp:>9.4f}")
+        if any(params.comp_weights()):
+            kept = ", ".join(f"{l} {w}" for l, w in zip(COMP_LABELS, params.comp_weights()) if w)
+            print(f"La composition améliore la prédiction de {comp_gain:.2f} % : poids gardés ({kept}).".replace(".", ",", 1))
+        else:
+            print("La composition ne prédit pas mieux : elle reste hors du score (les alertes restent affichées).")
+    else:
+        print("\nComposition non testée : traits des champions introuvables, ou probabilité d'équipe non validée.")
     params.save(data_dir / "params.json", {"test_matches": n, "patch": info["patch"]})
     p = params
     print(f"\nRéglages enregistrés dans data/params.json : α={p.alpha}, β={p.beta}, k={int(p.k_base)}, équipe={p.team}.")
@@ -129,7 +144,7 @@ def main() -> None:
             sources = [db_path_for(region)]
         if not sources or not sources[0].exists():
             sys.exit(f"Aucune base de parties pour {region} : lance d'abord le collecteur de cette région.")
-        meta = build_stats(sources, stats_path, args.patch, items=items)
+        meta = build_stats(sources, stats_path, args.patch, items=items, champion_keys=champions.keys)
         prev = f" + patch {meta['previous_patch']} à 50 %" if meta["previous_patch"] else ""
         print(f"Stats {region.upper()} prêtes : patch {meta['patch']}{prev}, {int(meta['matches'])} parties.")
         return
@@ -162,9 +177,12 @@ def main() -> None:
     stats = Stats.load(stats_path)
 
     params = Params.load(data_dir / "params.json")
-    best, discovery = recommend(stats, role, pool, allies, enemies, bans, params=params)
+    blind = len(enemies) < 5 and not lane_opponent_known(stats, role, enemies)
+    best, discovery = recommend(stats, role, pool, allies, enemies, bans, params=params, blind=blind)
     patch = stats.meta.get("patch", "?")
-    print(f"\nTu joues {ROLE_LABELS[role]} · patch {patch} · {stats.meta.get('matches', '?')} parties Master+\n")
+    print(f"\nTu joues {ROLE_LABELS[role]} · patch {patch} · {stats.meta.get('matches', '?')} parties Master+")
+    print("Ton vis-à-vis n'a pas encore choisi : les champions faciles à contrer descendent.\n" if blind
+          else "Ton vis-à-vis est connu : le classement suit les matchups.\n")
     if best:
         print("Recommandés dans ton pool :")
         for i, res in enumerate(best, 1):

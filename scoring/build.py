@@ -19,6 +19,8 @@ from collector.db import connect_with_retry
 from .builds import compute_builds
 from .items import Items
 from .runes import compute_runes
+from .situational import compute_situational
+from .traits import load_traits
 
 log = logging.getLogger(__name__)
 
@@ -78,7 +80,8 @@ def _stream(cursor, size: int = 20_000):
 
 
 def build_stats(db_path: Path | list[Path], out_path: Path, patch: str | None = None,
-                holdout: bool = False, items: Items | None = None) -> dict:
+                holdout: bool = False, items: Items | None = None,
+                champion_keys: dict | None = None) -> dict:
     """holdout=True : exclut les 10 % de parties réservées au calibrage.
     db_path : une base, ou plusieurs (« World ») dont les parties sont additionnées."""
     sources = [Path(x) for x in db_path] if isinstance(db_path, (list, tuple)) else [Path(db_path)]
@@ -175,6 +178,30 @@ def build_stats(db_path: Path | list[Path], out_path: Path, patch: str | None = 
                 FROM p a JOIN src.damage d
                   ON d.match_id = a.match_id AND d.team_id = a.team_id AND d.champion_id = a.champ
                 GROUP BY 1, 2""").fetchall()
+        # objets et runes adaptés à la draft adverse (traits de composition + dégâts mesurés)
+        situ = []
+        if champion_keys and _has(con, "builds"):
+            dmg: dict[int, list[float]] = {}
+            for champ, _, games, phys, mag, tru in damage_rows:
+                total = (phys or 0) + (mag or 0) + (tru or 0)
+                if total > 0:
+                    d = dmg.setdefault(champ, [0.0, 0.0, 0.0])
+                    d[0] += phys; d[1] += mag; d[2] += games
+            measured = {c: (p_ / (p_ + m_) if p_ + m_ else 0.5, m_ / (p_ + m_) if p_ + m_ else 0.5, g)
+                        for c, (p_, m_, g) in dmg.items()}
+            traits = load_traits(champion_keys, measured)
+            rune_cols = ("[ru.keystone, ru.p1, ru.p2, ru.p3, ru.s1, ru.s2, ru.sh1, ru.sh2, ru.sh3]" if has_runes else "NULL")
+            rune_join = ("LEFT JOIN rr ru ON ru.match_id = a.match_id AND ru.team_id = a.team_id AND ru.champ = a.champ"
+                         if has_runes else "")
+            cur = con.execute(f"""
+                SELECT a.champ, a.role, a.w, any_value(b.items), any_value({rune_cols}),
+                       string_agg(e.champ::VARCHAR, ',')
+                FROM p a JOIN src.builds b
+                  ON b.match_id = a.match_id AND b.team_id = a.team_id AND b.champion_id = a.champ
+                {rune_join}
+                JOIN p e ON e.match_id = a.match_id AND e.team_id <> a.team_id
+                GROUP BY a.match_id, a.team_id, a.champ, a.role, a.w""")
+            situ = compute_situational(_stream(cur), traits, items or Items(None))
         con.execute("DETACH src")
         for i in range(len(sources) if len(sources) > 1 else 0):
             con.execute(f"DETACH s{i}")
@@ -213,6 +240,8 @@ def build_stats(db_path: Path | list[Path], out_path: Path, patch: str | None = 
             if total > 0:
                 con.execute("INSERT INTO out.damage VALUES (?, ?, ?, ?, ?, ?)",
                             [champ, role, games, phys / total, mag / total, tru / total])
+        con.execute("CREATE TABLE out.situ (value VARCHAR)")
+        con.execute("INSERT INTO out.situ VALUES (?)", [json.dumps(situ)])
         con.execute("CREATE TABLE out.runes (value VARCHAR)")
         con.execute("INSERT INTO out.runes VALUES (?)", [json.dumps(runes)])
         con.execute("CREATE TABLE out.meta (key VARCHAR, value VARCHAR)")
