@@ -178,12 +178,14 @@ interface RecoRowProps {
   best?: boolean;
   /** Dans ton pool (badge gris). Faux en autofill, où tout est hors pool. */
   inPool?: boolean;
+  /** Tier du champion dans le rôle (mode compact : affiché sous le nom quand tu n'as pas de stats perso). */
+  tier?: string;
   /** Colonne « Toi » visible (masquée quand aucun champion de la liste n'a de stats perso). */
   showPerso?: boolean;
 }
 
 /** Une ligne de la liste des picks : clic = détail, survol = bouton « Présélectionner » (grande fenêtre). */
-export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [], best = false, inPool = false, showPerso = true }: RecoRowProps) {
+export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [], best = false, inPool = false, showPerso = true, tier }: RecoRowProps) {
   const laner = res.details[0];
   const hasPerso = perso != null && perso.value !== "—";
   const key = (e: React.KeyboardEvent) => {
@@ -201,13 +203,16 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
             {mine && <span className="badge badge--picked">{t("Présélectionné")}</span>}
           </span>
           <span className="reco__meta">
-            {discovery ? <span className="badge badge--discovery">{t("Découverte")}</span>
-              : inPool ? <span className="badge badge--muted">{t("Dans ton pool")}</span> : null}
+            {/* compact : la section et le séparateur disent déjà pool / découverte, une seule ligne sous le nom */}
+            {!compact && (discovery ? <span className="badge badge--discovery">{t("Découverte")}</span>
+              : inPool ? <span className="badge badge--muted">{t("Dans ton pool")}</span> : null)}
             {!compact && fill.length > 0 && (
               <span className="badge badge--muted" title={t("Ce champion comble ce qui manque à ton équipe")}>{t("Comble : ")}{fill.map((g) => GAP_LABEL[g]).join(" · ")}</span>
             )}
             {res.games < LOW_DATA_GAMES && <span className="badge badge--muted">{t("Peu de données")}</span>}
-            {compact && perso?.short && <span className={`tone-${perso.tone}`}>{perso.short} <Trend tone={perso.tone} /></span>}
+            {compact && (perso?.short
+              ? <span className={`tone-${perso.tone}`}>{perso.short} <Trend tone={perso.tone} /></span>
+              : tier && <span className={`reco__tier reco__tier--${tier}`}>{t("Tier {v}", { v: tier })}</span>)}
           </span>
         </span>
         <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}<Trend tone={wrTone(res.score)} /></span>
@@ -393,7 +398,7 @@ export function persoCell(perso: PersonalState | undefined, champ: number, role:
   if (perso.kind === "error") return { value: "—", label: t("Serveur injoignable"), tone: "neutral" };
   const d = perso.data;
   const [g, w] = d.byRole.get(`${champ}:${role}`) ?? [0, 0];
-  if (g > 0) return { value: pct(w / g), label: t("Toi · {games}", { games: games(g) }), tone: persoTone(g, w), short: t("Toi {pct} · {g}", { pct: pct(w / g), g: g }) };
+  if (g > 0) return { value: pct(w / g), label: t("Toi · {games}", { games: games(g) }), tone: persoTone(g, w), short: t("Toi {pct} · {g}", { pct: pct(w / g), g: games(g) }) };
   const [ga, wa] = d.byChamp.get(champ) ?? [0, 0];
   if (ga > 0) return { value: pct(wa / ga), label: t("Toi, autres lanes · {games}", { games: games(ga) }), tone: persoTone(ga, wa) };
   if (d.syncing && d.matches === 0) return { value: "—", label: t("Synchro en cours"), tone: "neutral" };

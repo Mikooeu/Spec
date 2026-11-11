@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import { ROLE_LABELS, ROLE_SHORT, type Stats, enemyDisplay } from "../lib/score";
+import { useEffect, useMemo, useState } from "react";
+import { ROLE_LABELS, ROLE_SHORT, type Stats, enemyDisplay, tierList } from "../lib/score";
 import { champName } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { Logo } from "./Logo";
@@ -27,6 +27,8 @@ interface Props {
   onBan?: (champ: number) => Promise<string | null>;
   perso?: PersonalState;
   onDemoPick?: (champ: number) => void;
+  /** Ouvre le champion pool (grande fenêtre) sur ce rôle. */
+  onPool?: (role: number) => void;
   /** Page du champion joué, affichée pendant la partie à la place de la draft. */
   game?: ReactNode;
 }
@@ -71,7 +73,8 @@ function CompactWaiting({ clientText, clientOn, onDemo }: Props) {
   );
 }
 
-function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect, onBan, perso, onDemoPick }: Props & { draft: Draft }) {
+function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect, onBan, perso, onDemoPick, onPool }: Props & { draft: Draft }) {
+  const tiers = useMemo(() => new Map(tierList(stats, draft.role).map((r) => [r.champ, r.tier])), [stats, draft.role]);
   const [open, setOpen] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { allies, autofill, rows } = useRecos(stats, draft, pool);
@@ -107,6 +110,12 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
           <span>{autofill ? t("Autofill en {v}", { v: ROLE_LABELS[draft.role] }) : t("Tes meilleurs picks")}</span>
           <span className="compact__section-note">{t("Dans cette draft")}</span>
         </p>
+        {autofill && rows.length > 0 && (
+          <p className="compact__autofill">
+            <span>{t("Aucun {v} dans ton pool : les meilleurs du rôle dans cette draft.", { v: ROLE_LABELS[draft.role] })}</span>
+            {onPool && <button className="link" onClick={() => onPool(draft.role)}>{t("Ajouter")}</button>}
+          </p>
+        )}
         {rows.length > 0 && <div className="reco-list">{rows.map(({ res, kind }, i) => (
           <div key={res.champ}>
             {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <Divider compact />}
@@ -114,7 +123,7 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
                      discovery={kind === "discovery" && !autofill} inPool={kind === "pool"} open={open === res.champ}
                      onToggle={() => setOpen(open === res.champ ? null : res.champ)}
                      onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
-                     role={draft.role} mine={res.champ === draft.myChamp}
+                     role={draft.role} mine={res.champ === draft.myChamp} tier={tiers.get(res.champ)}
                      why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies) : undefined} />
           </div>
         ))}</div>}

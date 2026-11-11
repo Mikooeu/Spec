@@ -99,6 +99,9 @@ export default function App() {
   const [champView, setChampView] = useState<ChampView | null>(null);
   const lpVersion = useLpTracking(client);
   const openChamp = (champ: number, role: number) => { setChampView({ champ, role }); setScreen("champion"); };
+  // depuis le mode compact (autofill) : grande fenêtre, champion pool ouvert sur le rôle de la draft
+  const [poolRole, setPoolRole] = useState<number | null>(null);
+  const onPool = (r: number) => { setPoolRole(r); setCompact(false); setScreen("pool"); };
 
   // pick verrouillé pendant la draft : le menu de build s'ouvre dans l'onglet Draft au lancement de la partie
   // (noté à chaque rendu : un effet séparé se ferait écraser par la remise à zéro du début de draft)
@@ -273,7 +276,8 @@ export default function App() {
                      onToggleTop={toggleTop} onExpand={() => setCompact(false)}
                      onDemo={clientOn ? undefined : () => setDraft(demoDraft(stats))} onEndDemo={() => setDraft(null)}
                      onDemoPick={(c) => draft && setDraft({ ...draft, myChamp: c, myLocked: false })}
-                     onPreselect={live ? doPreselect : undefined} onBan={live ? doBan : undefined} perso={perso} game={game} />
+                     onPreselect={live ? doPreselect : undefined} onBan={live ? doBan : undefined} perso={perso} game={game}
+                     onPool={onPool} />
       </SpellImportContext.Provider>
       </RuneImportContext.Provider>
     );
@@ -346,7 +350,7 @@ export default function App() {
                           onBack={() => setScreen("tier")}
                           region={regionSelect} regionLabel={REGION_LABEL[region]} />
         )}
-        {stats && screen === "pool" && <PoolScreen stats={stats} pools={pools} onChange={setPools} perso={perso} initialRole={roles.main ?? 2} />}
+        {stats && screen === "pool" && <PoolScreen key={poolRole ?? "main"} stats={stats} pools={pools} onChange={setPools} perso={perso} initialRole={poolRole ?? roles.main ?? 2} />}
         {screen === "overlay" && <OverlayScreen settings={overlay} onChange={setOverlay} inGame={inGame != null && started} />}
         {screen === "settings" && (
           <SettingsScreen account={me} registered={perso.kind === "ready"}

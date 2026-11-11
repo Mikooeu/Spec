@@ -1648,3 +1648,13 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .foes__note { font-size: 0.6875rem; color: var(--text-3); }
 .foes--compact .foes__list { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 1100px) { .foes__list { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- 0.12.4 : mode compact ---- une ligne sous le nom, bandeau autofill */
+.reco__tier { font-size: 0.75rem; font-weight: 600; color: var(--text-3); }
+.reco__tier--S { color: #ffd60a; } .reco__tier--A { color: var(--good); } .reco__tier--B { color: var(--text-2); }
+.reco__tier--C { color: var(--tier-c); } .reco__tier--D { color: var(--bad); }
+.compact__autofill { display: flex; align-items: center; gap: 0.5rem; padding: 0.5625rem 0.75rem; border-radius: 0.625rem;
+                     background: var(--accent-tint); font-size: 0.75rem; color: var(--text-2); }
+.compact__autofill span { flex: 1; }
+.compact__autofill .link { flex: none; font-size: 0.75rem; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; }
+.compact__autofill .link:hover { text-decoration: underline; }
