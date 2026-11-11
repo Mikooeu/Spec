@@ -299,7 +299,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
         </>
       )}
       {tab === "progress" && (
-        <ProgressView stats={stats} games={games} perso={perso} version={lpVersion + impactVersion + seriesTick} onOpenGame={openGame} />
+        <ProgressView stats={stats} games={games} perso={perso} tier={tier} version={lpVersion + impactVersion + seriesTick} onOpenGame={openGame} />
       )}
       {tab === "duo" && account?.puuid && (
         <DuoList stats={stats} client={account.puuid} selected={duo?.key ?? null} onOpen={openDuo} />
@@ -1034,8 +1034,8 @@ function DuoList({ stats, client, selected, onOpen }:
 
 const shortDate = (t: number) => new Date(t).toLocaleDateString(locale(), { day: "numeric", month: "short" });
 
-function ProgressView({ stats, games, version, onOpenGame }:
-  { stats: Stats; games: Game[] | null; perso?: PersonalState; version: number; onOpenGame: (id: number) => void }) {
+function ProgressView({ stats, games, tier, version, onOpenGame }:
+  { stats: Stats; games: Game[] | null; perso?: PersonalState; tier?: string | null; version: number; onOpenGame: (id: number) => void }) {
   const series = useMemo(() => readLpSeries(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = useMemo(() => recaps(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map((games ?? []).map((g) => [g.id, g])), [games]);
@@ -1044,7 +1044,7 @@ function ProgressView({ stats, games, version, onOpenGame }:
 
   return (
     <>
-      <LpChart stats={stats} series={series} games={byId} />
+      <LpChart stats={stats} series={series} games={byId} tier={tier ?? null} />
 
       {list.length > 0 && <section className="best">
         <div className="section-head">
@@ -1066,10 +1066,16 @@ const TIER_KEYS = ["iron", "bronze", "silver", "gold", "platinum", "emerald", "d
 const APEX = TIER_KEYS.length * 400;
 const tierIndex = (lp: number) => Math.min(TIER_KEYS.length, Math.floor(lp / 400));   // 7 = Maître et plus
 const tierColorOf = (lp: number) => TIER_COLOR[lp >= APEX ? "master" : TIER_KEYS[Math.max(0, tierIndex(lp))]];
-const tierNameOf = (lp: number) => lpLabel(lp, true).replace(/ (IV|III|II|I)$/, "").replace(/ \d+$/, "");
+
 
 /** Évolution des LP : bandes aux couleurs des rangs, un point par partie (vert gagné, rouge perdu), détail au survol. */
-function LpChart({ stats, series, games }: { stats: Stats; series: LpPoint[]; games: Map<number, Game> }) {
+const APEX_NAME: Record<string, string> = { master: t("Maître"), grandmaster: t("Grand Maître"), challenger: t("Challenger") };
+
+function LpChart({ stats, series, games, tier }: { stats: Stats; series: LpPoint[]; games: Map<number, Game>; tier: string | null }) {
+  // au-delà de Diamant I, les LP ne disent pas le palier : on reprend celui du compte (Maître par défaut)
+  const apexName = (tier && APEX_NAME[tier]) || t("Maître");
+  const tierNameOf = (lp: number) => (lp >= APEX ? apexName : lpLabel(lp, true).replace(/ (IV|III|II|I)$/, ""));
+  const fullLabel = (lp: number) => (lp >= APEX ? `${apexName} · ${lp - APEX} LP` : lpLabel(lp));
   const [period, setPeriod] = useState<Period>("30");
   const [hover, setHover] = useState<number | null>(null);
   const cut = period === "all" ? 0 : Date.now() - Number(period) * 86_400_000;
@@ -1109,7 +1115,7 @@ function LpChart({ stats, series, games }: { stats: Stats; series: LpPoint[]; ga
   const step = vmax - vmin > 700 ? 400 : 100;
   let lo = Math.floor(vmin / step) * step, hi = Math.ceil((vmax + 1) / step) * step;
   if (hi - lo < 2 * step) { lo = Math.max(0, lo - step); hi = lo + 2 * step; }
-  const W = 900, H = 240, L = 92, R = 14, T = 14, B = H - 22;
+  const W = 900, H = 264, L = 92, R = 14, T = 44, B = H - 22;   // T : place pour l'étiquette « Maintenant » au-dessus du point le plus haut
   const x = (i: number) => L + 6 + ((W - L - R - 12) * i) / (pts.length - 1);
   const y = (v: number) => T + (B - T) * (1 - (v - lo) / (hi - lo));
   const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p.lp).toFixed(1)}`).join(" ");
@@ -1127,14 +1133,14 @@ function LpChart({ stats, series, games }: { stats: Stats; series: LpPoint[]; ga
         <div><small>{t("Bilan")}</small><strong className={`tone-${tone}`}>{lpText(gain)}</strong>
           <small>{period === "all" ? t("depuis le {d}", { d: shortDate(first.at) }) : t("sur {n} jours", { n: period })}</small></div>
         <div><small>{t("Parties suivies")}</small><strong>{wins + losses}</strong><small>{t("{w} V – {l} D", { w: wins, l: losses })}</small></div>
-        <div><small>{t("Plus haut")}</small><strong>{tierNameOf(pts[peakI].lp)}</strong><small>{lpLabel(pts[peakI].lp).split(" · ")[1] ?? ""} · {shortDate(pts[peakI].at)}</small></div>
+        <div><small>{t("Plus haut")}</small><strong>{tierNameOf(pts[peakI].lp)}</strong><small>{fullLabel(pts[peakI].lp).split(" · ")[1] ?? ""} · {shortDate(pts[peakI].at)}</small></div>
         <div><small>{t("Série en cours")}</small>
           <strong className={streak ? `tone-${lastSign > 0 ? "good" : "bad"}` : ""}>
             {streak ? plural(streak, lastSign > 0 ? "{n} victoire" : "{n} défaite", lastSign > 0 ? "{n} victoires" : "{n} défaites") : "—"}</strong>
           <small>{streak ? t("d’affilée") : t("pas de série")}</small></div>
       </div>
       <div className="lp2__plot" onMouseLeave={() => setHover(null)}>
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("Courbe des LP : de {a} à {b}", { a: lpLabel(first.lp), b: lpLabel(last.lp) })}>
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("Courbe des LP : de {a} à {b}", { a: fullLabel(first.lp), b: fullLabel(last.lp) })}>
           <defs>
             <linearGradient id="lp2-fill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stopColor="var(--accent)" stopOpacity="0.26" />
@@ -1146,7 +1152,7 @@ function LpChart({ stats, series, games }: { stats: Stats; series: LpPoint[]; ga
               <rect x={L} width={W - L - R} y={y(v + step)} height={y(v) - y(v + step)} fill={tierColorOf(v)} opacity={i % 2 ? 0.045 : 0.075} />
               <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} className={v % 400 === 0 ? "lp2__tier-line" : "lp2__grid"} />
               <text x={L - 10} y={(y(v) + y(v + step)) / 2 + 4} textAnchor="end" className="lp2__band" fill={tierColorOf(v)}>
-                {step === 400 || v >= APEX ? tierNameOf(v) : lpLabel(v, true)}</text>
+                {v >= APEX ? (step === 400 ? apexName : `${v - APEX} LP`) : step === 400 ? tierNameOf(v) : lpLabel(v, true)}</text>
             </g>
           ))}
           <path d={area} fill="url(#lp2-fill)" />
@@ -1168,12 +1174,12 @@ function LpChart({ stats, series, games }: { stats: Stats; series: LpPoint[]; ga
           ))}
         </svg>
         <span className="lp2__now" style={{ left: `${(x(pts.length - 1) / W) * 100}%`, top: `${(y(last.lp) / H) * 100}%` }}>
-          {t("Maintenant · {v}", { v: lpLabel(last.lp) })}</span>
+          {t("Maintenant · {v}", { v: fullLabel(last.lp) })}</span>
         {h && hover != null && (
           <div className={`lp2__tip${x(hover) > W * 0.7 ? " is-left" : ""}`} style={{ left: `${(x(hover) / W) * 100}%`, top: `${(y(h.lp) / H) * 100}%` }}>
             <p>{hg && <ChampionIcon stats={stats} champ={hg.champ} size={1.25} />}
               <strong>{hg ? `${champName(stats, hg.champ)} · ${hg.win ? t("Victoire") : t("Défaite")}` : hd > 0 ? t("Victoire") : hd < 0 ? t("Défaite") : t("Partie")}</strong></p>
-            <p className={`tone-${hd > 0 ? "good" : hd < 0 ? "bad" : "neutral"}`}>{lpText(hd)} → {lpLabel(h.lp)}</p>
+            <p className={`tone-${hd > 0 ? "good" : hd < 0 ? "bad" : "neutral"}`}>{lpText(hd)} → {fullLabel(h.lp)}</p>
             <small>{shortDate(h.at)}{hg ? ` · ${hg.kills} / ${hg.deaths} / ${hg.assists}` : ""}</small>
           </div>
         )}
