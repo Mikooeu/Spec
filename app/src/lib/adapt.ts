@@ -1,5 +1,5 @@
 // Objets et runes que les joueurs Master+ adaptent à la draft adverse (voir scoring/situational.py).
-import { analyzeTeam, situationsOf, type Situation } from "./composition";
+import { analyzeTeam, situationsOf, traitsOf, type Situation } from "./composition";
 import type { SituPick, Stats } from "./score";
 
 export interface Adaptation { situation: Situation; games: number; items: SituPick[]; runes: SituPick[] }
@@ -13,4 +13,21 @@ export function adaptationsFor(stats: Stats, champ: number, role: number, enemie
   return entries
     .filter((e) => sits.includes(e.situation) && (e.items.length || e.runes.length))
     .sort((a, b) => Math.max(0, ...b.items.map(gap), ...b.runes.map(gap)) - Math.max(0, ...a.items.map(gap), ...a.runes.map(gap)));
+}
+
+/** Situations de l'équipe adverse (mêmes seuils que les adaptations). */
+export function enemySituations(stats: Stats, enemies: number[]): Situation[] {
+  return situationsOf(analyzeTeam(stats, enemies));
+}
+
+/** Champions adverses qui font entrer l'équipe dans cette situation (tanks, soigneurs, gros dégâts du type). */
+export function situationChamps(stats: Stats, situation: Situation, enemies: number[]): number[] {
+  return enemies.filter((c) => {
+    const tr = traitsOf(stats, c);
+    if (!tr) return false;
+    if (situation === "tank") return tr.front === 2;
+    if (situation === "heal") return tr.healer;
+    if (situation === "ad") return tr.weight === 1 && tr.ad >= 0.6;
+    return tr.weight === 1 && tr.ap >= 0.6;
+  });
 }

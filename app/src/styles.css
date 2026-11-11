@@ -1624,3 +1624,27 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .toggle.is-on, .toggle.is-on:hover:not(:disabled) { background: var(--accent); box-shadow: none; }
 .toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .toggle:disabled { opacity: 0.4; }
+
+/* ---- 0.12.4 : Face à leur équipe (build en partie) ---- */
+.ingame__card--wide { grid-column: 1 / -1; }
+.foes__head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.foes__team { display: flex; }
+.foes__team > * { box-shadow: 0 0 0 2px var(--bg-surface); border-radius: 50%; }
+.foes__team > * + * { margin-left: -0.375rem; }
+.foes__tags { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.foes__tag { padding: 0.1875rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; font-weight: 600; color: var(--bad); background: rgba(255, 69, 58, 0.14); }
+.foes__tag.is-neutral { color: var(--text-2); background: rgba(255, 255, 255, 0.08); }
+.foes__list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.625rem; }
+.foes__item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 0.875rem; border-radius: 0.75rem; background: rgba(255, 255, 255, 0.04); min-width: 0; }
+.foes__item .item-ic { flex: none; }
+.foes__text { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 0.3125rem; min-width: 0; }
+.foes__text strong { font-size: 0.8125rem; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.foes__when { padding: 0.125rem 0.4375rem; border-radius: 0.375rem; font-size: 0.6875rem; font-weight: 600; color: var(--text-2); background: rgba(255, 255, 255, 0.08); white-space: nowrap; }
+.foes__when.is-plan { color: var(--accent); background: var(--accent-tint); }
+.foes__vs { display: inline-flex; align-items: center; gap: 0.3125rem; font-size: 0.75rem; color: var(--text-3); }
+.foes__stat { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 0.125rem; }
+.foes__stat strong { font-size: 0.9375rem; font-weight: 600; color: var(--good); }
+.foes__stat small { font-size: 0.6875rem; color: var(--text-3); white-space: nowrap; }
+.foes__note { font-size: 0.6875rem; color: var(--text-3); }
+.foes--compact .foes__list { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1100px) { .foes__list { grid-template-columns: minmax(0, 1fr); } }

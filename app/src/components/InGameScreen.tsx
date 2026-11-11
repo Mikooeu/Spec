@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
-import { adaptationsFor } from "../lib/adapt";
+import { adaptationsFor, enemySituations, situationChamps } from "../lib/adapt";
 import type { Situation } from "../lib/composition";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
-import { getLang, t } from "../lib/i18n";
+import { getLang, plural, t } from "../lib/i18n";
 import { champIdOf, clock, POSITION_ROLE, useGameClock, type LiveGame } from "../lib/live";
 import { ROLE_LABELS, type ChampPage, type Stats } from "../lib/score";
-import { champName, int, patchLabel, pct } from "../lib/ui";
+import { champName, int, patchLabel, pct, pctN } from "../lib/ui";
 import { SITUATION_LABEL } from "./Adaptations";
 import { ChampionIcon } from "./ChampionIcon";
 import { groupIcons, ItemIcon, mergeStarts, SkillGrid } from "./ChampionScreen";
@@ -95,7 +95,7 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
           </Card>
         )}
 
-        <Card title={t("Build")}>
+        <Card title={t("Build")} wide>
           {steps.length ? (
             <>
               <div className="ingame__path">
@@ -123,13 +123,7 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
           ) : <Collecting />}
         </Card>
 
-        <Card title={t("Face à leur équipe")}>
-          {adapts.length ? (
-            <div className="ingame__list">
-              {adapts.map((a) => <Named key={a.id} icon={<ItemIcon id={a.id} data={items} />} title={name(a.id)} sub={a.why} />)}
-            </div>
-          ) : <p className="muted small">{foes.length < 3 ? t("S’affiche quand l’équipe adverse est connue.") : t("Rien à adapter de net face à cette équipe : garde ton build.")}</p>}
-        </Card>
+        <FoeCard stats={stats} foes={foes} adapts={adapts} items={items} name={name} compact={compact} />
       </div>
     </div>
   );
@@ -141,9 +135,9 @@ function GameClock({ game }: { game: LiveGame | null }) {
   return <>{time != null ? t("En partie · {v}", { v: clock(time) }) : t("Chargement de la partie")}</>;
 }
 
-function Card({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
+function Card({ title, sub, wide = false, children }: { title: string; sub?: string; wide?: boolean; children: ReactNode }) {
   return (
-    <section className="card champ__card ingame__card">
+    <section className={`card champ__card ingame__card${wide ? " ingame__card--wide" : ""}`}>
       <div>
         <h2>{title}</h2>
         {sub && <p className="muted small">{sub}</p>}
@@ -232,21 +226,77 @@ function bootChoice(stats: Stats, page: ChampPage | null, champ: number, role: n
   return { main, alt: second ? { id: second[0], why: t("Pris dans {v} des parties", { v: pct(second[1] / page.g) }) } : null };
 }
 
-/** Objets à adapter face à l'équipe adverse (sans les bottes, déjà dans leur carte). */
-function adaptItems(stats: Stats, champ: number, role: number, foes: number[], items: InfoMap | null, steps: Step[], owned: number[]) {
-  const out: { id: number; why: string }[] = [];
+interface Adapt { id: number; situation: Situation; rin: number; rout: number; champs: number[]; at: number | null }
+
+/** Objets à adapter face à l'équipe adverse (sans les bottes, déjà dans leur carte), les plus nets d'abord. */
+function adaptItems(stats: Stats, champ: number, role: number, foes: number[], items: InfoMap | null, steps: Step[], owned: number[]): Adapt[] {
+  const out: Adapt[] = [];
   const nextAt = steps.findIndex((s) => s.state === "next");
   for (const a of adaptationsFor(stats, champ, role, foes)) {
-    for (const [id] of a.items) {
-      if (out.length >= MAX_ADAPT || out.some((o) => o.id === id) || owned.includes(id) || items?.get(id)?.boots) continue;
-      const at = steps.findIndex((s) => s.id === id);
+    for (const [id, rin, rout] of a.items) {
+      if (out.some((o) => o.id === id) || owned.includes(id) || items?.get(id)?.boots) continue;
+      const pos = steps.findIndex((s) => s.id === id);
       // déjà prévu plus tard dans le build : on conseille de le monter juste après le prochain objet
-      const earlier = at > nextAt + 1 && nextAt >= 0 ? t(" · à prendre en {v}", { v: ordinal(nextAt + 2) }) : "";
-      if (at >= 0 && !earlier) continue;
-      out.push({ id, why: SITUATION_LABEL[a.situation]() + earlier });
+      const later = pos > nextAt + 1 && nextAt >= 0;
+      if (pos >= 0 && !later) continue;
+      out.push({ id, situation: a.situation, rin, rout, champs: situationChamps(stats, a.situation, foes), at: later ? nextAt + 2 : null });
     }
   }
-  return out;
+  return out.sort((x, y) => (y.rin - y.rout) - (x.rin - x.rout)).slice(0, MAX_ADAPT);
+}
+
+/** Étiquette d'une situation adverse : « 2 tanks », « Dégâts surtout physiques »… */
+function situationTag(stats: Stats, s: Situation, foes: number[]): string {
+  const n = situationChamps(stats, s, foes).length;
+  if (s === "tank") return n ? plural(n, "{n} tank", "{n} tanks") : t("Beaucoup de frontline");
+  if (s === "heal") return plural(n, "{n} soigneur", "{n} soigneurs");
+  return s === "ad" ? t("Dégâts surtout physiques") : t("Dégâts surtout magiques");
+}
+
+/** « Face à leur équipe » : leur équipe, ce qui la caractérise et les objets que les Master+ y adaptent. */
+function FoeCard({ stats, foes, adapts, items, name, compact }:
+  { stats: Stats; foes: number[]; adapts: Adapt[]; items: InfoMap | null; name: (id: number) => string; compact: boolean }) {
+  const sits = foes.length >= 3 ? enemySituations(stats, foes) : [];
+  const pc = (v: number) => pctN(Math.round(v * 100));
+  return (
+    <section className={`card champ__card ingame__card ingame__card--wide foes${compact ? " foes--compact" : ""}`}>
+      <div className="foes__head">
+        <h2>{t("Face à leur équipe")}</h2>
+        {foes.length > 0 && (
+          <span className="foes__team">{foes.map((c) => <ChampionIcon key={c} stats={stats} champ={c} size={1.5} round />)}</span>
+        )}
+      </div>
+      {foes.length < 3 ? <p className="muted small">{t("S’affiche quand l’équipe adverse est connue.")}</p> : (
+        <>
+          <div className="foes__tags">
+            {sits.length ? sits.map((s) => <span key={s} className="foes__tag">{situationTag(stats, s, foes)}</span>)
+              : <span className="foes__tag is-neutral">{t("Équipe équilibrée")}</span>}
+          </div>
+          {adapts.length ? (
+            <>
+              <div className="foes__list">
+                {adapts.map((a) => (
+                  <div key={a.id} className="foes__item" title={t("Pris dans {a} des parties Master+ face à ce type d’équipe, {b} sinon", { a: pc(a.rin), b: pc(a.rout) })}>
+                    <ItemIcon id={a.id} data={items} />
+                    <span className="foes__text">
+                      <strong>{name(a.id)}</strong>
+                      <span className={`foes__when${a.at != null ? " is-plan" : ""}`}>
+                        {a.at != null ? t("À prendre en {v}", { v: ordinal(a.at) }) : t("Hors de ton build")}</span>
+                      {a.champs.length > 0 && (
+                        <span className="foes__vs">{t("Contre")}{a.champs.map((c) => <ChampionIcon key={c} stats={stats} champ={c} size={1} round />)}</span>
+                      )}
+                    </span>
+                    <span className="foes__stat"><strong>{pc(a.rin)}</strong><small>{t("{v} sinon", { v: pc(a.rout) })}</small></span>
+                  </div>
+                ))}
+              </div>
+              <p className="foes__note">{t("Part des parties Master+ où l’objet est pris face à ce type d’équipe, et sans.")}</p>
+            </>
+          ) : <p className="muted small">{t("Rien à adapter de net : garde ton build.")}</p>}
+        </>
+      )}
+    </section>
+  );
 }
 
 function situationWhy(s: Situation): string {
