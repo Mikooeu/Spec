@@ -46,7 +46,7 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
         <div>
           <h1>{t("Tier list")}</h1>
         </div>
-        <div className="head-actions"><EloBadge />{region}</div>
+        <div className="head-actions"><EloBadge matches={Number(stats.meta.matches ?? 0)} />{region}</div>
       </header>
 
       <div className="tier-controls">
@@ -91,6 +91,7 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
               {label}<span className="tier-sort__arrow" aria-hidden="true">{sort === key ? arrow : "↕"}</span>
             </button>
           ))}
+          <span aria-hidden />
         </div>
         <div className="stagger tier-table__rows" key={`${all ? "all" : role}-${sort}-${asc}`}>
         {rows.map(({ r, rank }) => (
@@ -117,6 +118,9 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
             <span className={`tier-row__num tier-row__wr tone-${wrTone(r.winrate)}`}>{pct(r.winrate)}<Trend tone={wrTone(r.winrate)} /></span>
             <span className="tier-row__num">{pct(r.pickrate)}</span>
             {hasBan && <span className="tier-row__num">{r.banrate == null ? "—" : pct(r.banrate)}</span>}
+            <svg className="tier-row__chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+              <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
         ))}
         </div>

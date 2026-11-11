@@ -1587,3 +1587,13 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
                   font-size: 0.6875rem; font-weight: 500; line-height: 1.45; color: var(--text); text-align: left; pointer-events: none;
                   opacity: 0; transform: translateY(-2px); transition: opacity 0.12s, transform 0.12s; box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.4); }
 .has-tip:hover::after, .has-tip:focus-visible::after { opacity: 1; transform: none; }
+/* tier list : la ligne s'ouvre (fond au survol + flèche) */
+.tier-row { grid-template-columns: 1.5rem 2rem minmax(8rem, 1fr) repeat(4, minmax(4.5rem, 7rem)) 1rem; }
+.tier-table--noban .tier-row { grid-template-columns: 1.5rem 2rem minmax(8rem, 1fr) repeat(3, minmax(4.5rem, 7rem)) 1rem; }
+.tier-row--link { transition: background-color 0.12s, border-color 0.12s; }
+.tier-row--link:hover { background: rgba(255, 255, 255, 0.045); }
+.tier-row__chev { justify-self: end; color: var(--text-3); opacity: 0.5; transition: opacity 0.12s, transform 0.12s; }
+.tier-row--link:hover .tier-row__chev { opacity: 1; transform: translateX(2px); color: var(--text-2); }
+/* niveau des stats : une étiquette, pas un bouton (rien à cliquer) */
+.elo-badge { background: none; border-color: transparent; padding: 0 0.25rem; color: var(--text-2); font-weight: 600; cursor: default; }
+.elo-badge small { font-size: 0.75rem; font-weight: 400; color: var(--text-3); margin-left: 0.125rem; }
