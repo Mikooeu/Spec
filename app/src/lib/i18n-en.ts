@@ -926,4 +926,6 @@ export const EN: Record<string, string> = {
   "Maintenant · {v}": "Now · {v}",
   "Survole un point pour voir la partie. Les LP sont suivis depuis que Spec est installé.": "Hover a point to see the game. LP are tracked since Spec was installed.",
   "vis-à-vis non identifié": "lane opponent not identified",
+  "Petite fenêtre à côté du client": "Small window next to the client",
+  "Aucun compte": "No account",
 };

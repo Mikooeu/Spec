@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
@@ -39,6 +39,24 @@ import { t } from "./lib/i18n";
 type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "overlay" | "settings";
 interface ChampView { champ: number; role: number }
 const SCREENS: [Screen, string][] = [["draft", t("Draft")], ["profile", t("Profil")], ["tier", t("Tier list")], ["pool", t("Champion pool")], ["overlay", t("Overlay")], ["settings", t("Réglages")]];
+
+/** Icône de chaque onglet de la barre latérale (traits de 1,5 px, comme le reste de l'appli). */
+const NAV_PATHS: Record<Screen, string> = {
+  draft: "M3 3h4v10H3zM9 3h4v10H9z",
+  profile: "M8 2.25a2.75 2.75 0 1 1 0 5.5 2.75 2.75 0 0 1 0-5.5zM2.75 13.75c.75-2.4 2.8-3.75 5.25-3.75s4.5 1.35 5.25 3.75",
+  tier: "M3 4h10M3 8h7M3 12h4",
+  champion: "M3 4h10M3 8h7M3 12h4",
+  pool: "M8 2l1.8 3.8 4.2.5-3.1 2.9.8 4.1L8 11.3l-3.7 2 .8-4.1L2 6.3l4.2-.5z",
+  overlay: "M2 3h12v9H2zM9 5h3v3H9z",
+  settings: "M8 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4",
+};
+function NavIcon({ screen }: { screen: Screen }) {
+  return (
+    <svg className="nav__icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <path d={NAV_PATHS[screen]} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 /** Draft fictive de démonstration (remplacée plus tard par la lecture du client LoL). */
 function demoDraft(stats: Stats): Draft {
@@ -269,29 +287,38 @@ export default function App() {
         <div className="brand">
           <Logo className="brand__mark" />
           <span className="brand__name">{t("Spec")}</span>
-          <button className="icon-btn brand__compact" onClick={() => setCompact(true)} disabled={!stats}
-                  title={t("Mode compact")} aria-label={t("Passer en mode compact")}>
+          <button className="icon-btn brand__compact has-tip" onClick={() => setCompact(true)} disabled={!stats}
+                  data-tip={t("Mode compact")} data-tip-sub={t("Petite fenêtre à côté du client")} aria-label={t("Passer en mode compact")}>
             <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
-              <path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M9.5 6.5 14 2M6.5 9.5 2 14" fill="none" stroke="currentColor"
-                    strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M2 3h12v10H2zM8.5 8h4v3.5h-4z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
             </svg>
           </button>
         </div>
         <nav>
           {SCREENS.map(([key, label]) => (
-            <button key={key} className={`nav${screen === key || (key === "tier" && screen === "champion") ? " is-active" : ""}`}
-                    onClick={() => setScreen(key)} aria-current={screen === key ? "page" : undefined}>{label}</button>
+            <Fragment key={key}>
+              {key === "overlay" && <span className="nav__sep" aria-hidden />}
+              <button className={`nav${screen === key || (key === "tier" && screen === "champion") ? " is-active" : ""}`}
+                      onClick={() => setScreen(key)} aria-current={screen === key ? "page" : undefined}>
+                <NavIcon screen={key} />
+                <span className="nav__label">{label}</span>
+                {key === "draft" && live && <span className="nav__live">{t("En direct")}</span>}
+              </button>
+            </Fragment>
           ))}
         </nav>
         <span className="grow" />
         <UpdateCard state={update} onInstall={installUpdate} />
-        {account && (
-          <p className="sidebar__account" title={t("Compte connecté au client LoL")}>
-            <span className="dot" />{account.name}{account.region ? ` · ${account.region}` : ""}
-          </p>
-        )}
-        <p className="sidebar__foot">{footer}</p>
-        <p className="sidebar__legal">{t("Spec n’est pas approuvé par Riot Games.")}</p>
+        <div className="sidebar__account" title={account ? t("Compte connecté au client LoL") : undefined}>
+          {account?.icon != null && stats
+            ? <img className="sidebar__avatar" src={`https://ddragon.leagueoflegends.com/cdn/${stats.ddragon}/img/profileicon/${account.icon}.png`} alt="" draggable={false} />
+            : <span className="sidebar__avatar sidebar__avatar--empty" />}
+          <span className="sidebar__who">
+            <strong>{account?.name ?? savedAccount?.name ?? t("Aucun compte")}</strong>
+            <small><span className={clientOn ? "dot" : "dot dot--off"} />{clientOn ? t("Client connecté") : t("Client LoL fermé")}{account?.region ? ` · ${account.region}` : ""}</small>
+          </span>
+        </div>
+        <p className="sidebar__legal" title={footer}>{stats ? `${t("Patch {v}", { v: patchLabel(stats.meta.patch) })} · ` : ""}{t("Spec n’est pas approuvé par Riot Games.")}</p>
       </aside>
 
       <main className="main">
