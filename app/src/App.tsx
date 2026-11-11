@@ -48,7 +48,7 @@ const NAV_PATHS: Record<Screen, string> = {
   champion: "M3 4h10M3 8h7M3 12h4",
   pool: "M8 2l1.8 3.8 4.2.5-3.1 2.9.8 4.1L8 11.3l-3.7 2 .8-4.1L2 6.3l4.2-.5z",
   overlay: "M2 3h12v9H2zM9 5h3v3H9z",
-  settings: "M8 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4",
+  settings: "M14 2.67H9.33M6.67 2.67H2M14 8H8M5.33 8H2M14 13.33H10.67M8 13.33H2M9.33 1.33v2.67M5.33 6.67v2.67M10.67 12v2.67",
 };
 function NavIcon({ screen }: { screen: Screen }) {
   return (

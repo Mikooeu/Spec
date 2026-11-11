@@ -1073,7 +1073,7 @@ function LpChart({ stats, series, games }: { stats: Stats; series: LpPoint[]; ga
   const [period, setPeriod] = useState<Period>("30");
   const [hover, setHover] = useState<number | null>(null);
   const cut = period === "all" ? 0 : Date.now() - Number(period) * 86_400_000;
-  const before = series.filter((p) => p.at < cut).at(-1);
+  const older = series.filter((p) => p.at < cut), before = older[older.length - 1];
   const pts = [...(before ? [before] : []), ...series.filter((p) => p.at >= cut)].slice(-120);
   const head = (
     <div className="lp2__head">
