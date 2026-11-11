@@ -22,6 +22,7 @@ import { applyCompact, setOnTop, watchCompactExpand } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { InGameView, type GameStart } from "./components/InGameScreen";
 import { RecapView } from "./components/RecapView";
+import { HomeScreen } from "./components/HomeScreen";
 import { useLiveGame } from "./lib/live";
 import { OverlayScreen } from "./components/OverlayScreen";
 import { LoadingCards } from "./components/LoadingCards";
@@ -341,20 +342,10 @@ export default function App() {
           </div>
         )}
         {stats && screen === "draft" && !live && !inGame && !draft && !(recap && me?.puuid) && (
-          <div className="content">
-            <div className="empty-state">
-              <div className="spinner" />
-              <h1>{t("En attente de la draft")}</h1>
-              <p className="muted">{t("Lance une partie classée : tes recommandations s’affichent dès la sélection des champions.")}</p>
-              <div className="card status-list">
-                <div><span>{t("Client LoL")}</span><span className="muted"><span className={clientOn ? "dot" : "dot dot--off"} />{clientText}</span></div>
-                <div><span>{t("Stats Master+")}</span><span className="muted"><span className="dot" />{t("Patch ")}{patchLabel(stats.meta.patch)}</span></div>
-              </div>
-              {!clientOn && (
-                <button className="btn btn--primary" onClick={() => setDraft(demoDraft(stats))}>{t("Simuler une draft")}</button>
-              )}
-            </div>
-          </div>
+          <HomeScreen stats={stats} clientOn={clientOn} clientText={clientText} me={me?.puuid ?? null} pools={pools}
+                      mainRole={roles.main} version={lpVersion} onRecap={setRecap} onHistory={() => setScreen("profile")}
+                      onPool={() => setScreen("pool")} onTierList={(r) => { setTierRole(r); setScreen("tier"); }}
+                      onDemo={() => setDraft(demoDraft(stats))} />
         )}
         {stats && screen === "draft" && !live && !inGame && draft && (
           <DraftScreen stats={stats} draft={draft} pool={pools[draft.role]} wide={wide}
