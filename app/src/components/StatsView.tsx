@@ -5,7 +5,6 @@ import { t, plural } from "../lib/i18n";
 import { laneDiff, type Game, type LaneDiff } from "../lib/history";
 import { champRows, champScore, kdaOf, perMinute, type GW, type SeasonStats, type SortKey } from "../lib/seasonStats";
 import { ChampionIcon } from "./ChampionIcon";
-import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
 
 const DAYS = () => [t("Lun"), t("Mar"), t("Mer"), t("Jeu"), t("Ven"), t("Sam"), t("Dim")];
@@ -14,7 +13,7 @@ const rate = ([g, w]: GW) => (g ? w / g : 0);
 const signed = (x: number, f: (n: number) => string) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${f(Math.abs(x))}`;
 
 /** Page Stats du profil : côté, abandon, durée, champions, jour de la semaine et écart en lane. */
-export function StatsView({ stats, data, laneGames, me, guess, recentNote, other = false }: {
+export function StatsView({ stats, data, laneGames, me, guess, recentNote, other = false, role = null }: {
   stats: Stats; data: SeasonStats | null;
   /** parties récentes du client (la timeline n'existe que là), dans la file choisie */
   laneGames: Game[]; me: string | null; guess?: (champ: number, notJungle: boolean) => number | null;
@@ -22,6 +21,8 @@ export function StatsView({ stats, data, laneGames, me, guess, recentNote, other
   recentNote: string | null;
   /** profil d'un autre joueur : textes à la 3e personne */
   other?: boolean;
+  /** rôle choisi dans le filtre en haut du profil (null = tous) */
+  role?: number | null;
 }) {
   if (!data) return <div className="skeleton" aria-label={t("Chargement des stats")}>{[0, 1, 2].map((i) => <span key={i} />)}</div>;
   if (!data.games) return <p className="hint">{t("Pas encore de partie à analyser dans cette file.")}</p>;
@@ -53,17 +54,17 @@ export function StatsView({ stats, data, laneGames, me, guess, recentNote, other
             )}
             <div className="tile-stat" title={t("{a} parties de moins de 30 min, {b} de 30 min ou plus", { a: short[0], b: long[0] })}>
               <span className="tile-stat__label">{t("Winrate selon la durée")}</span>
-              <span className="tile-dur">
-                <span>{t("Moins de 30 min")}</span>
-                <strong className={short[0] ? `tone-${wrTone(rate(short))}` : ""}>{short[0] ? pct(rate(short)) : "—"}</strong>
-                <span>{t("Plus de 30 min")}</span>
-                <strong className={long[0] ? `tone-${wrTone(rate(long))}` : ""}>{long[0] ? pct(rate(long)) : "—"}</strong>
+              <span className="tile-dur2">
+                <span><strong className={`tile-stat__value${short[0] ? ` tone-${wrTone(rate(short))}` : ""}`}>{short[0] ? pct(rate(short)) : "—"}</strong>
+                  <span className="tile-stat__detail">{t("moins de 30 min")}</span></span>
+                <span><strong className={`tile-stat__value${long[0] ? ` tone-${wrTone(rate(long))}` : ""}`}>{long[0] ? pct(rate(long)) : "—"}</strong>
+                  <span className="tile-stat__detail">{t("30 min ou plus")}</span></span>
               </span>
             </div>
           </div>
         );
       })()}
-      <ChampionTable stats={stats} data={data} other={other} />
+      <ChampionTable stats={stats} data={data} other={other} role={role} />
       <div className="sview__row">
         <DayChart days={data.days} season={data.source === "season"} other={other} />
         <LaneCard games={laneGames} me={me} guess={guess} other={other} />
@@ -87,26 +88,18 @@ const SHOWN = 5;
 const scoreTone = (x: number) => (x >= 55 ? "good" : x <= 45 ? "bad" : "neutral");
 const COLS: [SortKey, string][] = [["score", "Score"], ["games", "Parties"], ["wr", "Winrate"], ["kda", "KDA"], ["cs", "CS/min"], ["gold", "Or/min"], ["pentas", "Pentas"]];
 
-function ChampionTable({ stats, data, other }: { stats: Stats; data: SeasonStats; other: boolean }) {
-  const [role, setRole] = useState<number | null>(null);
+function ChampionTable({ stats, data, other, role }: { stats: Stats; data: SeasonStats; other: boolean; role: number | null }) {
   const [sort, setSort] = useState<SortKey>("games");
   const [asc, setAsc] = useState(false);
   const [all, setAll] = useState(false);   // 5 lignes d'abord, pour voir les stats en dessous sans défiler
   const min = data.source === "season" ? 3 : 1;
   const rows = useMemo(() => champRows(data, role, min, sort, asc), [data, role, min, sort, asc]);
-  const count = (r: number | null) => data.champions.filter((c) => r == null || c.role === r).reduce((a, c) => a + c.games, 0);
   const onSort = (k: SortKey) => { if (k === sort) setAsc(!asc); else { setSort(k); setAsc(false); } };
   return (
     <section className="card stable">
       <div className="stable__head">
         <h2>{other ? t("Ses champions") : t("Tes champions")}</h2>
-        <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
-          {[null, 0, 1, 2, 3, 4].map((r) => (
-            <button key={String(r)} role="tab" aria-selected={role === r} className={role === r ? "is-active" : ""} onClick={() => setRole(r)}>
-              {r == null ? t("Tous") : ROLE_LABELS[r]} <span className="count">{count(r)}</span>
-            </button>
-          ))}
-        </Segmented>
+
       </div>
       {rows.length ? (
         <div className="stable__table" role="table">

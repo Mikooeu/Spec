@@ -107,3 +107,9 @@ export function patchLabel(internal: string | number | undefined): string {
   const major = Number(m[1]);
   return `${major >= 15 && major < 25 ? major + 10 : major}.${m[2]}`;
 }
+
+/** Couleurs des rangs de LoL (emblèmes Riot), partagées par l'écran de chargement et la courbe des LP. */
+export const TIER_COLOR: Record<string, string> = {
+  iron: "#8c8580", bronze: "#b4795a", silver: "#a9b4c0", gold: "#e0ad4c", platinum: "#4fb7b0", emerald: "#35c47f",
+  diamond: "#7f98ff", master: "#c06ce6", grandmaster: "#ef5a5a", challenger: "#f2c94c",
+};

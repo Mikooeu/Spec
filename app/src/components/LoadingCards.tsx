@@ -6,10 +6,8 @@ import { pctN } from "../lib/ui";
 import { useRuneData, type RuneData } from "./Runes";
 
 const CREST = (tier: string) => `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/${tier}.svg`;
-export const TIER_COLOR: Record<string, string> = {
-  iron: "#8c8580", bronze: "#b4795a", silver: "#a9b4c0", gold: "#e0ad4c", platinum: "#4fb7b0", emerald: "#35c47f",
-  diamond: "#7f98ff", master: "#c06ce6", grandmaster: "#ef5a5a", challenger: "#f2c94c",
-};
+export { TIER_COLOR } from "../lib/ui";
+import { TIER_COLOR } from "../lib/ui";
 const TIER_NAME: Record<string, () => string> = {
   iron: () => t("Fer"), bronze: () => t("Bronze"), silver: () => t("Argent"), gold: () => t("Or"), platinum: () => t("Platine"),
   emerald: () => t("Émeraude"), diamond: () => t("Diamant"), master: () => t("Maître"), grandmaster: () => t("Grand Maître"), challenger: () => t("Challenger"),

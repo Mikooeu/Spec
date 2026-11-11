@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ROLE_LABELS, type Stats } from "../lib/score";
-import { champName, dec1, int, pct, pctN, usePersistent, wrTone } from "../lib/ui";
+import { champName, dec1, int, pct, usePersistent, wrTone } from "../lib/ui";
 import type { PersonalState, Personal } from "../lib/api";
 import type { Account } from "../lib/lcu";
 import { ChampionIcon } from "./ChampionIcon";
+import { TIER_COLOR } from "../lib/ui";
 import { RecapView } from "./RecapView";
 import { Rune, useRuneData, type RuneData } from "./Runes";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
@@ -61,7 +62,10 @@ export function ProfileScreen({ stats, account, clientOn, perso, onRegister, lpV
   };
   return (
     <div className="content">
-      <PlayerSearch region={account?.region ?? null} clientOn={clientOn} onFound={open} />
+      <header className="page-head profile-head">
+        <div>{viewing ? <button className="link-back" onClick={() => setViewing(null)}>{t("← Ton profil")}</button> : <h1>{t("Ton profil")}</h1>}</div>
+        <PlayerSearch region={account?.region ?? null} clientOn={clientOn} onFound={open} />
+      </header>
       <div key={viewing ?? "me"} className="profile-view fade-in">
       {viewing
         ? <OtherProfile key={viewing} stats={stats} puuid={viewing} me={account?.puuid ?? null} assets={assets}
@@ -228,22 +232,19 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
 
   return (
     <>
-      <header className="page-head">
-        <div>
-          <h1>{t("Ton profil")}</h1>
-        </div>
-      </header>
-
-      <div className="card account">
-        <ProfileIcon version={stats.ddragon} icon={account?.icon ?? null} />
-        <div className="grow">
-          <p className="account__name">{account ? `${account.name}${account.region ? ` · ${account.region}` : ""}` : t("Aucun compte lié")}</p>
-          {rank && <RankLine tier={tier} rank={rank} />}
-          <p className="muted small">{persoText(perso)}</p>
-        </div>
-        <span className="pill">
-          <span className={clientOn ? "dot" : "dot dot--off"} />{clientOn ? t("Client LoL connecté") : t("Client LoL fermé")}
+      {/* bandeau : compte, rang, statut et chiffres de la saison (au lieu d'une carte et de 3 tuiles) */}
+      <div className="card account account--band">
+        <span className="account__avatar">
+          <ProfileIcon version={stats.ddragon} icon={account?.icon ?? null} size={3.25} />
+          {account?.level != null && <span className="account__level">{account.level}</span>}
         </span>
+        <div className="grow account__who">
+          <p className="account__name">{account ? account.name : t("Aucun compte lié")}{account?.region && <span className="account__region">{account.region}</span>}</p>
+          {rank && <RankLine tier={tier} rank={rank} />}
+          <p className="muted small account__status"><span className={clientOn ? "dot" : "dot dot--off"} />
+            {clientOn ? t("Client connecté") : t("Client LoL fermé")} · {persoText(perso).split(" · ")[0]}</p>
+        </div>
+        {perso.kind === "ready" && <SeasonTiles stats={stats} data={perso.data} games={games} />}
       </div>
 
       {perso.kind === "unregistered" && (
@@ -262,10 +263,11 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
         </form>
       )}
 
-      {perso.kind === "ready" && <SeasonTiles stats={stats} data={perso.data} games={games} />}
-
       <ProfileTabs tab={tab} onTab={setTab} tabs={showDuo ? ["history", "stats", "progress", "duo"] : ["history", "stats", "progress"]}
-                   extra={(tab === "history" && !duo) || tab === "stats" ? <QueueFilter queue={queue} onQueue={setQueue} count={tab === "history" ? queueCount : undefined} /> : null} />
+                   extra={(tab === "history" && !duo) || tab === "stats" ? <>
+                     <QueueFilter queue={queue} onQueue={setQueue} count={queueCount} />
+                     <RoleFilter role={role} onRole={setRole} games={games ? inQueue(games) : []} />
+                   </> : null} />
 
       <div key={tab} className="profile-view fade-in">
       {tab === "history" && (
@@ -292,7 +294,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
       {tab === "stats" && (
         <>
           <StatsView stats={stats} data={statsData} laneGames={clientGames ? inQueue(clientGames) : []}
-                     me={account?.puuid ?? null} guess={guess} recentNote={recentNote} />
+                     me={account?.puuid ?? null} guess={guess} recentNote={recentNote} role={role} />
           <ImpactCard version={impactVersion} />
         </>
       )}
@@ -319,29 +321,28 @@ function SeasonTiles({ stats, data, games: history }: { stats: Stats; data: Pers
   const week = (history ?? []).filter((g) => g.lp != null && Date.now() - g.created < 7 * 86400_000);
   const total = week.reduce((a, g) => a + (g.lp ?? 0), 0);
   return (
-    <div className="tiles">
-      <Tile label={t("Winrate saison")} value={pct(wins / games)} detail={t("{int} parties classées", { int: int(games) })} />
-      <Tile label={t("Champion le plus joué")} stats={stats} champ={top?.[0]}
-            value={top ? champName(stats, top[0]) : "—"}
-            detail={top ? t("{pct} · {n} parties", { pct: pct(top[1][1] / top[1][0]), n: int(top[1][0]) }) : ""} />
+    <div className="account__kpis">
+      <Kpi label={t("Winrate saison")} value={pct(wins / games)} detail={t("{int} parties classées", { int: int(games) })} />
+      <Kpi label={t("Le plus joué")} stats={stats} champ={top?.[0]}
+           value={top ? champName(stats, top[0]) : "—"}
+           detail={top ? t("{pct} · {n} parties", { pct: pct(top[1][1] / top[1][0]), n: int(top[1][0]) }) : ""} />
       {week.length
-        ? <Tile label={t("LP cette semaine")} value={lpText(total)} tone={total > 0 ? "good" : total < 0 ? "bad" : "neutral"}
-                detail={t("{length} partie{v} suivie{v2} par Spec", { length: week.length, v: week.length > 1 ? "s" : "", v2: week.length > 1 ? "s" : "" })} />
-        : <Tile label={t("Rôle principal")} value={ROLE_LABELS[mainRole]} detail={t("{pct} de tes parties", { pct: pct(byRole[mainRole] / games) })} />}
+        ? <Kpi label={t("LP cette semaine")} value={lpText(total)} tone={total > 0 ? "good" : total < 0 ? "bad" : "neutral"}
+               detail={plural(week.length, "{n} partie suivie", "{n} parties suivies")} />
+        : <Kpi label={t("Rôle principal")} value={ROLE_LABELS[mainRole]} detail={t("{pct} de tes parties", { pct: pct(byRole[mainRole] / games) })} />}
     </div>
   );
 }
 
-function Tile({ label, value, detail, tone, stats, champ }:
+function Kpi({ label, value, detail, tone, stats, champ }:
   { label: string; value: string; detail: string; tone?: string; stats?: Stats; champ?: number }) {
   return (
-    <div className="tile-stat">
-      <span className="tile-stat__label">{label}</span>
-      <span className={`tile-stat__value${champ != null ? " tile-stat__value--champ" : ""}${tone ? ` tone-${tone}` : ""}`}>
-        {stats && champ != null && <ChampionIcon stats={stats} champ={champ} size={1.75} />}
-        {value}{tone && <Trend tone={tone} />}
+    <div className="account__kpi">
+      <span className="account__kpi-label">{label}</span>
+      <span className={`account__kpi-value${tone ? ` tone-${tone}` : ""}`}>
+        {stats && champ != null && <ChampionIcon stats={stats} champ={champ} size={1.25} />}{value}
       </span>
-      <span className="tile-stat__detail">{detail}</span>
+      <span className="account__kpi-detail">{detail}</span>
     </div>
   );
 }
@@ -349,7 +350,7 @@ function Tile({ label, value, detail, tone, stats, champ }:
 // ---------------------------------------------------------------------------------------------
 // Profil d'un autre joueur (via le client LoL)
 
-function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
+function OtherProfile({ stats, puuid, me, assets, onOpenPlayer }:
   { stats: Stats; puuid: string; me: string | null; assets: Assets; onBack: () => void; onOpenPlayer: (puuid: string | null) => void }) {
   const guess = useGuess(stats);
   const [player, setPlayer] = useState<OtherPlayer | null>(null);
@@ -378,40 +379,37 @@ function OtherProfile({ stats, puuid, me, assets, onBack, onOpenPlayer }:
 
   return (
     <>
-      <button className="link-back" onClick={onBack}>{t("← Ton profil")}</button>
-      <header className="page-head">
-        <div>
-          <h1>{player?.name ?? (error ? t("Joueur introuvable") : "Chargement…")}</h1>
-        </div>
-      </header>
+      {!player && !error && <div className="skeleton" aria-label={t("Chargement du profil")}><span /><span /></div>}
       {error && <p className="hint">{t("Le client LoL n’a pas renvoyé ce profil. Vérifie qu’il est ouvert, puis réessaie.")}</p>}
       {player && (
         <>
-          <div className="card account">
-            <ProfileIcon version={stats.ddragon} icon={player.icon} />
-            <div className="grow">
+          <div className="card account account--band">
+            <span className="account__avatar"><ProfileIcon version={stats.ddragon} icon={player.icon} size={3.25} /></span>
+            <div className="grow account__who">
               <p className="account__name">{player.name}</p>
               {player.rank ? <RankLine tier={player.tier} rank={player.rank} /> : <p className="account__rank">{t("Non classé en Solo/Duo")}</p>}
+              <p className="muted small account__status">{ranked.length > 0 ? t("Sur ses {n} dernières parties", { n: ranked.length }) : t("Via le client LoL")}</p>
             </div>
-            <span className="pill"><span className="dot" />{t("Via le client LoL")}</span>
+            {ranked.length > 0 && (
+              <div className="account__kpis">
+                <Kpi label={t("Winrate récent")} value={pct(wins / ranked.length)} tone={wrTone(wins / ranked.length)}
+                     detail={t("{w} V – {l} D", { w: wins, l: ranked.length - wins })} />
+                <Kpi label={t("Le plus joué")} stats={stats} champ={top?.[0]} value={top ? champName(stats, top[0]) : "—"}
+                     detail={top ? plural(top[1], "{n} partie", "{n} parties") : ""} />
+                <Kpi label={t("Rôle principal")} value={roles[mainRole] ? ROLE_LABELS[mainRole] : "—"}
+                     detail={roles[mainRole] ? plural(roles[mainRole], "{n} partie", "{n} parties") : ""} />
+              </div>
+            )}
           </div>
-          {ranked.length > 0 && <h2 className="tiles__title">{t("Sur ses {n} dernières parties", { n: ranked.length })}</h2>}
-          {ranked.length > 0 && (
-            <div className="tiles">
-              <Tile label={t("Winrate récent")} value={pct(wins / ranked.length)} tone={wrTone(wins / ranked.length)}
-                    detail={t("{n} sur {total}", { n: plural(wins, "{n} victoire", "{n} victoires"), total: plural(ranked.length, "{n} partie", "{n} parties") })} />
-              <Tile label={t("Champion le plus joué")} stats={stats} champ={top?.[0]} value={top ? champName(stats, top[0]) : "—"}
-                    detail={top ? t("{n} sur {total}", { n: plural(top[1], "{n} partie", "{n} parties"), total: ranked.length }) : ""} />
-              <Tile label={t("Rôle principal")} value={roles[mainRole] ? ROLE_LABELS[mainRole] : "—"}
-                    detail={roles[mainRole] ? t("{n} sur {total}", { n: plural(roles[mainRole], "{n} partie", "{n} parties"), total: ranked.length }) : ""} />
-            </div>
-          )}
           <ProfileTabs tab={tab} onTab={setTab} tabs={["history", "stats"]}
-                       extra={<QueueFilter queue={queue} onQueue={setQueue} count={tab === "history" ? queueCount : undefined} />} />
+                       extra={<>
+                         <QueueFilter queue={queue} onQueue={setQueue} count={queueCount} />
+                         <RoleFilter role={role} onRole={setRole} games={inQueue} />
+                       </>} />
           <div key={tab} className="profile-view fade-in">
           {tab === "stats" && (
             // mêmes stats que ton profil, calculées sur ses dernières parties renvoyées par le client
-            <StatsView stats={stats} data={statsOf(inQueue)} laneGames={inQueue} me={puuid} guess={guess} recentNote={null} other />
+            <StatsView stats={stats} data={statsOf(inQueue)} laneGames={inQueue} me={puuid} guess={guess} recentNote={null} other role={role} />
           )}
           {tab === "history" && (
             <History stats={stats} games={player.games} assets={assets} role={role} onRole={setRole} me={me}
@@ -493,8 +491,8 @@ function History({ stats, games, assets, role, onRole, me, subject, title, intro
       {notice}
       {games && (
         <>
-          <div className="history__filters">
-            {!shared && <QueueFilter queue={queue} onQueue={setQueue} count={count} />}
+          {!shared && <div className="history__filters">
+            <QueueFilter queue={queue} onQueue={setQueue} count={count} />
             <Segmented className="segmented" role="tablist" aria-label={t("Poste (meilleurs picks et historique)")}>
               {[null, 0, 1, 2, 3, 4].map((r) => (
                 <button key={String(r)} role="tab" aria-selected={role === r} className={role === r ? "is-active" : ""}
@@ -504,7 +502,7 @@ function History({ stats, games, assets, role, onRole, me, subject, title, intro
                 </button>
               ))}
             </Segmented>
-          </div>
+          </div>}
           <div className="history__list stagger" key={`${queue}-${role}`}>
           {shown.map((g) => (
             <Fragment key={g.id}>
@@ -662,16 +660,14 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onTogg
       </span>
       <span className="game__sep" aria-hidden />
       <span className="stat-col game__lp">
-        {showLp ? (
-          <span className={`game__lp-value${g.lp == null ? "" : g.lp > 0 ? " tone-good" : g.lp < 0 ? " tone-bad" : ""}`}>
-            {g.lp == null ? t("— LP") : lpText(g.lp)}
-          </span>
+        {showLp && g.lp != null ? (
+          <span className={`game__lp-value${g.lp > 0 ? " tone-good" : g.lp < 0 ? " tone-bad" : ""}`}>{lpText(g.lp)}</span>
         ) : (
           <span className={`game__lp-value tone-${result === "remake" ? "neutral" : g.win ? "good" : "bad"}`}>
             {result === "remake" ? t("Remake") : g.win ? t("Victoire") : t("Défaite")}
           </span>
         )}
-        <span className="stat-col__label">{showLp ? `${result === "remake" ? t("Remake") : g.win ? t("Victoire") : t("Défaite")} · ` : ""}{t("{n} min", { n: min })}</span>
+        <span className="stat-col__label">{showLp && g.lp != null ? `${result === "remake" ? t("Remake") : g.win ? t("Victoire") : t("Défaite")} · ` : ""}{t("{n} min", { n: min })}</span>
       </span>
       <svg className="game__chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden>
         <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -868,16 +864,31 @@ function ProfileTabs({ tab, onTab, tabs, extra }: { tab: Tab; onTab: (t: Tab) =>
   );
 }
 
-/** Filtre de file (Toutes, Solo/Duo, Flex, 5c5) avec le nombre de parties de chaque file. */
+/** Filtre de file (Toutes, Solo/Duo, Flex, 5c5) : menu déroulant avec le nombre de parties de chaque file. */
 function QueueFilter({ queue, onQueue, count }: { queue: "all" | QueueKind; onQueue: (q: "all" | QueueKind) => void; count?: (q: "all" | QueueKind) => number }) {
   return (
-    <Segmented className="segmented" role="tablist" aria-label={t("File")}>
-      {QUEUES.map((q) => (
-        <button key={q} role="tab" aria-selected={queue === q} className={queue === q ? "is-active" : ""} onClick={() => onQueue(q)}>
-          {q === "all" ? t("Toutes") : QUEUE_LABELS[q]}{count && <> <span className="count">{count(q)}</span></>}
-        </button>
-      ))}
-    </Segmented>
+    <Select label={t("File")} value={queue} onChange={(v) => onQueue(v as "all" | QueueKind)}
+            options={QUEUES.map((q) => [q, `${q === "all" ? t("Toutes les files") : QUEUE_LABELS[q]}${count ? ` · ${count(q)}` : ""}`])} />
+  );
+}
+
+/** Filtre de rôle (historique et stats), avec le nombre de parties par rôle. */
+function RoleFilter({ role, onRole, games }: { role: number | null; onRole: (r: number | null) => void; games: Game[] }) {
+  const n = (r: number | null) => (r == null ? games.length : games.filter((g) => g.role === r).length);
+  return (
+    <Select label={t("Rôle")} value={role == null ? "all" : String(role)} onChange={(v) => onRole(v === "all" ? null : Number(v))}
+            options={[["all", `${t("Tous les rôles")} · ${n(null)}`], ...[0, 1, 2, 3, 4].map((r) => [String(r), `${ROLE_LABELS[r]} · ${n(r)}`] as [string, string])]} />
+  );
+}
+
+function Select({ label, value, options, onChange }: { label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
+  return (
+    <span className="pselect">
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    </span>
   );
 }
 
@@ -1019,32 +1030,13 @@ function DuoList({ stats, client, selected, onOpen }:
 }
 
 // ---------------------------------------------------------------------------------------------
-// Progression : courbe des LP, winrate par semaine, bilan après chaque partie
+// Progression : courbe des LP, bilan après chaque partie
 
-const WEEK = 7 * 86400_000, WEEK_OFFSET = 4 * 86400_000;   // semaines du lundi (UTC), comme le serveur
-const weekStart = (t: number) => Math.floor((t - WEEK_OFFSET) / WEEK) * WEEK + WEEK_OFFSET;
 const shortDate = (t: number) => new Date(t).toLocaleDateString(locale(), { day: "numeric", month: "short" });
 
-function ProgressView({ stats, games, perso, version, onOpenGame }:
-  { stats: Stats; games: Game[] | null; perso: PersonalState; version: number; onOpenGame: (id: number) => void }) {
+function ProgressView({ stats, games, version, onOpenGame }:
+  { stats: Stats; games: Game[] | null; perso?: PersonalState; version: number; onOpenGame: (id: number) => void }) {
   const series = useMemo(() => readLpSeries(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
-  // winrate par semaine : serveur Spec (toute la saison) si les stats perso sont actives, sinon l’historique du client
-  const weeks = useMemo(() => {
-    const start = weekStart(Date.now()) - 7 * WEEK;
-    const by = new Map<number, [number, number]>();
-    for (let k = 0; k < 8; k++) by.set(start + k * WEEK, [0, 0]);
-    if (perso.kind === "ready") {
-      for (const [w, g, v] of perso.data.weeks) if (by.has(w)) by.set(w, [g, v]);
-    } else {
-      for (const g of games ?? []) {
-        if (g.queue !== "solo" || g.remake) continue;
-        const t = by.get(weekStart(g.created));
-        if (t) { t[0] += 1; t[1] += g.win ? 1 : 0; }
-      }
-    }
-    return [...by.entries()];
-  }, [perso, games]);
-  const weekTotal = weeks.reduce<[number, number]>((a, [, [g, w]]) => [a[0] + g, a[1] + w], [0, 0]);
   const list = useMemo(() => recaps(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map((games ?? []).map((g) => [g.id, g])), [games]);
   const month = list.filter((r) => Date.now() - r.at < 30 * 86400_000);
@@ -1052,29 +1044,7 @@ function ProgressView({ stats, games, perso, version, onOpenGame }:
 
   return (
     <>
-      <section className="best">
-        <div className="section-head">
-          <div>
-            <h2>{t("Évolution des LP")}</h2>
-          </div>
-          {series.length > 0 && <span className="muted small">{t("Depuis le ")}{shortDate(series[0].at)}</span>}
-        </div>
-        <LpChart series={series} />
-      </section>
-
-      <section className="best">
-        <div className="section-head">
-          <div>
-            <h2>{t("Winrate par semaine")}</h2>
-          </div>
-          <span className="weeks__sum">
-            <span className="muted small">{t("8 dernières semaines")}</span>
-            {weekTotal[0] > 0 && <span className={`weeks__pill tone-${wrTone(weekTotal[1] / weekTotal[0])}`}>
-              {pct(weekTotal[1] / weekTotal[0])} · {plural(weekTotal[0], "{n} partie", "{n} parties")}</span>}
-          </span>
-        </div>
-        <WeekBars weeks={weeks} />
-      </section>
+      <LpChart stats={stats} series={series} games={byId} />
 
       {list.length > 0 && <section className="best">
         <div className="section-head">
@@ -1091,104 +1061,128 @@ function ProgressView({ stats, games, perso, version, onOpenGame }:
   );
 }
 
-function LpChart({ series }: { series: LpPoint[] }) {
-  if (series.length < 2) {
+type Period = "7" | "30" | "all";
+const TIER_KEYS = ["iron", "bronze", "silver", "gold", "platinum", "emerald", "diamond"];
+const APEX = TIER_KEYS.length * 400;
+const tierIndex = (lp: number) => Math.min(TIER_KEYS.length, Math.floor(lp / 400));   // 7 = Maître et plus
+const tierColorOf = (lp: number) => TIER_COLOR[lp >= APEX ? "master" : TIER_KEYS[Math.max(0, tierIndex(lp))]];
+const tierNameOf = (lp: number) => lpLabel(lp, true).replace(/ (IV|III|II|I)$/, "").replace(/ \d+$/, "");
+
+/** Évolution des LP : bandes aux couleurs des rangs, un point par partie (vert gagné, rouge perdu), détail au survol. */
+function LpChart({ stats, series, games }: { stats: Stats; series: LpPoint[]; games: Map<number, Game> }) {
+  const [period, setPeriod] = useState<Period>("30");
+  const [hover, setHover] = useState<number | null>(null);
+  const cut = period === "all" ? 0 : Date.now() - Number(period) * 86_400_000;
+  const before = series.filter((p) => p.at < cut).at(-1);
+  const pts = [...(before ? [before] : []), ...series.filter((p) => p.at >= cut)].slice(-120);
+  const head = (
+    <div className="lp2__head">
+      <h2>{t("Évolution de tes LP")}</h2>
+      <Segmented className="segmented segmented--small" role="tablist" aria-label={t("Période")}>
+        {([["7", t("7 jours")], ["30", t("30 jours")], ["all", t("Saison")]] as [Period, string][]).map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={period === k} className={period === k ? "is-active" : ""} onClick={() => { setPeriod(k); setHover(null); }}>{l}</button>
+        ))}
+      </Segmented>
+    </div>
+  );
+  if (pts.length < 2) {
     return (
-      <div className="card lp-card">
-        <p className="hint">{t("La courbe démarre avec tes prochaines parties classées jouées avec Spec ouvert : le client LoL ne garde pas l’historique de tes LP.")}</p>
-      </div>
+      <section className="card lp2">
+        {head}
+        <p className="hint">{series.length < 2
+          ? t("La courbe démarre avec tes prochaines parties classées jouées avec Spec ouvert : le client LoL ne garde pas l’historique de tes LP.")
+          : t("Pas assez de parties suivies sur cette période.")}</p>
+      </section>
     );
   }
-  const pts = series.slice(-80);
   const first = pts[0], last = pts[pts.length - 1];
-  const peak = pts.reduce((a, p) => (p.lp > a.lp ? p : a), first);
+  const deltas = pts.map((p, i) => (i ? p.lp - pts[i - 1].lp : 0));
+  const wins = deltas.filter((d) => d > 0).length, losses = deltas.filter((d) => d < 0).length;
+  const peakI = pts.reduce((bi, p, i) => (p.lp > pts[bi].lp ? i : bi), 0);
+  const lastSign = Math.sign(deltas[deltas.length - 1]);
+  let streak = 0;
+  for (let i = deltas.length - 1; i > 0 && lastSign !== 0 && Math.sign(deltas[i]) === lastSign; i--) streak++;
   const gain = last.lp - first.lp;
-  // échelle : divisions entières autour des points (au moins 2 divisions visibles)
-  let lo = Math.floor(Math.min(...pts.map((p) => p.lp)) / 100) * 100;
-  let hi = Math.ceil((Math.max(...pts.map((p) => p.lp)) + 1) / 100) * 100;
-  if (hi - lo < 200) { lo = Math.max(0, lo - 100); hi = lo + 200; }
-  const W = 900, H = 200, L = 96, R = 12, T = 10, B = 176;
-  const x = (i: number) => L + ((W - L - R) * i) / Math.max(1, pts.length - 1);
+
+  // échelle : divisions de 100 LP (rangs de 400 si l'écart est grand)
+  const vmin = Math.min(...pts.map((p) => p.lp)), vmax = Math.max(...pts.map((p) => p.lp));
+  const step = vmax - vmin > 700 ? 400 : 100;
+  let lo = Math.floor(vmin / step) * step, hi = Math.ceil((vmax + 1) / step) * step;
+  if (hi - lo < 2 * step) { lo = Math.max(0, lo - step); hi = lo + 2 * step; }
+  const W = 900, H = 240, L = 92, R = 14, T = 14, B = H - 22;
+  const x = (i: number) => L + 6 + ((W - L - R - 12) * i) / (pts.length - 1);
   const y = (v: number) => T + (B - T) * (1 - (v - lo) / (hi - lo));
   const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p.lp).toFixed(1)}`).join(" ");
   const area = `${line} L${x(pts.length - 1).toFixed(1)} ${B} L${x(0).toFixed(1)} ${B} Z`;
   const bands: number[] = [];
-  for (let v = lo; v <= hi; v += 100) bands.push(v);
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (pts.length - 1)));
+  for (let v = lo; v < hi; v += step) bands.push(v);
+  const promos = pts.map((p, i) => (i && tierIndex(p.lp) !== tierIndex(pts[i - 1].lp) ? i : -1)).filter((i) => i > 0 && i < pts.length - 1).slice(-3);   // le dernier point a déjà son étiquette
+  const ticks = [...new Set([0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (pts.length - 1))))];
+  const h = hover != null ? pts[hover] : null, hg = h?.game != null ? games.get(h.game) : undefined, hd = hover != null ? deltas[hover] : 0;
   const tone = gain > 0 ? "good" : gain < 0 ? "bad" : "neutral";
   return (
-    <div className="card lp-card">
-      <div className="lp-card__head">
-        <div><span className="small muted">{t("Rang actuel")}</span><strong>{lpLabel(last.lp)}</strong></div>
-        <div><span className="small muted">{t("Depuis le début du suivi")}</span>
-          <strong className={`tone-${tone}`}>{gain > 0 ? "+" : gain < 0 ? "−" : ""}{Math.abs(gain)} LP<Trend tone={tone} /></strong></div>
-        <div><span className="small muted">{t("Meilleur moment")}</span><strong>{lpLabel(peak.lp)}</strong></div>
+    <section className="card lp2">
+      {head}
+      <div className="lp2__kpis">
+        <div><small>{t("Bilan")}</small><strong className={`tone-${tone}`}>{lpText(gain)}</strong>
+          <small>{period === "all" ? t("depuis le {d}", { d: shortDate(first.at) }) : t("sur {n} jours", { n: period })}</small></div>
+        <div><small>{t("Parties suivies")}</small><strong>{wins + losses}</strong><small>{t("{w} V – {l} D", { w: wins, l: losses })}</small></div>
+        <div><small>{t("Plus haut")}</small><strong>{tierNameOf(pts[peakI].lp)}</strong><small>{lpLabel(pts[peakI].lp).split(" · ")[1] ?? ""} · {shortDate(pts[peakI].at)}</small></div>
+        <div><small>{t("Série en cours")}</small>
+          <strong className={streak ? `tone-${lastSign > 0 ? "good" : "bad"}` : ""}>
+            {streak ? plural(streak, lastSign > 0 ? "{n} victoire" : "{n} défaite", lastSign > 0 ? "{n} victoires" : "{n} défaites") : "—"}</strong>
+          <small>{streak ? t("d’affilée") : t("pas de série")}</small></div>
       </div>
-      <svg className="lp-chart" viewBox={`0 0 ${W} ${H + 20}`} role="img"
-           aria-label={t("Courbe des LP : de {lpLabel} à {lpLabel2}", { lpLabel: lpLabel(first.lp), lpLabel2: lpLabel(last.lp) })}>
-        <defs>
-          <linearGradient id="lp-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="var(--accent)" stopOpacity="0.22" />
-            <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {bands.map((v) => <line key={v} x1={L} x2={W - R} y1={y(v)} y2={y(v)} className="lp-chart__grid" />)}
-        {bands.slice(0, -1).map((v) => (
-          <text key={`t${v}`} x={0} y={(y(v) + y(v + 100)) / 2 + 4} className="lp-chart__label">{lpLabel(v, true)}</text>
-        ))}
-        <path d={area} fill="url(#lp-fill)" />
-        <path d={line} className="lp-chart__line" />
-        {pts.map((p, i) => <circle key={i} cx={x(i)} cy={y(p.lp)} r={i === pts.length - 1 ? 4.5 : 2.5}
-                                   className={i === pts.length - 1 ? "lp-chart__last" : "lp-chart__dot"}>
-          <title>{`${shortDate(p.at)} · ${lpLabel(p.lp)}`}</title>
-        </circle>)}
-        {[...new Set(ticks)].map((i) => (
-          <text key={`d${i}`} x={x(i)} y={H + 14} textAnchor={i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"}
-                className="lp-chart__label">{shortDate(pts[i].at)}</text>
-        ))}
-      </svg>
-      <p className="muted small">{t("Les LP ne sont connus que pour les parties jouées avec Spec ouvert : le client LoL ne garde pas l’historique des LP.")}</p>
-    </div>
-  );
-}
-
-/** Moins de parties que ça dans une semaine : barre estompée, le winrate y est trop incertain. */
-const WEEK_FEW = 5;
-
-/** Winrate par semaine : barres qui partent de 50 % (vert au-dessus, rouge en dessous), écart plafonné à ±30 pt. */
-function WeekBars({ weeks }: { weeks: [number, [number, number]][] }) {
-  const total = weeks.reduce((a, [, [g]]) => a + g, 0);
-  if (!total) return <div className="card"><p className="hint">{t("Aucune partie classée Solo/Duo ces 8 dernières semaines.")}</p></div>;
-  return (
-    <div className="card weeks">
-      <div className="weeks__plot">
-        <span className="weeks__mid" aria-hidden />
-        {weeks.map(([start, [g, w]]) => {
-          const wr = g ? w / g : 0.5;
-          const dev = Math.max(-0.3, Math.min(0.3, wr - 0.5));
-          const tone = !g || Math.abs(wr - 0.5) <= 0.02 ? "neutral" : dev > 0 ? "good" : "bad";
-          const h = g ? Math.max(3, (Math.abs(dev) / 0.3) * 100) : 0;
-          return (
-            <div key={start} className="weeks__col" title={g ? t("{n} sur {total}", { n: plural(w, "{n} victoire", "{n} victoires"), total: plural(g, "{n} partie", "{n} parties") }) : t("Aucune partie")}>
-              <div className="weeks__area">
-                {g > 0 ? <span className={`weeks__bar tone-bg-${tone}${dev >= 0 ? " is-up" : " is-down"}${g < WEEK_FEW ? " is-few" : ""}`}
-                               style={{ height: `${h / 2}%` }} />
-                       : <span className="weeks__none" />}
-              </div>
-              <strong className={`weeks__value ${g ? `tone-${tone}` : "muted"}`}>{g ? pctN(Math.round(wr * 100)) : "—"}</strong>
-              <span className="weeks__label">{shortDate(start)}</span>
-              <span className="weeks__games">{g ? plural(g, "{n} partie", "{n} parties") : t("aucune partie")}</span>
-            </div>
-          );
-        })}
+      <div className="lp2__plot" onMouseLeave={() => setHover(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("Courbe des LP : de {a} à {b}", { a: lpLabel(first.lp), b: lpLabel(last.lp) })}>
+          <defs>
+            <linearGradient id="lp2-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="var(--accent)" stopOpacity="0.26" />
+              <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {bands.map((v, i) => (
+            <g key={v}>
+              <rect x={L} width={W - L - R} y={y(v + step)} height={y(v) - y(v + step)} fill={tierColorOf(v)} opacity={i % 2 ? 0.045 : 0.075} />
+              <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} className={v % 400 === 0 ? "lp2__tier-line" : "lp2__grid"} />
+              <text x={L - 10} y={(y(v) + y(v + step)) / 2 + 4} textAnchor="end" className="lp2__band" fill={tierColorOf(v)}>
+                {step === 400 || v >= APEX ? tierNameOf(v) : lpLabel(v, true)}</text>
+            </g>
+          ))}
+          <path d={area} fill="url(#lp2-fill)" />
+          <path d={line} className="lp2__line" />
+          {hover != null && <line x1={x(hover)} x2={x(hover)} y1={T} y2={B} className="lp2__cursor" />}
+          {pts.map((p, i) => i > 0 && (
+            <circle key={i} cx={x(i)} cy={y(p.lp)} r={i === pts.length - 1 || hover === i ? 5 : 3.5}
+                    className={`lp2__dot ${deltas[i] > 0 ? "is-up" : deltas[i] < 0 ? "is-down" : ""}`} />
+          ))}
+          {promos.map((i) => {
+            const up = pts[i].lp > pts[i - 1].lp, label = `${up ? t("Promu") : t("Rétrogradé")} ${tierNameOf(pts[i].lp)}`;
+            return <text key={`p${i}`} x={x(i)} y={y(pts[i].lp) - 12} textAnchor="middle" className="lp2__promo" fill={tierColorOf(pts[i].lp)}>{label}</text>;
+          })}
+          {pts.map((p, i) => i > 0 && (
+            <circle key={`h${i}`} cx={x(i)} cy={y(p.lp)} r={12} fill="transparent" onMouseEnter={() => setHover(i)} />
+          ))}
+          {ticks.map((i) => (
+            <text key={`d${i}`} x={x(i)} y={H - 4} textAnchor={i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"} className="lp2__date">{shortDate(pts[i].at)}</text>
+          ))}
+        </svg>
+        <span className="lp2__now" style={{ left: `${(x(pts.length - 1) / W) * 100}%`, top: `${(y(last.lp) / H) * 100}%` }}>
+          {t("Maintenant · {v}", { v: lpLabel(last.lp) })}</span>
+        {h && hover != null && (
+          <div className={`lp2__tip${x(hover) > W * 0.7 ? " is-left" : ""}`} style={{ left: `${(x(hover) / W) * 100}%`, top: `${(y(h.lp) / H) * 100}%` }}>
+            <p>{hg && <ChampionIcon stats={stats} champ={hg.champ} size={1.25} />}
+              <strong>{hg ? `${champName(stats, hg.champ)} · ${hg.win ? t("Victoire") : t("Défaite")}` : hd > 0 ? t("Victoire") : hd < 0 ? t("Défaite") : t("Partie")}</strong></p>
+            <p className={`tone-${hd > 0 ? "good" : hd < 0 ? "bad" : "neutral"}`}>{lpText(hd)} → {lpLabel(h.lp)}</p>
+            <small>{shortDate(h.at)}{hg ? ` · ${hg.kills} / ${hg.deaths} / ${hg.assists}` : ""}</small>
+          </div>
+        )}
       </div>
-      <div className="weeks__legend">
-        <span><i className="tone-bg-good" />{t("au-dessus de 50 %")}</span>
-        <span><i className="tone-bg-bad" />{t("en dessous")}</span>
-        {weeks.some(([, [g]]) => g > 0 && g < WEEK_FEW) &&
-          <span><i className="tone-bg-neutral is-few" />{t("moins de {n} parties : à prendre avec prudence", { n: WEEK_FEW })}</span>}
+      <div className="lp2__legend">
+        <span><i className="tone-bg-good" />{t("Victoire")}</span><span><i className="tone-bg-bad" />{t("Défaite")}</span>
+        <span className="muted">{t("Survole un point pour voir la partie. Les LP sont suivis depuis que Spec est installé.")}</span>
       </div>
-    </div>
+    </section>
   );
 }
 
