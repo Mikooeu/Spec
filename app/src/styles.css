@@ -1656,3 +1656,54 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .compact__autofill span { flex: 1; }
 .compact__autofill .link { flex: none; font-size: 0.75rem; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; }
 .compact__autofill .link:hover { text-decoration: underline; }
+
+/* ---- 0.13.0 : récap de partie (courbe, lane, position, à retenir) ---- */
+.grecap-head { display: flex; align-items: center; gap: 0.5rem; }
+.grecap-head .grow { flex: 1; }
+.grecap-chip { padding: 0.1875rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; font-weight: 600; }
+.grecap-chip--won { color: var(--good); background: rgba(48, 209, 88, 0.14); }
+.grecap-chip--lost { color: var(--bad); background: rgba(255, 69, 58, 0.14); }
+.grecap-chip--even { color: var(--text-2); background: rgba(255, 255, 255, 0.08); }
+.grecap-curve { position: relative; }
+.grecap-curve svg { display: block; width: 100%; height: auto; overflow: visible; }
+.grecap-curve__phase { fill: rgba(255, 255, 255, 0.02); }
+.grecap-curve__phase.is-first { fill: rgba(255, 255, 255, 0.035); }
+.grecap-curve__plabel { font-size: 11px; font-weight: 600; fill: var(--text-3); }
+.grecap-curve__zero { stroke: rgba(255, 255, 255, 0.18); }
+.grecap-curve__axis { font-size: 10px; fill: var(--text-3); }
+.grecap-curve__line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.grecap-curve__line.is-up { stroke: var(--accent); }
+.grecap-curve__line.is-down { stroke: var(--bad); }
+.grecap-curve__cursor { stroke: rgba(255, 255, 255, 0.2); stroke-dasharray: 3 3; }
+.grecap-curve .mk { stroke: var(--bg-surface); stroke-width: 2; }
+.mk--kill { fill: var(--good); background: var(--good); } .mk--death { fill: var(--bad); background: var(--bad); }
+.mk--dragon { fill: #bf5af2; background: #bf5af2; } .mk--tower { fill: #8e8e93; background: #8e8e93; }
+.mk--baron { fill: #ff9f0a; background: #ff9f0a; } .mk--herald { fill: #64d2ff; background: #64d2ff; }
+.grecap-curve__legend { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; font-size: 0.75rem; color: var(--text-3); }
+.grecap-curve__legend span { display: inline-flex; align-items: center; gap: 0.3125rem; }
+.grecap-curve__legend i { width: 0.5rem; height: 0.5rem; border-radius: 50%; }
+.grecap-curve__note { position: absolute; transform: translate(-50%, calc(-100% - 0.875rem)); display: flex; flex-direction: column; gap: 0.125rem;
+  padding: 0.4375rem 0.625rem; border-radius: 0.5rem; background: #2b2b2f; border: 1px solid rgba(255, 255, 255, 0.12); pointer-events: none; white-space: nowrap; }
+.grecap-curve__note strong { font-size: 0.75rem; font-weight: 600; }
+.grecap-curve__note small { font-size: 0.75rem; color: var(--text-2); }
+.grecap-row { grid-template-columns: minmax(0, 1fr) 17rem; align-items: stretch; }
+.grecap-bars { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; gap: 1rem; }
+.grecap-bar { display: flex; flex-direction: column; gap: 0.4375rem; }
+.grecap-bar p { display: flex; align-items: baseline; gap: 0.375rem; font-size: 0.8125rem; }
+.grecap-bar p > span:first-child { flex: 1; color: var(--text-2); }
+.grecap-bar p strong { font-weight: 600; }
+.grecap-bar__me { color: var(--accent); }
+.grecap-bar__track { display: flex; gap: 3px; height: 6px; }
+.grecap-bar__track span { min-width: 4px; border-radius: 3px; background: var(--accent); }
+.grecap-bar__track span + span { background: var(--bad); }
+.grecap-pos { gap: 0.625rem; }
+.grecap-map--small { display: block; width: 100%; padding: 0; border: 0; cursor: zoom-in; }
+.grecap-map--small:disabled { cursor: default; }
+.link-btn { background: none; border: 0; padding: 0; font-size: 0.8125rem; font-weight: 600; color: var(--accent); cursor: pointer; }
+.link-btn:hover { text-decoration: underline; }
+.grecap-tips { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.625rem; }
+.grecap-tip strong { font-size: 0.8125rem; font-weight: 600; }
+.grecap-tip small { line-height: 1.4; color: var(--text-2); }
+.grecap-modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(0, 0, 0, 0.6); padding: 2rem; }
+.grecap-modal__box { width: min(34rem, 100%); max-height: 100%; overflow: auto; }
+@container (max-width: 46rem) { .grecap-row { grid-template-columns: 1fr; } .grecap-pos { max-width: 24rem; } }

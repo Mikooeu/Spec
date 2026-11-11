@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CDN } from "../lib/ddragon";
 import { gameLp, type Game } from "../lib/history";
 import { t } from "../lib/i18n";
-import { loadRecap, useRoleGuess, type Duel, type Point, type Recap, type Spot } from "../lib/recap";
+import { loadRecap, useRoleGuess, type Bar, type Mark, type Point, type Recap, type Spot } from "../lib/recap";
+import { recaps } from "../lib/impact";
 import { ROLE_LABELS, type Stats } from "../lib/score";
 import { champName, dec1, int, pctN } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
@@ -42,6 +43,16 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
   const r = recap;
   const opp = r.oppChamp != null ? champName(stats, r.oppChamp) : null;
   const fill = (s: string) => s.replace("{opp}", opp ?? t("ton vis-à-vis"));
+  const draft = recaps().find((x) => x.game === game.id);
+  const tips = [...r.tips];
+  if (draft) {
+    const me = champName(stats, draft.champ), best = draft.top[0] != null ? champName(stats, draft.top[0]) : null;
+    const tip: Point = draft.rank === 1
+      ? { title: t("Conseil de Spec suivi"), detail: t("{c} était le n°1 de Spec dans cette draft.", { c: me }) + (r.laneVerdict === "won" ? ` ${t("Lane gagnée : garde-le face à {opp}.", { opp: opp ?? "" })}` : ""), weight: 0 }
+      : { title: best ? t("Spec conseillait {c}", { c: best }) : t("Hors des conseils de Spec"),
+          detail: draft.rank != null ? t("{c} était n°{n} de Spec dans cette draft.", { c: me, n: draft.rank }) : t("{c} n’était pas dans les conseils de Spec pour cette draft.", { c: me }), weight: 0 };
+    tips.splice(Math.min(tips.length, 2), tips.length, tip);
+  }
   return (
     <div className={`grecap${embedded ? " grecap--embedded" : ""}`}>
       <section className={`grecap-hero grecap-hero--${r.win ? "win" : "loss"}`}>
@@ -49,7 +60,7 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
         <div className="grecap-hero__title">
           <p><strong className={r.win ? "tone-good" : "tone-bad"}>{r.win ? t("Victoire") : t("Défaite")}</strong>
             <span>{champName(stats, r.champ)}{r.role != null ? ` · ${ROLE_LABELS[r.role]}` : ""}</span></p>
-          <small>{game.queueName} · {clock(r.duration)} · {r.side ? t("Côté rouge") : t("Côté bleu")}</small>
+          <small>{[game.queueName, clock(r.duration), r.side ? t("côté rouge") : t("côté bleu"), opp ? t("contre {opp}", { opp }) : null].filter(Boolean).join(" · ")}</small>
         </div>
         <div className="grecap-hero__kpis">
           <Kpi label={t("KDA")} value={`${r.kills} / ${r.deaths} / ${r.assists}`} />
@@ -60,107 +71,160 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
         {onClose && <button className="btn btn--secondary btn--small" onClick={onClose}>{t("Fermer")}</button>}
       </section>
 
-      <section className="card grecap-card">
-        <h2>{t("Ta lane")}<small>{opp ? t("face à {opp}", { opp }) : t("vis-à-vis non identifié")}</small></h2>
-        <div className="grecap-lane">
-          {r.at15 ? <DuelTile title={t("À 15 min")} rows={r.at15} opp={opp} />
-            : <div className="grecap-tile grecap-tile--empty">{t("La partie s’est terminée avant 15 min.")}</div>}
-          <DuelTile title={t("Fin de partie")} rows={r.end} opp={opp} />
-        </div>
-      </section>
-
-      <section className="card grecap-card">
-        <h2>{t("Ton équipe")}</h2>
-        <div className="grecap-team">
-          <GoldTile label={t("Écart d’or à 15 min")} value={r.team.gold15} />
-          <GoldTile label={t("Écart d’or en fin")} value={r.team.goldEnd} />
-          <Versus label={t("Kills")} v={r.team.kills} />
-          <Versus label={t("Tours")} v={r.team.towers} />
-          <Versus label={t("Dragons")} v={r.team.dragons} />
-          <Versus label={t("Nashor")} v={r.team.barons} />
-          <Versus label={t("Héraut")} v={r.team.heralds} />
-        </div>
-      </section>
+      {r.curve.length >= 4 && <GoldCurve r={r} />}
 
       <div className="grecap-row">
         <section className="card grecap-card">
-          <h2>{t("Ce qui a joué")}</h2>
-          {r.brief && <div className="grecap-tile grecap-brief"><small>{t("En bref")}</small><p>{fill(r.brief)}</p></div>}
-          <div className="grecap-why">
-            <Points title={t("En ta faveur")} tone="good" points={r.good} fill={fill} />
-            <Points title={t("En ta défaveur")} tone="bad" points={r.bad} fill={fill} />
+          <div className="grecap-head">
+            <h2>{t("Ta lane")}</h2>
+            <ChampionIcon stats={stats} champ={r.champ} size={1.25} round />
+            {r.oppChamp != null && <><span className="muted small">{t("vs")}</span><ChampionIcon stats={stats} champ={r.oppChamp} size={1.25} round /></>}
+            <span className="grow" />
+            {r.laneVerdict && <span className={`grecap-chip grecap-chip--${r.laneVerdict}`}>
+              {r.laneVerdict === "won" ? t("Lane gagnée") : r.laneVerdict === "lost" ? t("Lane perdue") : t("Lane équilibrée")}</span>}
+          </div>
+          {r.lane ? <div className="grecap-bars">{r.lane.map((b) => <BarRow key={b.label} b={b} />)}</div>
+            : <p className="muted small">{t("Vis-à-vis non identifié sur cette partie.")}</p>}
+        </section>
+        <PositionCard stats={stats} r={r} />
+      </div>
+
+      {tips.length > 0 && (
+        <section className="card grecap-card">
+          <h2>{t("À retenir pour la prochaine")}</h2>
+          <div className="grecap-tips">
+            {tips.map((p) => <div key={p.title} className="grecap-tile grecap-tip"><strong>{fill(p.title)}</strong><small>{fill(p.detail)}</small></div>)}
           </div>
         </section>
-        <section className="card grecap-card grecap-moves">
-          <h2>{t("Tes déplacements")}</h2>
-          <Heatmap stats={stats} heat={r.heat} side={r.side} duration={r.duration} />
-        </section>
+      )}
+    </div>
+  );
+}
+
+function BarRow({ b }: { b: Bar }) {
+  const tot = b.me + b.opp;
+  return (
+    <div className="grecap-bar">
+      <p><span>{b.label}</span><strong className="grecap-bar__me">{int(b.me)}</strong><span className="muted">–</span><strong className="tone-bad">{int(b.opp)}</strong></p>
+      <div className="grecap-bar__track" aria-hidden="true">
+        <span style={{ flexGrow: tot ? b.me : 1 }} /><span style={{ flexGrow: tot ? b.opp : 1 }} />
       </div>
     </div>
+  );
+}
+
+const MARK_LABEL: Record<Mark["kind"], () => string> = {
+  kill: () => t("Kill"), death: () => t("Mort"), dragon: () => t("Dragon"), tower: () => t("Tour"), baron: () => t("Nashor"), herald: () => t("Héraut"),
+};
+
+/** Écart d'or de ton équipe sur toute la partie, découpé en phases, avec tes kills et tes morts et les objectifs des deux équipes. */
+function GoldCurve({ r }: { r: Recap }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const end = r.duration / 60;
+  const objs = r.marks.filter((m) => m.kind !== "kill" && m.kind !== "death");
+  // échelle asymétrique : toute la hauteur sert, le 0 se place selon l'écart le plus haut et le plus bas
+  const W = 900, L = 40, R = 8, T = 30, B = 150, OA = 170, OB = 188, H = objs.length ? 212 : 172;
+  const hi = Math.max(600, ...r.curve.map((p) => p.gold)) * 1.1, lo = Math.min(-600, ...r.curve.map((p) => p.gold)) * 1.1;
+  const x = (m: number) => L + (W - L - R) * Math.min(1, m / end);
+  const y = (g: number) => T + (B - T) * ((hi - g) / (hi - lo));
+  const goldAt = (m: number) => {
+    const c = r.curve; const i = c.findIndex((p) => p.min >= m);
+    if (i <= 0) return c[Math.max(0, i)].gold;
+    const a = c[i - 1], b = c[i]; return a.gold + (b.gold - a.gold) * ((m - a.min) / (b.min - a.min || 1));
+  };
+  const d = r.curve.map((p, i) => `${i ? "L" : "M"}${x(p.min).toFixed(1)} ${y(p.gold).toFixed(1)}`).join(" ");
+  const phases: [string, number, number][] = end > 27 ? [[t("Lane"), 0, 15], [t("Milieu"), 15, 25], [t("Fin"), 25, end]]
+    : end > 17 ? [[t("Lane"), 0, 15], [t("Fin"), 15, end]] : [[t("Lane"), 0, end]];
+  const ticks = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50].filter((m) => m < end - 1.5);
+  const onCurve = r.marks.filter((m) => m.kind === "kill" || m.kind === "death");
+  const h = hover != null ? r.curve[hover] : null;
+  const legend = (["kill", "death", "dragon", "tower", "baron", "herald"] as Mark["kind"][]).filter((k) => r.marks.some((m) => m.kind === k));
+  return (
+    <section className="card grecap-card">
+      <div className="grecap-head">
+        <h2>{t("Écart d’or de ton équipe")}</h2>
+        <span className="grow" />
+        <span className="grecap-curve__legend">{legend.map((k) => <span key={k}><i className={`mk mk--${k}`} />{MARK_LABEL[k]()}</span>)}</span>
+      </div>
+      <div className="grecap-curve" onMouseLeave={() => setHover(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("Écart d’or de ton équipe pendant la partie")}>
+          <defs>
+            <clipPath id="gc-up"><rect x="0" y="0" width={W} height={y(0)} /></clipPath>
+            <clipPath id="gc-down"><rect x="0" y={y(0)} width={W} height={H} /></clipPath>
+          </defs>
+          {phases.map(([label, a, b], i) => (
+            <g key={label}>
+              <rect x={x(a) + (i ? 2 : 0)} y={4} width={x(b) - x(a) - (i ? 2 : 0)} height={B - 4} rx={8} className={i ? "grecap-curve__phase" : "grecap-curve__phase is-first"} />
+              <text x={x(a) + 10} y={20} className="grecap-curve__plabel">{label} · {Math.round(a)}–{Math.round(b)} min</text>
+            </g>
+          ))}
+          <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} className="grecap-curve__zero" />
+          <text x={L - 8} y={y(0) + 4} textAnchor="end" className="grecap-curve__axis">0</text>
+          <path d={d} className="grecap-curve__line is-up" clipPath="url(#gc-up)" />
+          <path d={d} className="grecap-curve__line is-down" clipPath="url(#gc-down)" />
+          {hover != null && h && <line x1={x(h.min)} x2={x(h.min)} y1={4} y2={B} className="grecap-curve__cursor" />}
+          {onCurve.map((m, i) => <circle key={`c${i}`} cx={x(m.min)} cy={y(goldAt(m.min))} r={5} className={`mk mk--${m.kind}`}><title>{`${MARK_LABEL[m.kind]()} · ${Math.floor(m.min)} min`}</title></circle>)}
+          {objs.length > 0 && <>
+            <text x={L - 8} y={OA + 4} textAnchor="end" className="grecap-curve__axis">{t("Vous")}</text>
+            <text x={L - 8} y={OB + 4} textAnchor="end" className="grecap-curve__axis">{t("Eux")}</text>
+          </>}
+          {objs.map((m, i) => <circle key={`o${i}`} cx={x(m.min)} cy={m.ally ? OA : OB} r={4.5} className={`mk mk--${m.kind}`}><title>{`${MARK_LABEL[m.kind]()} · ${Math.floor(m.min)} min`}</title></circle>)}
+          {ticks.map((m) => <text key={m} x={x(m)} y={H - 2} textAnchor={m ? "middle" : "start"} className="grecap-curve__axis">{m}</text>)}
+          {r.curve.map((p, i) => <rect key={`h${i}`} x={x(p.min) - 8} y={4} width={16} height={B - 4} fill="transparent" onMouseEnter={() => setHover(i)} />)}
+        </svg>
+        {r.turn && hover == null && (
+          <div className="grecap-curve__note" style={{ left: `${(x(r.turn.min) / W) * 100}%`, top: `${(y(goldAt(r.turn.min)) / H) * 100}%` }}>
+            <strong>{t("{m} min · le tournant", { m: r.turn.min })}</strong><small>{r.turn.detail}</small>
+          </div>
+        )}
+        {h && (
+          <div className="grecap-curve__note is-hover" style={{ left: `${(x(h.min) / W) * 100}%`, top: `${(y(h.gold) / H) * 100}%` }}>
+            <strong>{t("{m} min", { m: Math.round(h.min) })}</strong><small className={h.gold >= 0 ? "tone-good" : "tone-bad"}>{signed(h.gold)} {t("d’or")}</small>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Petite carte de tes déplacements ; « Agrandir » ouvre la carte complète avec les périodes. */
+function PositionCard({ stats, r }: { stats: Stats; r: Recap }) {
+  const [big, setBig] = useState(false);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = canvas.current, ctx = c?.getContext("2d");
+    if (c && ctx) drawHeat(ctx, c.width, r.heat.path);
+  }, [r]);
+  useEffect(() => {
+    if (!big) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") setBig(false); };
+    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
+  }, [big]);
+  const zones = r.zones.length === 2 ? t("Surtout {a} et {b}.", { a: r.zones[0], b: r.zones[1] }) : r.zones.length ? t("Surtout {a}.", { a: r.zones[0] }) : "";
+  return (
+    <section className="card grecap-card grecap-pos">
+      <div className="grecap-head"><h2>{t("Ta position")}</h2><span className="grow" />
+        {r.heat.path.length > 0 && <button className="link-btn" onClick={() => setBig(true)}>{t("Agrandir")}</button>}</div>
+      <button className="grecap-map grecap-map--small" onClick={() => setBig(true)} disabled={!r.heat.path.length} aria-label={t("Agrandir la carte")}>
+        <img src={`${CDN}/${stats.ddragon}/img/map/map11.png`} alt="" />
+        <canvas ref={canvas} width={256} height={256} />
+        {!r.heat.path.length && <p className="grecap-map__empty">{t("Pas de positions pour cette partie.")}</p>}
+      </button>
+      {zones && <small className="muted">{zones}</small>}
+      {big && (
+        <div className="grecap-modal" role="dialog" aria-modal="true" aria-label={t("Ta position")} onClick={() => setBig(false)}>
+          <div className="card grecap-card grecap-modal__box" onClick={(e) => e.stopPropagation()}>
+            <div className="grecap-head"><h2>{t("Tes déplacements")}</h2><span className="grow" /><button className="btn btn--secondary btn--small" onClick={() => setBig(false)}>{t("Fermer")}</button></div>
+            <Heatmap stats={stats} heat={r.heat} side={r.side} duration={r.duration} />
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
 function Kpi({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) {
   return <div className="grecap-kpi"><small>{label}</small><strong className={tone ? `tone-${tone}` : ""}>{value}</strong></div>;
-}
-
-function DuelTile({ title, rows, opp }: { title: string; rows: Duel[]; opp: string | null }) {
-  return (
-    <div className={`grecap-tile grecap-duel${opp ? "" : " grecap-duel--solo"}`}>
-      <div className="grecap-duel__row grecap-duel__head">
-        <strong>{title}</strong><span>{t("Toi")}</span>{opp && <><span>{opp}</span><span>{t("Écart")}</span></>}
-      </div>
-      {rows.map((d) => (
-        <div key={d.label} className="grecap-duel__row">
-          <span className="grecap-duel__label">{d.label}</span>
-          <strong>{d.me}</strong>
-          {opp && <><span className="muted">{d.opp ?? "—"}</span>
-            <span>{d.diff != null && <span className={`grecap-pill tone-${d.good ? "good" : "bad"}`}>{d.diff}</span>}</span></>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function GoldTile({ label, value }: { label: string; value: number | null }) {
-  const tone = value == null ? "" : value >= 0 ? "good" : "bad";
-  const note = value == null ? t("Timeline indisponible") : label === t("Écart d’or à 15 min")
-    ? (value >= 1500 ? t("Devant après la phase de lane") : value <= -1500 ? t("En retard après la phase de lane") : t("Équilibré après la phase de lane"))
-    : (value >= 0 ? t("Devant en fin de partie") : t("En retard en fin de partie"));
-  return (
-    <div className="grecap-tile grecap-gold">
-      <small>{label}</small>
-      <strong className={tone ? `tone-${tone}` : ""}>{value == null ? "—" : signed(value)}</strong>
-      <small>{note}</small>
-    </div>
-  );
-}
-
-function Versus({ label, v: [a, b] }: { label: string; v: [number, number] }) {
-  const tot = a + b;
-  return (
-    <div className="grecap-tile grecap-vs">
-      <small>{label}</small>
-      <p><strong className="grecap-vs__ally">{a}</strong><span>–</span><strong className="tone-bad">{b}</strong></p>
-      <div className="grecap-vs__bar" aria-hidden="true">
-        <span style={{ flexGrow: tot ? a : 1, opacity: a || !tot ? 1 : 0.25 }} />
-        <span style={{ flexGrow: tot ? b : 1, opacity: b || !tot ? 1 : 0.25 }} />
-      </div>
-    </div>
-  );
-}
-
-function Points({ title, tone, points, fill }: { title: string; tone: "good" | "bad"; points: Point[]; fill: (s: string) => string }) {
-  return (
-    <div className="grecap-points">
-      <p className={`grecap-points__title tone-${tone}`}><span className="dot-mark" />{title}</p>
-      {points.length
-        ? points.map((p) => (
-          <div key={p.title} className={`grecap-point grecap-point--${tone}`}><strong>{p.title}</strong><small>{fill(p.detail)}</small></div>
-        ))
-        : <p className="muted small">{t("Rien de marquant sur cette partie.")}</p>}
-    </div>
-  );
 }
 
 type Period = "all" | "early" | "late";

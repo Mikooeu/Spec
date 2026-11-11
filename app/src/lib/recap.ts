@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useMemo } from "react";
 import type { Stats } from "./score";
 import { roleOf, type Guess, type RawGame, type RawParticipant } from "./history";
-import { t } from "./i18n";
+import { plural, t } from "./i18n";
 import { int, pctN } from "./ui";
 
 type PFrame = {
@@ -24,6 +24,11 @@ type Timeline = { frames?: { timestamp?: number; participantFrames?: Record<stri
 export interface Duel { label: string; me: string; opp: string | null; diff: string | null; good: boolean | null }
 export interface Point { title: string; detail: string; weight: number }
 export interface Spot { x: number; y: number; min: number }   // x, y entre 0 et 1 (0,0 = coin bas gauche)
+/** Une ligne de « Ta lane » : toi en bleu, ton vis-à-vis en rouge. */
+export interface Bar { label: string; me: number; opp: number }
+export type MarkKind = "kill" | "death" | "dragon" | "tower" | "baron" | "herald";
+/** Un évènement placé sur la courbe : tes kills et tes morts, les objectifs des deux équipes. */
+export interface Mark { min: number; kind: MarkKind; ally: boolean }
 
 export interface Recap {
   gameId: number;
@@ -48,6 +53,17 @@ export interface Recap {
   bad: Point[];
   brief: string;
   heat: { path: Spot[]; kills: Spot[]; deaths: Spot[] };
+  /** Écart d'or de ton équipe minute par minute (vide sans timeline). */
+  curve: { min: number; gold: number }[];
+  marks: Mark[];
+  /** Le moment où l'écart d'or a le plus bougé (3 minutes), dans le sens du résultat. */
+  turn: { min: number; delta: number; detail: string } | null;
+  lane: Bar[] | null;
+  laneVerdict: "won" | "lost" | "even" | null;
+  /** « À retenir pour la prochaine » (sans le conseil de draft, ajouté à l'affichage). */
+  tips: Point[];
+  /** Zones où tu as passé le plus de temps (« en top », « dans la rivière »…). */
+  zones: string[];
 }
 
 const SR = { w: 14870, h: 14980 };    // taille de la Faille en unités de jeu
@@ -248,10 +264,104 @@ export function makeRecap(g: RawGame, tl: Timeline, me: string, guess?: Guess): 
     deaths: kills.filter((e) => isMe(e.victimId)).map((e) => spot(e.position, e.timestamp ?? 0)).filter((x): x is Spot => !!x),
   };
 
+  // --- courbe d'écart d'or et évènements
+  const curve = frames.map((f, i) => {
+    const tg = (ps: RawParticipant[]) => ps.reduce((acc, p) => acc + (f.participantFrames?.[String(p.participantId)]?.totalGold ?? 0), 0);
+    return { min: Math.min((f.timestamp ?? i * MIN) / MIN, duration / 60), gold: tg(allies) - tg(enemies) };
+  }).filter((p, i, a) => i === 0 || p.min > a[i - 1].min);
+  const minOf = (e: TEvent) => (e.timestamp ?? 0) / MIN;
+  const marks: Mark[] = [
+    ...kills.filter((e) => isMe(e.killerId)).map((e) => ({ min: minOf(e), kind: "kill" as const, ally: true })),
+    ...kills.filter((e) => isMe(e.victimId)).map((e) => ({ min: minOf(e), kind: "death" as const, ally: false })),
+    ...monsters.filter((e) => e.monsterType === "DRAGON" || e.monsterType === "BARON_NASHOR" || e.monsterType === "RIFTHERALD").map((e) => ({
+      min: minOf(e), kind: (e.monsterType === "DRAGON" ? "dragon" : e.monsterType === "BARON_NASHOR" ? "baron" : "herald") as MarkKind,
+      ally: e.killerTeamId != null ? e.killerTeamId === myTeam : teamOf(e.killerId) === "ally" })),
+    ...events.filter((e) => e.type === "BUILDING_KILL" && e.buildingType === "TOWER_BUILDING").map((e) => ({ min: minOf(e), kind: "tower" as const, ally: e.teamId !== myTeam })),
+  ].sort((a, b) => a.min - b.min);
+
+  // --- le tournant : la plus grosse variation sur 3 minutes, dans le sens du résultat
+  const turn = (() => {
+    if (curve.length < 6) return null;
+    let best: { i: number; d: number } | null = null;
+    for (let i = 0; i + 3 < curve.length; i++) {
+      const d = curve[i + 3].gold - curve[i].gold;
+      if ((win ? d > 0 : d < 0) && (!best || Math.abs(d) > Math.abs(best.d))) best = { i, d };
+    }
+    if (!best || Math.abs(best.d) < 1000) return null;
+    const from = curve[best.i].min, to = curve[best.i + 3].min;
+    const inWin = marks.filter((m) => m.min >= from && m.min <= to);
+    const ours = win;   // ce qui explique le tournant : vos objectifs si tu as gagné, les leurs sinon
+    const objs = (k: MarkKind, one: string, many: string) => {
+      const n = inWin.filter((m) => m.kind === k && m.ally === ours).length;
+      return n ? plural(n, one, many) : null;
+    };
+    const teamDeaths = kills.filter((e) => minOf(e) >= from && minOf(e) <= to && teamOf(e.victimId) === (win ? "enemy" : "ally")).length;
+    const parts = [
+      objs("baron", win ? "Nashor pris" : "Nashor perdu", win ? "Nashor pris" : "Nashor perdu"),
+      objs("dragon", win ? "{n} dragon pris" : "{n} dragon perdu", win ? "{n} dragons pris" : "{n} dragons perdus"),
+      objs("herald", win ? "Héraut pris" : "Héraut perdu", win ? "Héraut pris" : "Héraut perdu"),
+      objs("tower", win ? "{n} tour prise" : "{n} tour perdue", win ? "{n} tours prises" : "{n} tours perdues"),
+      teamDeaths ? (win ? plural(teamDeaths, "{n} kill", "{n} kills") : plural(teamDeaths, "{n} mort dans ton équipe", "{n} morts dans ton équipe")) : null,
+    ].filter((x): x is string => !!x).slice(0, 3);
+    const mid = curve[best.i + 1].min;
+    return { min: Math.round(mid), delta: best.d, detail: `${parts.join(" + ")}${parts.length ? " : " : ""}${sign(best.d)}` };
+  })();
+
+  // --- ta lane : barres toi / vis-à-vis
+  const solo = (killer?: number, victim?: number) => kills.filter((e) => e.killerId === killer && e.victimId === victim && !(e.assistingParticipantIds ?? []).length).length;
+  const plates = events.filter((e) => e.type === "TURRET_PLATE_DESTROYED");
+  const laneBars: Bar[] | null = opp ? (() => {
+    const a = has15 ? frameAt(15, myId) : undefined, b = has15 ? frameAt(15, opp.participantId) : undefined;
+    const csOf = (f: PFrame) => (f.minionsKilled ?? 0) + (f.jungleMinionsKilled ?? 0);
+    const out: Bar[] = [];
+    if (a && b) {
+      out.push({ label: t("CS à 15 min"), me: csOf(a), opp: csOf(b) });
+      out.push({ label: t("Or à 15 min"), me: a.totalGold ?? 0, opp: b.totalGold ?? 0 });
+    } else {
+      out.push({ label: t("CS"), me: cs(mine), opp: cs(opp) });
+      out.push({ label: t("Or"), me: s.goldEarned ?? 0, opp: opp.stats.goldEarned ?? 0 });
+    }
+    if (frames.length) out.push({ label: t("Solo kills"), me: solo(myId, opp.participantId), opp: solo(opp.participantId, myId) });
+    // plaques : seulement si la timeline les contient (pas toujours le cas dans le client)
+    if (plates.length) out.push({ label: t("Plaques de tour"), me: plates.filter((e) => e.killerId === myId).length, opp: plates.filter((e) => e.killerId === opp.participantId).length });
+    out.push({ label: t("Dégâts aux champions"), me: s.totalDamageDealtToChampions ?? 0, opp: opp.stats.totalDamageDealtToChampions ?? 0 });
+    return out;
+  })() : null;
+  const laneVerdict = laneGold == null ? null : laneGold >= 500 ? "won" : laneGold <= -500 ? "lost" : "even";
+
+  // --- à retenir
+  const tips: Point[] = [];
+  if (laneGold != null && laneGold >= 500 && teamGold15 != null && goldEnd < teamGold15) {
+    const after = (k: MarkKind) => marks.filter((m) => m.kind === k && m.ally && m.min >= 15).length;
+    tips.push({ title: t("Convertis ton avance"), detail: t("{g} d’or d’avance sur {opp} à 15 min, puis {d} et {tw} pour ton équipe ensuite.", {
+      g: int(laneGold), opp: oppName, d: plural(after("dragon"), "{n} dragon", "{n} dragons"), tw: plural(after("tower"), "{n} tour", "{n} tours") }), weight: 3 });
+  }
+  const lateDeaths = kills.filter((e) => isMe(e.victimId) && minOf(e) >= 20).length;
+  const earlyDeaths = kills.filter((e) => isMe(e.victimId) && minOf(e) < 15).length;
+  if (lateDeaths >= 3) tips.push({ title: t("Évite les morts après 20 min"), detail: t("{n} morts sur tes {d} : c’est là que les combats se jouent.", { n: lateDeaths, d: s.deaths }), weight: lateDeaths });
+  if (earlyDeaths >= 3) tips.push({ title: t("Joue plus prudemment en début de partie"), detail: t("{n} morts avant 15 min.", { n: earlyDeaths }), weight: earlyDeaths });
+  for (const p of top([...bad])) if (tips.length < 3 && !tips.some((x) => x.title === p.title)) tips.push(p);
+  if (win) for (const p of top([...good])) if (tips.length < 3) tips.push(p);
+
+  // --- zones
+  const zoneOf = (p: Spot) => {
+    const { x, y } = p;
+    if ((x < 0.22 && y < 0.22) || (x > 0.78 && y > 0.78)) return t("dans ta base");
+    if (x < 0.2 || y > 0.8) return t("en top");
+    if (y < 0.2 || x > 0.8) return t("en bot");
+    if (Math.abs(x - y) < 0.1) return t("en mid");
+    if (Math.abs(x + y - 1) < 0.09) return t("dans la rivière");
+    return t("dans la jungle");
+  };
+  const zc = new Map<string, number>();
+  for (const p of path) if (p.min >= 1.5) zc.set(zoneOf(p), (zc.get(zoneOf(p)) ?? 0) + 1);
+  const zones = [...zc.entries()].filter(([z]) => z !== t("dans ta base")).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([z]) => z);
+
   return {
     gameId: g.gameId, win, remake, champ: mine.championId, role, side: myTeam === 200 ? 1 : 0, duration,
     kills: s.kills, deaths: s.deaths, assists: s.assists, csMin: duration ? cs(mine) / (duration / 60) : 0, kp,
     oppChamp: opp?.championId ?? null, at15, end, team, good: top(good), bad: top(bad), brief, heat,
+    curve, marks, turn, lane: laneBars, laneVerdict, tips: tips.slice(0, 3), zones,
   };
 }
 
