@@ -878,4 +878,18 @@ export const EN: Record<string, string> = {
   "✓ Dans ton pool": "✓ In your pool",
   "toi {wr} ({n})": "you {wr} ({n})",
   "Peu joué en {v}": "Rarely played {v}",
+  // onglet overlay
+  "Sbires et monstres": "Minions and monsters",
+  "Estimé avec tes objets": "Estimated with your items",
+  "Kills et assists": "Kills and assists",
+  "(K + A) / morts": "(K + A) / deaths",
+  "Un coin, ou glisse l’overlay dans l’aperçu.": "A corner, or drag the overlay in the preview.",
+  "Les cartes Spec par-dessus l’écran de chargement du jeu.": "Spec cards on top of the game's loading screen.",
+  "Aperçu": "Preview",
+  "Placer sur mon écran": "Place on my screen",
+  "Glisse l’overlay sur ton écran, puis clique sur Terminé ou appuie sur Échap. Le jeu ne reçoit pas les clics pendant ce temps.": "Drag the overlay on your screen, then click Done or press Esc. The game doesn't get clicks meanwhile.",
+  "Glisse l’overlay dans l’aperçu : il sera au même endroit en jeu, quelle que soit ta résolution.": "Drag the overlay in the preview: it will be at the same place in game, whatever your resolution.",
+  "{n} sur 6": "{n} of 6",
+  "Aperçu de l’écran de jeu": "Game screen preview",
+  "Overlay désactivé": "Overlay off",
 };

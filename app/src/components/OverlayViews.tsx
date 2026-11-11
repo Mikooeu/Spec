@@ -44,7 +44,7 @@ function useGameScale(): number {
   return s;
 }
 
-const LABEL: Record<OverlayStat, () => string> = {
+export const LABEL: Record<OverlayStat, () => string> = {
   cs: () => t("CS/min"), gold: () => t("Or/min"), kp: () => t("KP"), vision: () => t("Vision/min"), kda: () => t("KDA"), goldDiff: () => t("Écart d’or"),
 };
 
@@ -71,7 +71,7 @@ export function statValues(g: LiveGame, items: InfoMap | null): Record<OverlaySt
 }
 
 /** Stats en direct, carte verticale (par défaut) ou barre horizontale, dans le coin choisi. */
-const SAMPLE: LiveGame = { champion: null, position: "", level: 9, spent: 9, gold: 650, time: 900, items: [], enemies: [], at: 0,
+export const SAMPLE: LiveGame = { champion: null, position: "", level: 9, spent: 9, gold: 650, time: 900, items: [], enemies: [], at: 0,
   scores: { kills: 4, deaths: 2, assists: 6, cs: 117, ward: 10 }, teamKills: 16, oppItems: [] };
 
 export function StatsOverlay() {
