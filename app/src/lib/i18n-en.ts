@@ -945,4 +945,5 @@ export const EN: Record<string, string> = {
   "Pris dans {a} des parties Master+ face à ce type d’équipe, {b} sinon": "Bought in {a} of Master+ games against this kind of team, {b} otherwise",
   "Tier {v}": "Tier {v}",
   "Aucun {v} dans ton pool : les meilleurs du rôle dans cette draft.": "No {v} in your pool: the best of the role in this draft.",
+  "{v} parties Master+": "{v} Master+ games",
 };

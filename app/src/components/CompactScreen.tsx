@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { ROLE_LABELS, ROLE_SHORT, type Stats, enemyDisplay, tierList } from "../lib/score";
+import { useEffect, useState } from "react";
+import { ROLE_LABELS, ROLE_SHORT, type Stats, enemyDisplay } from "../lib/score";
 import { champName } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { Logo } from "./Logo";
@@ -74,7 +74,6 @@ function CompactWaiting({ clientText, clientOn, onDemo }: Props) {
 }
 
 function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect, onBan, perso, onDemoPick, onPool }: Props & { draft: Draft }) {
-  const tiers = useMemo(() => new Map(tierList(stats, draft.role).map((r) => [r.champ, r.tier])), [stats, draft.role]);
   const [open, setOpen] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { allies, autofill, rows } = useRecos(stats, draft, pool);
@@ -123,7 +122,7 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
                      discovery={kind === "discovery" && !autofill} inPool={kind === "pool"} open={open === res.champ}
                      onToggle={() => setOpen(open === res.champ ? null : res.champ)}
                      onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
-                     role={draft.role} mine={res.champ === draft.myChamp} tier={tiers.get(res.champ)}
+                     role={draft.role} mine={res.champ === draft.myChamp}
                      why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies) : undefined} />
           </div>
         ))}</div>}

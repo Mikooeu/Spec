@@ -178,14 +178,12 @@ interface RecoRowProps {
   best?: boolean;
   /** Dans ton pool (badge gris). Faux en autofill, où tout est hors pool. */
   inPool?: boolean;
-  /** Tier du champion dans le rôle (mode compact : affiché sous le nom quand tu n'as pas de stats perso). */
-  tier?: string;
   /** Colonne « Toi » visible (masquée quand aucun champion de la liste n'a de stats perso). */
   showPerso?: boolean;
 }
 
 /** Une ligne de la liste des picks : clic = détail, survol = bouton « Présélectionner » (grande fenêtre). */
-export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [], best = false, inPool = false, showPerso = true, tier }: RecoRowProps) {
+export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [], best = false, inPool = false, showPerso = true }: RecoRowProps) {
   const laner = res.details[0];
   const hasPerso = perso != null && perso.value !== "—";
   const key = (e: React.KeyboardEvent) => {
@@ -212,7 +210,7 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
             {res.games < LOW_DATA_GAMES && <span className="badge badge--muted">{t("Peu de données")}</span>}
             {compact && (perso?.short
               ? <span className={`tone-${perso.tone}`}>{perso.short} <Trend tone={perso.tone} /></span>
-              : tier && <span className={`reco__tier reco__tier--${tier}`}>{t("Tier {v}", { v: tier })}</span>)}
+              : <span className="reco__games">{t("{v} parties Master+", { v: int(res.games) })}</span>)}
           </span>
         </span>
         <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}<Trend tone={wrTone(res.score)} /></span>
