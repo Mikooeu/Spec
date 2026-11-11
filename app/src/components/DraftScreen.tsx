@@ -11,7 +11,6 @@ import { ChampionPicker } from "./ChampionPicker";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
 import { DraftBand } from "./DraftBand";
-import { Adaptations } from "./Adaptations";
 import { GAP_LABEL, analyzeTeam, bumpForComposition, fills, type Gap } from "../lib/composition";
 import { t, plural } from "../lib/i18n";
 
@@ -184,7 +183,7 @@ interface RecoRowProps {
 }
 
 /** Une ligne de la liste des picks : clic = détail, survol = bouton « Présélectionner » (grande fenêtre). */
-export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [], enemies = [], best = false, inPool = false, showPerso = true }: RecoRowProps) {
+export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [], best = false, inPool = false, showPerso = true }: RecoRowProps) {
   const laner = res.details[0];
   const hasPerso = perso != null && perso.value !== "—";
   const key = (e: React.KeyboardEvent) => {
@@ -236,7 +235,6 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
             <FactorTile label={t("Avec tes alliés")} value={res.synergies} />
           </div>
           <RunePage stats={stats} champ={res.champ} role={role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
-          {!compact && <Adaptations stats={stats} champ={res.champ} role={role} enemies={enemies} />}
           {compact && (mine
             ? <p className="reco__inclient reco__inclient--block">{t("✓ Présélectionné dans le client")}</p>
             : <button className="btn btn--primary" onClick={onPreselect}>{t("Présélectionner dans le client")}</button>)}
@@ -435,7 +433,6 @@ export function MyPick({ stats, draft, compact = false }: { stats: Stats; draft:
         </span>
       </div>
       <p className="mypick__why">{explain(stats, res, draft.role, allies, stats.params, !draft.myLocked && isBlind(stats, draft.role, enemies))}</p>
-      <Adaptations stats={stats} champ={champ} role={draft.role} enemies={enemies} />
       <RunePage stats={stats} champ={champ} role={draft.role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
     </div>
   );
