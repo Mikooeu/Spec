@@ -27,6 +27,9 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
   const arrow = asc ? "↑" : "↓";
   const lists = useMemo(() => [0, 1, 2, 3, 4].map((r) => tierList(stats, r)), [stats]);
   const total = lists.reduce((a, l) => a + l.length, 0);
+  // banrate : pas encore collecté sur toutes les régions → colonne masquée tant qu'elle serait vide
+  const hasBan = useMemo(() => lists.some((l) => l.some((r) => r.banrate != null)), [lists]);
+  const sorts = hasBan ? SORTS : SORTS.filter(([k]) => k !== "banrate");
   // classement complet d'abord (le # reste celui de la tier list), puis filtre de recherche
   const ranked = useMemo(() => {
     const value = (r: TierRow) => (sort === "banrate" ? r.banrate ?? -1 : r[sort]);
@@ -76,12 +79,12 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
         </div>
       </div>
 
-      <div className="tier-table" role="table" aria-label={t("Tier list {v}", { v: scope })}>
+      <div className={`tier-table${hasBan ? "" : " tier-table--noban"}`} role="table" aria-label={t("Tier list {v}", { v: scope })}>
         <div className="tier-row tier-row--head" role="row">
           <span className="tier-row__rank" role="columnheader">#</span>
           <span className="tier-row__tier" role="columnheader">{t("Tier")}</span>
           <span className="tier-row__champ" role="columnheader">{t("Champion")}</span>
-          {SORTS.map(([key, label]) => (
+          {sorts.map(([key, label]) => (
             <button key={key} role="columnheader" className={`tier-row__num${sort === key ? " is-sorted" : ""}`}
                     onClick={() => choose(key)} aria-sort={sort === key ? (asc ? "ascending" : "descending") : "none"}
                     title={sort === key ? (asc ? t("Trier du plus haut au plus bas") : t("Trier du plus bas au plus haut")) : t("Trier par {v}", { v: label })}>
@@ -113,7 +116,7 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
             <span className="tier-row__num tier-row__score">{dec1(r.score * 100)}</span>
             <span className={`tier-row__num tier-row__wr tone-${wrTone(r.winrate)}`}>{pct(r.winrate)}<Trend tone={wrTone(r.winrate)} /></span>
             <span className="tier-row__num">{pct(r.pickrate)}</span>
-            <span className="tier-row__num">{r.banrate == null ? "—" : pct(r.banrate)}</span>
+            {hasBan && <span className="tier-row__num">{r.banrate == null ? "—" : pct(r.banrate)}</span>}
           </button>
         ))}
         </div>

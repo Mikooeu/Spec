@@ -1483,3 +1483,10 @@ html.is-overlay, html.is-overlay body, html.is-overlay #root { background: trans
 .ovs-stat.is-on .ovs-stat__text strong { color: var(--text); }
 .ovs-stat__text small { font-size: 0.6875rem; color: var(--text-3); }
 @media (max-width: 1100px) { .ovs__grid { grid-template-columns: 1fr; } }
+
+/* ---- 0.11.3 : états vides masqués ---- */
+.tiles--1 { grid-template-columns: minmax(0, 22rem); }
+.tiles--2 { grid-template-columns: repeat(2, 1fr); }
+.tiles--3 { grid-template-columns: repeat(3, 1fr); }
+.tier-table--noban .tier-row { grid-template-columns: 1.5rem 2rem minmax(8rem, 1fr) repeat(3, minmax(4.5rem, 7rem)); }
+.champ__empty { gap: 0.5rem; }

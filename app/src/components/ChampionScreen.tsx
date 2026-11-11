@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import {
-  ROLE_LABELS, gamesIn, tierLetter, tierScore, type ChampPage, type Stats,
+  ROLE_LABELS, gamesIn, tierLetter, tierScore, type Stats,
 } from "../lib/score";
 import { champName, int, patchLabel, pct, wrTone } from "../lib/ui";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
@@ -58,7 +58,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
         <div className="champ__stats">
           <Stat value={pct(winrate)} label={t("Winrate")} tone={wrTone(winrate)} />
           <Stat value={pct(pickrate)} label={t("Pickrate")} />
-          <Stat value={banrate == null ? "—" : pct(banrate)} label={t("Banrate")} />
+          {banrate != null && <Stat value={pct(banrate)} label={t("Banrate")} />}
           <Stat value={int(g)} label={t("Parties")} />
         </div>
       </header>
@@ -71,45 +71,65 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
         </Segmented>
       )}
 
-      <Card title={t("Ordre des sorts")}
-            sub={page?.skills ? t("Priorité {replace} · {share} des parties", { replace: page.skills[1].replace(/ > /g, " › "), share: share(page.skills[2], page.tg) }) : undefined}>
-        {page?.skills ? <SkillGrid order={page.skills[0]} /> : <Empty page={page} timeline />}
-      </Card>
-
-      <Card title={t("Runes")} sub={runeSub(stats, champ, role)}>
-        <RuneTree stats={stats} champ={champ} role={role} />
-      </Card>
-
-      <div className="champ__row champ__row--3">
-        <Card title={t("Objets de départ")} sub={t("Les 3 combinaisons les plus jouées")}>
-          {page?.start.length ? (
-            <div className="combos combos--stack">
-              {mergeStarts(page.start).map(([ids, cg, cw]) => (
-                <Combo key={ids} icons={groupIcons(ids)} data={items} wr={cw / cg} pr={cg / page.tg} />
-              ))}
+      {(() => {
+        // sections sans données : masquées ; tout vide → un seul message plutôt que « Collecte en cours » partout
+        const has = {
+          skills: !!page?.skills, runes: !!stats.runes.get(`${champ}|${role}`)?.[0]?.games, start: !!page?.start.length,
+          spells: !!page?.spells.length, boots: !!page?.boots.length, items: !!page?.items.length, builds: !!page?.builds.length,
+        };
+        const row = [has.start, has.spells, has.boots].filter(Boolean).length;
+        if (!Object.values(has).some(Boolean)) return (
+          <section className="card champ__card champ__empty">
+            <h2>{t("Builds en cours de collecte")}</h2>
+            <p className="muted small">{t("Pas encore assez de parties de {c} en {r} pour conseiller sorts, runes et objets. Ils s’affichent avec les prochaines stats (calcul toutes les 6 h).", { c: champName(stats, champ), r: ROLE_LABELS[role] })}
+              {page?.g ? t(" {n} parties analysées pour l’instant.", { n: int(page.g) }) : ""}</p>
+          </section>
+        );
+        return (<>
+          {has.skills && (
+            <Card title={t("Ordre des sorts")}
+                  sub={t("Priorité {replace} · {share} des parties", { replace: page!.skills![1].replace(/ > /g, " › "), share: share(page!.skills![2], page!.tg) })}>
+              <SkillGrid order={page!.skills![0]} />
+            </Card>
+          )}
+          {has.runes && (
+            <Card title={t("Runes")} sub={runeSub(stats, champ, role)}>
+              <RuneTree stats={stats} champ={champ} role={role} />
+            </Card>
+          )}
+          {row > 0 && (
+            <div className="champ__row" style={{ gridTemplateColumns: `repeat(${row}, minmax(0, 1fr))` }}>
+              {has.start && (
+                <Card title={t("Objets de départ")} sub={t("Les 3 combinaisons les plus jouées")}>
+                  <div className="combos combos--stack">
+                    {mergeStarts(page!.start).map(([ids, cg, cw]) => (
+                      <Combo key={ids} icons={groupIcons(ids)} data={items} wr={cw / cg} pr={cg / page!.tg} />
+                    ))}
+                  </div>
+                </Card>
+              )}
+              {has.spells && (
+                <Card title={t("Sorts d’invocateur")} sub={t("Les 2 combinaisons les plus jouées")}>
+                  <div className="combos combos--stack">
+                    {page!.spells.map(([a, b, cg, cw]) => (
+                      <Combo key={`${a}-${b}`} icons={[[a, 1], [b, 1]]} data={spells} wr={cw / cg} pr={cg / page!.g} />
+                    ))}
+                  </div>
+                </Card>
+              )}
+              {has.boots && (
+                <Card title={t("Bottes")} sub={t("Les 3 plus jouées")}>
+                  <div className="cells">
+                    {page!.boots.map(([id, bg, bw]) => <Cell key={id} id={id} data={items} wr={bw / bg} pr={bg / page!.g} />)}
+                  </div>
+                </Card>
+              )}
             </div>
-          ) : <Empty page={page} timeline />}
-        </Card>
-        <Card title={t("Sorts d’invocateur")} sub={t("Les 2 combinaisons les plus jouées")}>
-          {page?.spells.length ? (
-            <div className="combos combos--stack">
-              {page.spells.map(([a, b, cg, cw]) => (
-                <Combo key={`${a}-${b}`} icons={[[a, 1], [b, 1]]} data={spells} wr={cw / cg} pr={cg / page.g} />
-              ))}
-            </div>
-          ) : <Empty page={page} />}
-        </Card>
-        <Card title={t("Bottes")} sub={t("Les 3 plus jouées")}>
-          {page?.boots.length ? (
-            <div className="cells">
-              {page.boots.map(([id, bg, bw]) => <Cell key={id} id={id} data={items} wr={bw / bg} pr={bg / page.g} />)}
-            </div>
-          ) : <Empty page={page} />}
-        </Card>
+          )}
+        </>);
+      })()}
 
-      </div>
-
-      {role === 4 && (
+      {role === 4 && !!page?.support?.length && (
         <Card title={t("Évolution de l’objet de support")} sub={t("Le choix à faire à la fin de ta quête de support · part des parties où il est choisi")}>
           {page?.support?.length ? (() => {
             const total = page.support.reduce((a, [, g]) => a + g, 0);
@@ -134,6 +154,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
         </Card>
       )}
 
+      {!!page?.items.length && (
       <Card title={t("Objets")} sub={t("Winrate et pickrate selon l’objet acheté en 1er, 2e, 3e… Couleur : par rapport aux autres choix au même rang.")}>
         {page?.items.length ? (
           <div className="item-ranks">
@@ -151,9 +172,11 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
               );
             })}
           </div>
-        ) : <Empty page={page} timeline />}
+        ) : null}
       </Card>
+      )}
 
+      {!!page?.builds.length && (
       <Card title={t("Builds complets")} sub={t("Les 3 enchaînements de {ranks} objets avec le meilleur winrate", { ranks: ranks })}>
         {page?.builds.length ? (
           <div className="builds">
@@ -175,8 +198,9 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
               </div>
             ))}
           </div>
-        ) : <Empty page={page} timeline note={t("Il faut assez de parties avec les {ranks} mêmes objets dans le même ordre.", { ranks: ranks })} />}
+        ) : null}
       </Card>
+      )}
     </div>
   );
 }
@@ -235,14 +259,6 @@ function Card({ title, sub, children }: { title: string; sub?: string; children:
       </div>
       {children}
     </section>
-  );
-}
-
-function Empty({ page, timeline = false, note }: { page: ChampPage | null; timeline?: boolean; note?: string }) {
-  const n = page ? (timeline ? page.tg : page.g) : 0;
-  return (
-    <p className="runes__empty">{t("Collecte en cours")}{n ? t(" ({int} parties analysées pour l’instant)", { int: int(n) }) : ""}. {note ?? ""}
-    </p>
   );
 }
 

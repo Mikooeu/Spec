@@ -32,26 +32,37 @@ export function StatsView({ stats, data, laneGames, me, guess, recentNote, other
   return (
     <div className="sview">
       {recentNote && <p className="muted small">{recentNote}</p>}
-      <div className="tiles tiles--4">
-        <SideTile label={t("Winrate côté bleu")} gw={data.sides[0]} missing={missing} />
-        <SideTile label={t("Winrate côté rouge")} gw={data.sides[1]} missing={missing} />
-        <div className="tile-stat">
-          <span className="tile-stat__label">{t("Parties finies par FF")}</span>
-          <span className="tile-stat__value">{ff.known ? pctN(Math.round((ff.games / ff.known) * 100)) : "—"}</span>
-          <span className="tile-stat__detail">
-            {ff.known ? `${plural(ff.games, "{n} partie", "{n} parties")} · ${t("{w} V – {l} D", { w: ff.wins, l: ff.games - ff.wins })}` : missing}
-          </span>
-        </div>
-        <div className="tile-stat" title={t("{a} parties de moins de 30 min, {b} de 30 min ou plus", { a: short[0], b: long[0] })}>
-          <span className="tile-stat__label">{t("Winrate selon la durée")}</span>
-          <span className="tile-dur">
-            <span>{t("Moins de 30 min")}</span>
-            <strong className={short[0] ? `tone-${wrTone(rate(short))}` : ""}>{short[0] ? pct(rate(short)) : "—"}</strong>
-            <span>{t("Plus de 30 min")}</span>
-            <strong className={long[0] ? `tone-${wrTone(rate(long))}` : ""}>{long[0] ? pct(rate(long)) : "—"}</strong>
-          </span>
-        </div>
-      </div>
+      {(() => {
+        // côté et abandon : affichés seulement si le client les renvoie (ou pendant la relecture des parties)
+        const season = data.source === "season";
+        const sides = season || data.sides[0][0] + data.sides[1][0] > 0;
+        const ffShown = season || ff.known > 0;
+        const n = 1 + (sides ? 2 : 0) + (ffShown ? 1 : 0);
+        return (
+          <div className={`tiles tiles--${n}`}>
+            {sides && <SideTile label={t("Winrate côté bleu")} gw={data.sides[0]} missing={missing} />}
+            {sides && <SideTile label={t("Winrate côté rouge")} gw={data.sides[1]} missing={missing} />}
+            {ffShown && (
+              <div className="tile-stat">
+                <span className="tile-stat__label">{t("Parties finies par FF")}</span>
+                <span className="tile-stat__value">{ff.known ? pctN(Math.round((ff.games / ff.known) * 100)) : "—"}</span>
+                <span className="tile-stat__detail">
+                  {ff.known ? `${plural(ff.games, "{n} partie", "{n} parties")} · ${t("{w} V – {l} D", { w: ff.wins, l: ff.games - ff.wins })}` : missing}
+                </span>
+              </div>
+            )}
+            <div className="tile-stat" title={t("{a} parties de moins de 30 min, {b} de 30 min ou plus", { a: short[0], b: long[0] })}>
+              <span className="tile-stat__label">{t("Winrate selon la durée")}</span>
+              <span className="tile-dur">
+                <span>{t("Moins de 30 min")}</span>
+                <strong className={short[0] ? `tone-${wrTone(rate(short))}` : ""}>{short[0] ? pct(rate(short)) : "—"}</strong>
+                <span>{t("Plus de 30 min")}</span>
+                <strong className={long[0] ? `tone-${wrTone(rate(long))}` : ""}>{long[0] ? pct(rate(long)) : "—"}</strong>
+              </span>
+            </div>
+          </div>
+        );
+      })()}
       <ChampionTable stats={stats} data={data} other={other} />
       <div className="sview__row">
         <DayChart days={data.days} season={data.source === "season"} other={other} />

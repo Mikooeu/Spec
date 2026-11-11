@@ -893,4 +893,7 @@ export const EN: Record<string, string> = {
   "Aperçu de l’écran de jeu": "Game screen preview",
   "Overlay désactivé": "Overlay off",
   "Le jeu doit être en mode Sans bordure ou Fenêtré (Options › Vidéo › Mode fenêtre).": "The game must be in Borderless or Windowed mode (Options › Video › Window mode).",
+  "Builds en cours de collecte": "Builds being collected",
+  "Pas encore assez de parties de {c} en {r} pour conseiller sorts, runes et objets. Ils s’affichent avec les prochaines stats (calcul toutes les 6 h).": "Not enough {c} games in {r} yet to suggest skills, runes and items. They show up with the next stats (computed every 6 h).",
+  " {n} parties analysées pour l’instant.": " {n} games analysed so far.",
 };
