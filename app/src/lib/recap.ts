@@ -90,8 +90,22 @@ export function makeRecap(g: RawGame, tl: Timeline, me: string, guess?: Guess): 
   const allies = g.participants.filter((p) => (p.teamId ?? 100) === myTeam);
   const enemies = g.participants.filter((p) => (p.teamId ?? 100) !== myTeam);
   const role = roleOf(mine, guess);
-  const opp = role != null ? enemies.find((p) => roleOf(p, guess) === role) : undefined;
   const allyIds = new Set(allies.map((p) => p.participantId));
+  const frames0 = tl.frames ?? [];
+  // vis-à-vis : l'adversaire au même poste ; sinon celui qui a passé la phase de lane le plus près de toi (minutes 2 à 12)
+  const near = (): RawParticipant | undefined => {
+    let best: RawParticipant | undefined, bestD = Infinity;
+    for (const e of enemies) {
+      let sum = 0, n = 0;
+      for (let m = 2; m <= 12 && m < frames0.length; m++) {
+        const a = frames0[m]?.participantFrames?.[String(myId)]?.position, b = frames0[m]?.participantFrames?.[String(e.participantId)]?.position;
+        if (a && b) { sum += Math.hypot(a.x - b.x, a.y - b.y); n++; }
+      }
+      if (n >= 3 && sum / n < bestD) { bestD = sum / n; best = e; }
+    }
+    return bestD < 4500 ? best : undefined;
+  };
+  const opp = (role != null ? enemies.find((p) => roleOf(p, guess) === role) : undefined) ?? near();
 
   const cs = (p: RawParticipant) => (p.stats.totalMinionsKilled ?? 0) + (p.stats.neutralMinionsKilled ?? 0);
   const sum = (ps: RawParticipant[], f: (p: RawParticipant) => number) => ps.reduce((a, p) => a + f(p), 0);
@@ -129,7 +143,8 @@ export function makeRecap(g: RawGame, tl: Timeline, me: string, guess?: Guess): 
       duel(t("Or"), a.totalGold ?? 0, b?.totalGold ?? null),
       ...(dmg(a) != null ? [duel(t("Dégâts aux champions"), dmg(a)!, dmg(b))] : []),
       duel(t("Participation aux kills"), kpAt(myId, "ally"), opp ? kpAt(opp.participantId, "enemy") : null, "pct"),
-      duel(t("Balises posées"), wards(myId), opp ? wards(opp.participantId) : null),
+      // balises : seulement si la timeline contient les poses de balises (pas toujours le cas dans le client)
+      ...(events.some((e) => e.type === "WARD_PLACED") ? [duel(t("Balises posées"), wards(myId), opp ? wards(opp.participantId) : null)] : []),
     ];
   })();
   const end: Duel[] = [

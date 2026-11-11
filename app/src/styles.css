@@ -1561,3 +1561,5 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .tile-dur2 > span { min-width: 0; }
 .tile-dur2 .tile-stat__value { font-size: 1.5rem; white-space: nowrap; }
 .tile-dur2 .tile-stat__detail { white-space: nowrap; }
+/* récap sans vis-à-vis identifié : libellé à gauche, ta valeur à droite */
+.grecap-duel--solo .grecap-duel__row { grid-template-columns: 1fr auto; }

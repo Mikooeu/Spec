@@ -61,7 +61,7 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
       </section>
 
       <section className="card grecap-card">
-        <h2>{t("Ta lane")}{opp && <small>{t("face à {opp}", { opp })}</small>}</h2>
+        <h2>{t("Ta lane")}<small>{opp ? t("face à {opp}", { opp }) : t("vis-à-vis non identifié")}</small></h2>
         <div className="grecap-lane">
           {r.at15 ? <DuelTile title={t("À 15 min")} rows={r.at15} opp={opp} />
             : <div className="grecap-tile grecap-tile--empty">{t("La partie s’est terminée avant 15 min.")}</div>}
@@ -106,7 +106,7 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone?: "goo
 
 function DuelTile({ title, rows, opp }: { title: string; rows: Duel[]; opp: string | null }) {
   return (
-    <div className="grecap-tile grecap-duel">
+    <div className={`grecap-tile grecap-duel${opp ? "" : " grecap-duel--solo"}`}>
       <div className="grecap-duel__row grecap-duel__head">
         <strong>{title}</strong><span>{t("Toi")}</span>{opp && <><span>{opp}</span><span>{t("Écart")}</span></>}
       </div>
