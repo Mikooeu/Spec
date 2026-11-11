@@ -1388,3 +1388,43 @@ html.is-overlay, html.is-overlay body, html.is-overlay #root { background: trans
   .home-best { grid-template-columns: 1fr; }
 }
 .home-list__wr.tone-bad { color: var(--bad); }
+
+/* ---- 0.11.0 : champion pool ---- */
+.pool2 { display: flex; flex-direction: column; gap: 1rem; }
+.pool2__roles { align-self: flex-start; }
+.pool2-card { display: flex; flex-direction: column; gap: 0.875rem; padding: 1.125rem 1.25rem 1.25rem; }
+.pool2-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.pool2-card__head h2 { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.9375rem; font-weight: 600; }
+.pool2-card__head h2 small { font-size: 0.75rem; font-weight: 400; color: var(--text-3); }
+.pool2-card__head--tools { align-items: center; }
+.pool2-card__head--tools h2 { flex: 1; }
+.pool2__prefill { color: var(--accent); font-size: 0.8125rem; }
+.pool2__prefill:hover { color: var(--text); }
+.pool2__hint { max-width: 32rem; text-align: right; }
+.pool2__search { width: 14rem; }
+.pool2-mine { display: grid; grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr)); gap: 0.625rem; }
+.pool2-mine__card { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 0.5rem 0.625rem 0.625rem; border-radius: 0.75rem;
+                    background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); min-width: 0; }
+.pool2-mine__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1875rem; }
+.pool2-mine__text p { display: flex; align-items: center; gap: 0.375rem; }
+.pool2-mine__text strong { font-size: 0.8125rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pool2-mine__text small { font-size: 0.6875rem; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pool2-mine__x { flex: none; width: 1.5rem; height: 1.5rem; border: 0; border-radius: 0.375rem; background: none; color: var(--text-3); font-size: 1rem; cursor: pointer; }
+.pool2-mine__x:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.pool2-mine__add { min-height: 3.75rem; border: 1px dashed rgba(255, 255, 255, 0.16); border-radius: 0.75rem; background: none;
+                   color: var(--text-3); font: inherit; font-size: 0.8125rem; font-weight: 500; cursor: pointer; }
+.pool2-mine__add:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.3); }
+.pool2-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: 0.625rem; }
+.pool2-tile { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.625rem; border-radius: 0.75rem; text-align: left; cursor: pointer;
+              background: rgba(255, 255, 255, 0.04); border: 1px solid transparent; font: inherit; color: inherit; min-width: 0; }
+.pool2-tile:hover { border-color: var(--separator); }
+.pool2-tile.is-selected { background: rgba(10, 132, 255, 0.08); border-color: rgba(10, 132, 255, 0.6); }
+.pool2-tile__top { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.pool2-tile__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.125rem; }
+.pool2-tile__text strong { font-size: 0.75rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pool2-tile__text small { font-size: 0.6875rem; color: var(--text-3); }
+.pool2-tile__foot { font-size: 0.6875rem; font-weight: 500; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pool2-tile.is-selected .pool2-tile__foot { color: var(--accent); }
+.tier--none { color: var(--text-3); background: rgba(255, 255, 255, 0.04); }
+.segmented--small button { font-size: 0.75rem; padding: 0.3125rem 0.625rem; }
+.segmented--small button:disabled { opacity: 0.4; cursor: default; }
