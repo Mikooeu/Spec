@@ -76,7 +76,6 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
       <header className="page-head">
         <div>
           <h1>{t("Ton champion pool")}</h1>
-          <p className="muted">{t("Spec met ces champions en avant pendant la draft : les 3 meilleurs pour la draft en cours, puis 4 découvertes.")}</p>
         </div>
       </header>
 

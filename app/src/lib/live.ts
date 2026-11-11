@@ -29,20 +29,26 @@ const shown = (g: Omit<LiveGame, "at">) => JSON.stringify([g.champion, g.positio
 
 /** Lit la partie toutes les 3 s tant que `active` ; null pendant l'écran de chargement.
  *  Fenêtre réduite : aucune lecture. Rien de changé : aucun nouveau rendu. */
-export function useLiveGame(active: boolean): LiveGame | null {
+export function useLiveGame(active: boolean, background = false): LiveGame | null {
   const [game, setGame] = useState<LiveGame | null>(null);
   useEffect(() => {
     if (!active) { setGame(null); return; }
     let stop = false;
     let timer: ReturnType<typeof setTimeout>;
-    let last = "";
+    let last = "", seen = false, fails = 0;
     const tick = async () => {
-      if (!document.hidden) {
+      // fenêtre principale : on lit même réduite (c'est elle qui ouvre et ferme les overlays)
+      if (background || !document.hidden) {
         try {
           const g = await invoke<Omit<LiveGame, "at">>("live_game");
+          seen = true; fails = 0;
           const key = shown(g);
           if (!stop && key !== last) { last = key; setGame({ ...g, at: Date.now() }); }
-        } catch { /* partie pas encore chargée : on garde la dernière lecture */ }
+        } catch {
+          // avant le début : partie pas encore chargée, on garde la dernière lecture.
+          // après : le jeu s'est fermé (fin de partie) → plus rien à afficher
+          if (seen && ++fails >= 3 && !stop) { seen = false; last = ""; setGame(null); }
+        }
       }
       if (!stop) timer = setTimeout(tick, POLL_MS);
     };
@@ -51,7 +57,7 @@ export function useLiveGame(active: boolean): LiveGame | null {
     document.addEventListener("visibilitychange", onShow);
     tick();
     return () => { stop = true; clearTimeout(timer); document.removeEventListener("visibilitychange", onShow); };
-  }, [active]);
+  }, [active, background]);
   return game;
 }
 

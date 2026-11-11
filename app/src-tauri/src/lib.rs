@@ -92,6 +92,8 @@ fn overlay_interactive(app: tauri::AppHandle, kind: String, on: bool) -> Result<
 #[tauri::command]
 fn overlay_close(app: tauri::AppHandle, kind: String) -> Result<(), String> {
     if let Some(w) = app.get_webview_window(overlay_label(&kind)?) {
+        // masquée tout de suite, même si la fermeture tarde
+        let _ = w.hide();
         w.close().map_err(|e| e.to_string())?;
     }
     Ok(())

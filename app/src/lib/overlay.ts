@@ -49,13 +49,19 @@ export function useOverlaySettings(): [OverlaySettings, (s: OverlaySettings) => 
 
 export type OverlayKind = "overlay" | "loading";
 
+// état voulu de chaque fenêtre : une fermeture demandée pendant l'ouverture (fenêtre encore en création) l'emporte
+const want: Record<OverlayKind, boolean> = { overlay: false, loading: false };
+
 export async function openOverlay(kind: OverlayKind): Promise<void> {
   if (!IN_APP) return;
+  want[kind] = true;
   try { await invoke("overlay_open", { kind }); } catch (e) { console.warn("[overlay]", kind, e); }
+  if (!want[kind]) { try { await invoke("overlay_close", { kind }); } catch { /* déjà fermée */ } }
 }
 
 export async function closeOverlay(kind: OverlayKind): Promise<void> {
   if (!IN_APP) return;
+  want[kind] = false;
   try { await invoke("overlay_close", { kind }); } catch { /* déjà fermée */ }
 }
 

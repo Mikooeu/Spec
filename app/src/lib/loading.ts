@@ -49,7 +49,9 @@ export async function loadLoading(stats: Stats, mePuuid: string | null, guess?: 
   onFirst?: (d: LoadingData) => void): Promise<LoadingData | null> {
   const s = await invoke<RawSession>("lcu_get", { path: "/lol-gameflow/v1/session" });
   const gd = s.gameData;
-  if (!gd?.teamOne?.length || !gd.teamTwo?.length) return null;
+  // partie personnalisée : une équipe peut être vide (seul, ou contre des bots que le client ne liste pas)
+  if (!gd || (!gd.teamOne?.length && !gd.teamTwo?.length)) return null;
+  gd.teamOne ??= []; gd.teamTwo ??= [];
   const sel = new Map((gd.playerChampionSelections ?? []).map((x) => [x.puuid, x]));
   const mine = gd.teamTwo.some((m) => m.puuid && m.puuid === mePuuid) ? 2 : 1;
   const build = async (m: RawMember, full: boolean): Promise<LoadPlayer> => {
@@ -74,7 +76,7 @@ export async function loadLoading(stats: Stats, mePuuid: string | null, guess?: 
   const order = (list: LoadPlayer[]) => [...list].sort((a, b) => (a.role ?? 9) - (b.role ?? 9));
   const pack = (one: LoadPlayer[], two: LoadPlayer[]): LoadingData => {
     const allies = order(mine === 1 ? one : two), enemies = order(mine === 1 ? two : one);
-    return { at: Date.now(), ddragon: stats.ddragon, queue: gd.queue?.description ?? "", allies, enemies, duels: allies.map((a, i) => duel(stats, a, enemies[i])) };
+    return { at: Date.now(), ddragon: stats.ddragon, queue: gd.queue?.description ?? "", allies, enemies, duels: enemies.length ? allies.map((a, i) => duel(stats, a, enemies[i])) : [] };
   };
   // 1) cartes immédiates, 2) profils des 10 joueurs en parallèle (l'écran de chargement ne dure que quelques dizaines de secondes)
   const quick = async (list: RawMember[]) => Promise.all(list.map((m) => build(m, false)));

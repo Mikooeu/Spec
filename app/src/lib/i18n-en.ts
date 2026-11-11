@@ -892,4 +892,5 @@ export const EN: Record<string, string> = {
   "{n} sur 6": "{n} of 6",
   "Aperçu de l’écran de jeu": "Game screen preview",
   "Overlay désactivé": "Overlay off",
+  "Le jeu doit être en mode Sans bordure ou Fenêtré (Options › Vidéo › Mode fenêtre).": "The game must be in Borderless or Windowed mode (Options › Video › Window mode).",
 };

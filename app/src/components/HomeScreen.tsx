@@ -75,7 +75,6 @@ export function HomeScreen({ stats, clientOn, clientText, me, pools, mainRole, v
       <header className="page-head home__head">
         <div>
           <h1>{t("Prêt pour ta prochaine draft")}</h1>
-          <p className="muted">{t("Lance une partie : tes recommandations s’affichent dès la sélection des champions.")}</p>
         </div>
         <div className="home__status">
           <span className="home__pill"><span className={clientOn ? "dot" : "dot dot--off"} />{clientOn ? clientText : t("Client LoL fermé")}</span>

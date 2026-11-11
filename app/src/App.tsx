@@ -125,7 +125,7 @@ export default function App() {
     // partie terminée : retour sur l'écran d'attente de la draft
     if (["PreEndOfGame", "EndOfGame", "WaitingForStats", t("Lobby"), t("None"), "offline"].includes(phase)) setInGame(null);
   }, [phase]);
-  const liveGame = useLiveGame(inGame != null);
+  const liveGame = useLiveGame(inGame != null, true);
   const [overlay, setOverlay] = useOverlaySettings();
   // un déplacement resté ouvert (Spec fermé en plein déplacement) ne doit pas rouvrir l'overlay au démarrage
   useEffect(() => { if (overlay.editing) setOverlay({ ...overlay, editing: false }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -133,7 +133,10 @@ export default function App() {
   const [loading, setLoading] = useState<LoadingData | null>(null);
   // l'API du jeu peut répondre dès l'écran de chargement : la partie n'a vraiment commencé qu'avec le chrono qui tourne
   const started = liveGame != null && liveGame.time > 1;
-  const loadingPhase = inGame != null && !started;
+  // une fois la partie commencée, l'écran de chargement ne revient plus (fin de partie : le jeu se ferme avant le client)
+  const [hadStart, setHadStart] = useState(false);
+  useEffect(() => { if (started) setHadStart(true); else if (!inGame) setHadStart(false); }, [started, inGame]);
+  const loadingPhase = inGame != null && !started && !hadStart;
   useEffect(() => {
     if (!inGame) { setLoading(null); saveLoading(null); return; }
     if (!stats || loading) return;

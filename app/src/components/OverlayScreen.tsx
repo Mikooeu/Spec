@@ -27,9 +27,8 @@ export function OverlayScreen({ settings: s, onChange: save, inGame }: { setting
       <header className="page-head">
         <div>
           <h1>{t("Overlay")}</h1>
-          <p className="muted">{t("Tes stats en direct par-dessus le jeu. Le jeu doit être en mode Sans bordure ou Fenêtré (Options › Vidéo › Mode fenêtre).")}</p>
         </div>
-        <label className="ovs__master"><span>{t("Afficher l’overlay")}</span>
+        <label className="ovs__master" title={t("Le jeu doit être en mode Sans bordure ou Fenêtré (Options › Vidéo › Mode fenêtre).")}><span>{t("Afficher l’overlay")}</span>
           <Toggle on={s.enabled} onChange={() => save({ ...s, enabled: !s.enabled })} label={t("Afficher l’overlay")} /></label>
       </header>
 
