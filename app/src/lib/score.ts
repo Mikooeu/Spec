@@ -373,7 +373,7 @@ export function rankValue(stats: Stats, r: Result, blind: boolean): number {
 
 export function recommend(
   stats: Stats, role: number, pool: number[], allies: number[], enemies: number[],
-  bans: number[] = [], top = 3, discoveries = 6,
+  bans: number[] = [], top = 3, discoveries = 4,
 ): { pool: Result[]; discoveries: Result[]; blind: boolean } {
   const blind = isBlind(stats, role, enemies);
   const rank = (a: Result, b: Result) => rankValue(stats, b, blind) - rankValue(stats, a, blind);

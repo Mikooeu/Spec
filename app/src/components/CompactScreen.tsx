@@ -4,7 +4,7 @@ import { ROLE_LABELS, ROLE_SHORT, type Stats, enemyDisplay } from "../lib/score"
 import { champName } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { Logo } from "./Logo";
-import { BanPanel, MyPick, RecoRow, makeBanSelect, makePreselect, persoCell, useRecos, type Draft } from "./DraftScreen";
+import { BanPanel, Divider, MyPick, RecoRow, makeBanSelect, makePreselect, persoCell, useRecos, type Draft } from "./DraftScreen";
 import { explain } from "../lib/score";
 import type { PersonalState } from "../lib/api";
 import { Segmented } from "./Segmented";
@@ -103,18 +103,21 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
         <p className="hint">{t("Champion verrouillé : importe tes runes et tes sorts ci-dessus.")}</p>
       ) : (
       <div className="compact__recos">
-        <p className="compact__section">{autofill ? t("Autofill en {v}", { v: ROLE_LABELS[draft.role] }) : t("Recommandés pour toi")}</p>
-        {rows.map(({ res, kind }, i) => (
+        <p className="compact__section">
+          <span>{autofill ? t("Autofill en {v}", { v: ROLE_LABELS[draft.role] }) : t("Tes meilleurs picks")}</span>
+          <span className="compact__section-note">{t("Dans cette draft")}</span>
+        </p>
+        {rows.length > 0 && <div className="reco-list">{rows.map(({ res, kind }, i) => (
           <div key={res.champ}>
-            {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">{t("Envie de tester ?")}</p>}
-            <RecoRow stats={stats} res={res} rank={kind === "pool" ? String(i + 1) : "—"} compact
-                     discovery={kind === "discovery"} open={open === res.champ}
+            {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <Divider compact />}
+            <RecoRow stats={stats} res={res} rank={String(i + 1)} compact
+                     discovery={kind === "discovery" && !autofill} inPool={kind === "pool"} open={open === res.champ}
                      onToggle={() => setOpen(open === res.champ ? null : res.champ)}
                      onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
                      role={draft.role} mine={res.champ === draft.myChamp}
                      why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies) : undefined} />
           </div>
-        ))}
+        ))}</div>}
         {rows.length === 0 && <p className="hint">{t("Pas encore assez de parties pour ce rôle.")}</p>}
       </div>
       )}

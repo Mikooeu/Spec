@@ -54,6 +54,8 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
   const [notice, setNotice] = useState<string | null>(null);
 
   const { allies, enemies, autofill, rows, team, blind } = useRecos(stats, draft, pool);
+  const persoCells = useMemo(() => new Map(rows.map(({ res }) => [res.champ, persoCell(perso, res.champ, draft.role)])), [rows, perso, draft.role]);
+  const showPerso = [...persoCells.values()].some((c) => c.value !== "—");
 
   const selected = rows.find((r) => r.res.champ === openChamp)?.res ?? null;
   // ton champion présélectionné : sa ligne s'ouvre, avec l'explication (pas de carte en double au-dessus)
@@ -123,15 +125,22 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
           {!draft.myLocked && autofill && (
             <p className="hint">{t("Ton pool est vide pour ce rôle : voici les meilleurs choix de cette draft.")}</p>
           )}
-          {!draft.myLocked && (
-            <div className="recos__list stagger" key={draft.role}>
+          {!draft.myLocked && rows.length > 0 && (
+            <div className="recos__list reco-list stagger" key={draft.role}>
+              <div className="reco-head" aria-hidden="true">
+                <span className="reco-head__champ">{t("Champion")}</span>
+                <span className="reco-head__wr">{t("Dans cette draft")}</span>
+                {showPerso && <span className="reco-head__perso">{t("Toi")}</span>}
+                <span className="reco-head__act" />
+              </div>
               {rows.map(({ res, kind }, i) => (
                 <div key={res.champ}>
-                  {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <p className="divider-label">{t("Envie de tester ?")}</p>}
-                  <RecoRow stats={stats} res={res} rank={kind === "pool" ? String(i + 1) : "—"}
-                           discovery={kind === "discovery"} open={openChamp === res.champ}
+                  {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <Divider />}
+                  <RecoRow stats={stats} res={res} rank={String(i + 1)} best={i === 0}
+                           discovery={kind === "discovery" && !autofill} inPool={kind === "pool"} showPerso={showPerso}
+                           open={openChamp === res.champ}
                            onToggle={() => setOpenChamp(openChamp === res.champ ? null : res.champ)}
-                           onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
+                           onPreselect={() => preselect(res.champ)} perso={persoCells.get(res.champ)}
                            role={draft.role} mine={res.champ === draft.myChamp}
                            why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies, stats.params, blind) : undefined}
                            fill={fills(stats, res.champ, team)} enemies={enemies} />
@@ -166,64 +175,103 @@ interface RecoRowProps {
   fill?: Gap[];
   /** Adversaires déjà choisis : objets et runes adaptés à leur équipe dans le détail. */
   enemies?: number[];
+  /** Premier de la liste : badge « Meilleur choix ». */
+  best?: boolean;
+  /** Dans ton pool (badge gris). Faux en autofill, où tout est hors pool. */
+  inPool?: boolean;
+  /** Colonne « Toi » visible (masquée quand aucun champion de la liste n'a de stats perso). */
+  showPerso?: boolean;
 }
 
-export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [], enemies = [] }: RecoRowProps) {
+/** Une ligne de la liste des picks : clic = détail, survol = bouton « Présélectionner » (grande fenêtre). */
+export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [], enemies = [], best = false, inPool = false, showPerso = true }: RecoRowProps) {
   const laner = res.details[0];
+  const hasPerso = perso != null && perso.value !== "—";
+  const key = (e: React.KeyboardEvent) => {
+    if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onToggle(); }
+  };
   return (
-    <div className={`reco${open ? " is-open" : ""}`}>
-      <button className="reco__line" onClick={onToggle} aria-expanded={open}>
+    <div className={`reco${open ? " is-open" : ""}${mine ? " is-mine" : ""}`}>
+      <div className="reco__line" role="button" tabIndex={0} onClick={onToggle} onKeyDown={key} aria-expanded={open}>
         <span className="reco__rank">{rank}</span>
         <ChampionIcon stats={stats} champ={res.champ} size={compact ? 2.125 : 2.5} />
         <span className="reco__info">
-          <span className="reco__name">{champName(stats, res.champ)}</span>
+          <span className="reco__title">
+            <span className="reco__name">{champName(stats, res.champ)}</span>
+            {best && !compact && <span className="badge badge--best">{t("Meilleur choix")}</span>}
+            {mine && <span className="badge badge--picked">{t("Présélectionné")}</span>}
+          </span>
           <span className="reco__meta">
-            {mine && <span className="badge badge--mine">{t("Présélectionné")}</span>}
-            {discovery && <span className="badge">{t("Découverte")}</span>}
-            {!compact && (fill.length
-              ? <span className="reco__fill" title={t("Ce champion comble ce qui manque à ton équipe")}>{t("Comble : ")}{fill.map((g) => GAP_LABEL[g]).join(" · ")}</span>
-              : <span>{discovery ? t("Hors de ton pool") : t("Dans ton pool")}</span>)}
-            {res.games < LOW_DATA_GAMES && <span className="warn">{t("Peu de données")}</span>}
+            {discovery ? <span className="badge badge--discovery">{t("Découverte")}</span>
+              : inPool ? <span className="badge badge--muted">{t("Dans ton pool")}</span> : null}
+            {!compact && fill.length > 0 && (
+              <span className="badge badge--muted" title={t("Ce champion comble ce qui manque à ton équipe")}>{t("Comble : ")}{fill.map((g) => GAP_LABEL[g]).join(" · ")}</span>
+            )}
+            {res.games < LOW_DATA_GAMES && <span className="badge badge--muted">{t("Peu de données")}</span>}
             {compact && perso?.short && <span className={`tone-${perso.tone}`}>{perso.short} <Trend tone={perso.tone} /></span>}
           </span>
         </span>
-        <span className="reco__stat">
-          <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}<Trend tone={wrTone(res.score)} /></span>
-          <span className="reco__label">{t("Dans cette draft")}</span>
-        </span>
-        {!compact && <>
-          <span className="reco__sep" />
-          <span className="reco__perso">
-            <span className={`reco__perso-value tone-${perso?.tone ?? "neutral"}`}>{perso?.value ?? "—"}<Trend tone={perso?.tone} /></span>
-            <span className="reco__label">{perso?.label ?? t("Stats perso indisponibles")}</span>
+        <span className={`reco__wr tone-${wrTone(res.score)}`}>{pct(res.score)}<Trend tone={wrTone(res.score)} /></span>
+        {!compact && showPerso && (
+          <span className={`reco__perso tone-${perso?.tone ?? "neutral"}`} title={perso?.label}>{perso?.value ?? "—"}</span>
+        )}
+        {!compact && (
+          <span className="reco__act">
+            {mine
+              ? <span className="reco__inclient">{t("✓ Dans le client")}</span>
+              : <button className="btn btn--secondary btn--small reco__pre" onClick={(e) => { e.stopPropagation(); onPreselect(); }}>{t("Présélectionner")}</button>}
           </span>
-        </>}
-      </button>
+        )}
+        <span className="reco__chev" aria-hidden="true"><Chevron open={open} /></span>
+      </div>
       {open && (
         <div className="reco__detail">
           {why && <p className="mypick__why">{why}</p>}
           <div className="reco__factors">
-          {laner && laner.p >= 0.15 && (
-            <Factor label={t("Face à {champName} · {round} % d’être ton vis-à-vis", { champName: champName(stats, laner.enemy), round: Math.round(laner.p * 100) })}
-                    value={res.lane} />
-          )}
-          <Factor label={t("Contre le reste de l’équipe")} value={res.counters} />
-          <Factor label={t("Avec tes alliés")} value={res.synergies} />
+            {compact && hasPerso && <FactorTile label={t("Toi sur {c}", { c: champName(stats, res.champ) })} text={perso!.value} tone={perso!.tone} />}
+            {laner && laner.p >= 0.15
+              ? <FactorTile label={t("Face à {champName} · {round} % d’être ton vis-à-vis", { champName: champName(stats, laner.enemy), round: Math.round(laner.p * 100) })} value={res.lane} />
+              : <FactorTile label={t("Vis-à-vis pas encore choisi")} />}
+            <FactorTile label={t("Contre le reste de l’équipe")} value={res.counters} />
+            <FactorTile label={t("Avec tes alliés")} value={res.synergies} />
           </div>
           <RunePage stats={stats} champ={res.champ} role={role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
           {!compact && <Adaptations stats={stats} champ={res.champ} role={role} enemies={enemies} />}
-          {!mine && <button className="btn btn--primary" onClick={onPreselect}>{t("Présélectionner dans le client")}</button>}
+          {compact && (mine
+            ? <p className="reco__inclient reco__inclient--block">{t("✓ Présélectionné dans le client")}</p>
+            : <button className="btn btn--primary" onClick={onPreselect}>{t("Présélectionner dans le client")}</button>)}
         </div>
       )}
     </div>
   );
 }
 
-function Factor({ label, value }: { label: string; value: number }) {
+/** Séparateur entre ton pool et les découvertes. */
+export function Divider({ compact = false }: { compact?: boolean }) {
   return (
-    <span className="factor">
-      {label} <strong className={`tone-${value > 0.0005 ? "good" : value < -0.0005 ? "bad" : "neutral"}`}>{pts(value)}<Trend tone={value > 0.0005 ? "good" : value < -0.0005 ? "bad" : "neutral"} /></strong>
-    </span>
+    <p className="reco-divider">
+      <strong>{t("Envie de tester ?")}</strong>
+      <span>{compact ? t("Hors de ton pool") : t("Hors de ton pool, mais forts dans cette draft")}</span>
+    </p>
+  );
+}
+
+const Chevron = ({ open }: { open: boolean }) => (
+  <svg viewBox="0 0 16 16" width="14" height="14" style={{ transform: open ? "rotate(180deg)" : undefined }}>
+    <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+/** Tuile d'un facteur du score : valeur en points et petite barre (pleine vers ±6 pts). */
+function FactorTile({ label, value, text, tone }: { label: string; value?: number; text?: string; tone?: string }) {
+  const tn = tone ?? (value == null ? "neutral" : value > 0.0005 ? "good" : value < -0.0005 ? "bad" : "neutral");
+  const width = value == null ? 0 : Math.min(100, (Math.abs(value) / 0.06) * 100);
+  return (
+    <div className="factor-tile">
+      <span className="factor-tile__label">{label}</span>
+      <strong className={`tone-${tn}`}>{text ?? (value == null ? "—" : pts(value))}</strong>
+      {text == null && <span className="factor-tile__bar"><span className={`tone-bg-${tn}`} style={{ width: `${width}%` }} /></span>}
+    </div>
   );
 }
 
@@ -269,7 +317,7 @@ function Tile({ label, value, detail, tone }: { label: string; value: string; de
 
 export type RecoItem = { res: Result; kind: "pool" | "discovery" };
 
-/** Recommandations de la draft : pool d'abord, puis une découverte (ou le top du rôle en autofill). */
+/** Recommandations de la draft : ton pool d’abord, puis 4 découvertes (ou le top du rôle en autofill). */
 export function useRecos(stats: Stats, draft: Draft, pool: number[]) {
   return useMemo(() => {
     const allies = draft.allies.filter((c, i): c is number => c != null && i !== draft.role);

@@ -837,4 +837,12 @@ export const EN: Record<string, string> = {
   "Côté bleu (en bas à gauche)": "Blue side (bottom left)",
   "Ta position toutes les minutes, plus tes kills et tes morts.": "Your position every minute, plus your kills and deaths.",
   "Récap": "Recap",
+  "Meilleur choix": "Best pick",
+  "✓ Dans le client": "✓ In the client",
+  "Présélectionner": "Hover",
+  "Toi sur {c}": "You on {c}",
+  "Vis-à-vis pas encore choisi": "Lane opponent not picked yet",
+  "Hors de ton pool, mais forts dans cette draft": "Outside your pool, but strong in this draft",
+  "Tes meilleurs picks": "Your best picks",
+  "✓ Présélectionné dans le client": "✓ Hovered in the client",
 };
