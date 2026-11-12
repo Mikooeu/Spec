@@ -144,7 +144,7 @@ function CopyButton({ r, stats, opp, lp, queue }: { r: Recap; stats: Stats; opp:
 }
 
 /** Carte 1200 × 630 : résultat, chiffres clés et courbe d'or. Dessinée à la main, sans image externe. */
-async function recapImage(r: Recap, title: string, sub: string, kpis: [string, string, string?][]): Promise<Blob> {
+export async function recapImage(r: Recap, title: string, sub: string, kpis: [string, string, string?][]): Promise<Blob> {
   const W = 1200, H = 630, c = document.createElement("canvas");
   c.width = W; c.height = H;
   const g = c.getContext("2d")!;
@@ -160,7 +160,7 @@ async function recapImage(r: Recap, title: string, sub: string, kpis: [string, s
     g.fillStyle = col ?? "#f5f5f7"; g.font = F(700, 36); g.fillText(v, x + 22, 296);
   });
   // courbe d'or
-  const pts = r.curve, X0 = 84, X1 = W - 84, Y0 = 360, Y1 = 520;
+  const pts = r.curve, X0 = 84, X1 = W - 84, Y0 = 370, Y1 = 496;   // la courbe s’arrête bien au-dessus du pied (Spec · verdict)
   if (pts.length >= 2) {
     const end = pts[pts.length - 1].min || 1;
     const hi = Math.max(600, ...pts.map((p) => p.gold)), lo = Math.min(-600, ...pts.map((p) => p.gold));
