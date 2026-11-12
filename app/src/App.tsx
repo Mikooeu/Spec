@@ -386,7 +386,8 @@ export default function App() {
           <ChampionScreen stats={regionStats.stats} champ={champView.champ} role={champView.role}
                           onRole={(role) => setChampView({ ...champView, role })}
                           onBack={() => setScreen("tier")}
-                          region={regionSelect} regionLabel={REGION_LABEL[region]} />
+                          region={regionSelect} regionLabel={REGION_LABEL[region]}
+                          perso={perso.kind === "ready" ? perso.data : null} />
         )}
         {stats && screen === "pool" && <PoolScreen key={poolRole ?? "main"} stats={stats} pools={pools} onChange={setPools} perso={perso} initialRole={poolRole ?? roles.main ?? 2} />}
         {screen === "overlay" && <OverlayScreen settings={overlay} onChange={setOverlay} inGame={inGame != null && started} />}

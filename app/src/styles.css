@@ -1900,3 +1900,29 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .goals-opt__target button { width: 1.75rem; height: 1.75rem; border: 0; border-radius: 6px; background: none; color: var(--text-2); font: inherit; font-size: 0.9375rem; cursor: pointer; }
 .goals-opt__target button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .goals-opt__target button:disabled { cursor: default; }
+
+/* Page champion : onglets, rôle, onglet Matchups (0.14.14) */
+.champ__bar { display: flex; align-items: center; gap: 0.75rem; }
+.champ__bar .segmented { align-self: auto; }
+.champ__share { margin-left: 0.375rem; font-size: 0.6875rem; font-weight: 400; color: var(--text-3); }
+.champ__sep { align-self: stretch; width: 1px; margin: 0.125rem 0.25rem; background: rgba(255, 255, 255, 0.1); }
+.mups__head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.875rem; }
+.mups__head h2 { font-size: 0.9375rem; font-weight: 600; }
+.mups__notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 0.75rem; }
+.mups__who { display: inline-flex; align-items: center; gap: 0.625rem; font-size: 0.8125rem; font-weight: 500; color: var(--text); }
+.mups__search { width: 14rem; height: 2rem; padding: 0 0.75rem; border-radius: 8px; font: inherit; font-size: 0.75rem; color: var(--text);
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); }
+.mups__search:focus { outline: none; border-color: var(--accent); }
+.mups__table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.mups__table th { height: 2rem; padding: 0 0.5rem; text-align: left; font-size: 0.8125rem; font-weight: 500; color: var(--text-3); }
+.mups__sort { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.mups__sort:hover { color: var(--text); }
+.mups__sort.is-sorted, .mups__sort.is-sorted:hover { color: var(--accent); }
+.mups__table td { height: 3.25rem; padding: 0 0.5rem; border-top: 1px solid rgba(255, 255, 255, 0.06); vertical-align: middle; white-space: nowrap; }
+.mups__table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.mups__table strong { font-weight: 600; }
+.mups__chip { padding: 0.25rem 0.5625rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; color: var(--accent); background: rgba(64, 156, 255, 0.12); }
+.mups__table .link-btn { font-size: 0.75rem; font-weight: 600; }
+.mnote-dialog__pick { display: flex; align-items: center; gap: 0.625rem; font-size: 0.8125rem; color: var(--text-3); }
+.mnote-dialog__pick select { flex: 1; height: 2.5rem; padding: 0 0.625rem; border-radius: 10px; font: inherit; font-size: 0.875rem; color: var(--text);
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); }

@@ -2,7 +2,7 @@ import { useContext, useState, type ReactNode } from "react";
 import {
   ROLE_LABELS, gamesIn, tierLetter, tierScore, type ChampPage, type Stats,
 } from "../lib/score";
-import { champName, int, patchLabel, pct, wrTone } from "../lib/ui";
+import { champName, int, patchLabel, pct, pctN, wrTone } from "../lib/ui";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
 import { ChampionIcon } from "./ChampionIcon";
 import { InButton } from "./Runes";
@@ -10,6 +10,8 @@ import { RuneTree } from "./Runes";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
 import { t } from "../lib/i18n";
+import type { Personal } from "../lib/api";
+import { ChampionMatchups, MIN_PERSO_GAMES } from "./ChampionMatchups";
 
 interface Props {
   stats: Stats;
@@ -22,6 +24,8 @@ interface Props {
   /** Sélecteur de région des stats. */
   region?: ReactNode;
   regionLabel?: string;
+  /** Stats perso (ton winrate sur ce champion et face à chaque adversaire). */
+  perso?: Personal | null;
 }
 
 const ROLE_MIN_GAMES = 200;   // un rôle est proposé à partir de ce nombre de parties
@@ -29,7 +33,10 @@ const RARE = 0.01;            // en dessous de 1 % des parties, l'objet est gris
 const RELATIVE = 0.015;       // vert / rouge à 1,5 point de la moyenne du rang
 
 /** Page d'un champion : ordre des sorts, runes, objets de départ, sorts d'invocateur, bottes, objets, builds. */
-export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = false, region, regionLabel = "EUW" }: Props) {
+export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = false, region, regionLabel = "EUW", perso = null }: Props) {
+  const [tab, setTab] = useState<"build" | "matchups">("build");
+  const me = perso?.byRole.get(`${champ}:${role}`) ?? null;
+  const meWr = me && me[0] > 0 ? me[1] / me[0] : null;
   const items = useInfo(loadItems, stats.ddragon);
   const spells = useInfo(loadSpells, stats.ddragon);
   const page = stats.champPages.get(`${champ}|${role}`) ?? null;
@@ -40,6 +47,8 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
   const tier = g ? tierLetter(tierScore(stats, champ, role)) : "—";
   const roles = [0, 1, 2, 3, 4].filter((r) => r === role || gamesIn(stats, champ, r) >= ROLE_MIN_GAMES);
   const ranks = role === 3 ? 6 : 5;
+  const allGames = [0, 1, 2, 3, 4].reduce((a, r) => a + gamesIn(stats, champ, r), 0);
+  const roleShare = (r: number) => (allGames ? gamesIn(stats, champ, r) / allGames : 0);
 
   return (
     <div className="content champ">
@@ -61,18 +70,37 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
           <Stat value={pct(pickrate)} label={t("Pickrate")} />
           {banrate != null && <Stat value={pct(banrate)} label={t("Banrate")} />}
           <Stat value={int(g)} label={t("Parties")} />
+          {me && meWr != null && (
+            <>
+              <span className="champ__sep" aria-hidden />
+              <Stat value={pct(meWr)} label={t("Toi · {n} parties", { n: me[0] })} tone={me[0] >= MIN_PERSO_GAMES ? wrTone(meWr) : undefined} />
+            </>
+          )}
         </div>
       </header>
-      {roles.length > 1 && (
-        <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
-          {roles.map((r) => (
-            <button key={r} role="tab" aria-selected={r === role} className={r === role ? "is-active" : ""}
-                    onClick={() => onRole(r)}>{ROLE_LABELS[r]}</button>
-          ))}
-        </Segmented>
-      )}
+      <div className="champ__bar">
+        {!inGame && (
+          <Segmented className="segmented" role="tablist" aria-label={t("Onglets")}>
+            {(["build", "matchups"] as const).map((k) => (
+              <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "is-active" : ""}
+                      onClick={() => setTab(k)}>{k === "build" ? t("Build") : t("Matchups")}</button>
+            ))}
+          </Segmented>
+        )}
+        <span className="grow" />
+        {roles.length > 1 && (
+          <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
+            {roles.map((r) => (
+              <button key={r} role="tab" aria-selected={r === role} className={r === role ? "is-active" : ""}
+                      onClick={() => onRole(r)}>{ROLE_LABELS[r]}<span className="champ__share">{pctN(Math.round(roleShare(r) * 100))}</span></button>
+            ))}
+          </Segmented>
+        )}
+      </div>
 
-      {(() => {
+      {tab === "matchups" && !inGame ? <ChampionMatchups stats={stats} champ={champ} role={role} perso={perso} /> :
+
+      (() => {
         // sections sans données : masquées ; tout vide → un seul message plutôt que « Collecte en cours » partout
         const has = {
           skills: !!page?.skills, runes: !!stats.runes.get(`${champ}|${role}`)?.[0]?.games, start: !!page?.start.length,
@@ -130,7 +158,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
         </>);
       })()}
 
-      {role === 4 && !!page?.support?.length && (
+      {tab === "build" && role === 4 && !!page?.support?.length && (
         <Card title={t("Évolution de l’objet de support")} sub={t("Le choix à faire à la fin de ta quête de support · part des parties où il est choisi")}>
           {page?.support?.length ? (() => {
             const total = page.support.reduce((a, [, g]) => a + g, 0);
@@ -155,7 +183,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
         </Card>
       )}
 
-      {!!page?.items.length && (
+      {tab === "build" && !!page?.items.length && (
       <Card title={t("Objets")} sub={t("Winrate et pickrate selon l’objet acheté en 1er, 2e, 3e… Couleur : par rapport aux autres choix au même rang.")}>
         {page?.items.length ? (
           <div className="item-ranks">
@@ -177,7 +205,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
       </Card>
       )}
 
-      {!!page?.builds.length && (
+      {tab === "build" && !!page?.builds.length && (
       <Card title={t("Builds complets")} sub={t("Les 3 enchaînements de {ranks} objets avec le meilleur winrate, bottes comprises", { ranks: ranks })}>
         {page?.builds.length ? (
           <div className="builds">
