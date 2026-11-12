@@ -5,7 +5,7 @@ import { t } from "../lib/i18n";
 export const RIOT_LEGAL = "Spec isn’t endorsed by Riot Games and doesn’t reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.";
 
 /** Adresse de contact affichée dans la page de confidentialité (vide : ligne masquée). */
-export const PRIVACY_CONTACT = "";
+export const PRIVACY_CONTACT = "guillaumintheo5@gmail.com";
 
 /** Page de confidentialité : ce que Spec lit, ce qu'il envoie, ce qu'il garde, et comment tout supprimer. */
 export function PrivacyDialog({ onClose }: { onClose: () => void }) {

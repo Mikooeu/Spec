@@ -1194,7 +1194,7 @@ function LpChart({ stats, series, games, tier }: { stats: Stats; series: LpPoint
       <div className="lp2__strip">
         <div><small>{t("Bilan")}</small><strong className={`tone-${tone}`}>{lpText(gain)}</strong></div>
         <div><small>{t("Pic")}</small>{crest(pts[peakI].lp, "lp2__strip-crest")}<strong style={{ color: tierColorOf(pts[peakI].lp) }}>{fullLabel(pts[peakI].lp)}</strong></div>
-        <div><small>{t("Parties")}</small><strong>{wins + losses}</strong><span className="muted">{t("{w} V – {l} D", { w: wins, l: losses })}</span></div>
+        <div><small>{t("Parties")}</small><strong>{t("{w} V – {l} D", { w: wins, l: losses })}</strong></div>
         <div><small>{t("Série")}</small>
           <strong className={streak ? `tone-${lastSign > 0 ? "good" : "bad"}` : ""}>
             {streak ? plural(streak, lastSign > 0 ? "{n} victoire" : "{n} défaite", lastSign > 0 ? "{n} victoires" : "{n} défaites") : "—"}</strong></div>
