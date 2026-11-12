@@ -118,6 +118,9 @@ function RunePageView({ stats, champ, role, page, vs, data, spells }:
   const [flashKey, setFlashKey] = useFlashKey();
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // vis-à-vis visé par le dernier import réussi : null = runes génériques, undefined = rien importé
+  const [importedVs, setImportedVs] = useState<number | null | undefined>(undefined);
+  const outdated = importedVs === null && vs != null;
   const ordered = spells ? orderSpells(spells.spells, flashKey) : null;
   const run = async () => {
     if (!importer) {
@@ -130,6 +133,7 @@ function RunePageView({ stats, champ, role, page, vs, data, spells }:
     const spellError = !error && ordered && spellImporter ? await spellImporter(ordered[0], ordered[1]) : null;
     const itemError = !error && itemImporter ? await itemImporter(champ, role) : null;
     setBusy(false);
+    if (!error) setImportedVs(vs);
     setStatus(error ? { ok: false, text: error }
       : spellError ? { ok: false, text: t("Runes importées, mais pas les sorts : {spellError}", { spellError: spellError }) }
       : itemError ? { ok: false, text: t("Runes et sorts importés, mais pas le set d’objets : {itemError}", { itemError }) }
@@ -149,10 +153,21 @@ function RunePageView({ stats, champ, role, page, vs, data, spells }:
         {page.sub.map((r) => <Rune key={`s${r}`} data={data} id={r} size="minor" />)}
         <span className="runes__sep" />
         {page.shards.map((r, i) => <Rune key={`f${i}`} data={data} id={r} size="shard" />)}
-        <button className="btn btn--secondary btn--tiny runes__import" onClick={run} disabled={busy}>
-          {busy ? "Import…" : ordered ? (itemImporter ? t("Importer runes, sorts et objets") : t("Importer runes et sorts")) : t("Importer dans le client")}
-        </button>
+        {!outdated && (
+          <button className="btn btn--secondary btn--tiny runes__import" onClick={run} disabled={busy}>
+            {busy ? "Import…" : ordered ? (itemImporter ? t("Importer runes, sorts et objets") : t("Importer runes et sorts")) : t("Importer dans le client")}
+          </button>
+        )}
       </div>
+      {outdated && (
+        <div className="runes__update" role="status">
+          <div className="grow">
+            <strong>{t("{champName} est verrouillé", { champName: champName(stats, vs) })}</strong>
+            <span className="muted small">{t("Runes adaptées face à lui · {wr} sur {n} parties", { wr, n: Math.round(page.games) })}</span>
+          </div>
+          <button className="btn btn--primary btn--tiny" onClick={run} disabled={busy}>{busy ? "Import…" : t("Mettre à jour")}</button>
+        </div>
+      )}
       {ordered && (
         <div className="spells">
           <span className="spells__label">{t("Sorts")}{spells?.vs != null ? t(" face à {champName}", { champName: champName(stats, spells.vs) }) : ""}</span>

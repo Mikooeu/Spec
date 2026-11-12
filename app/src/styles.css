@@ -304,7 +304,11 @@ h3 { font-size: 0.9375rem; font-weight: 600; }
 .compact .runes__row > .rune:nth-last-child(-n+3) .rune__tip { left: auto; right: 0; transform: none; }
 
 .btn--tiny { padding: 0.25rem 0.625rem; font-size: 0.75rem; border-radius: 0.5rem; }
-.runes__import { margin-left: 0.5rem; }  /* reste collé aux runes : ne bouge plus quand le message d’import apparaît */
+.runes__import { margin-left: 0.5rem; }
+.runes__update { display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.75rem 0.625rem 0.875rem; border-radius: 10px;
+  background: rgba(64, 156, 255, 0.10); border: 1px solid rgba(64, 156, 255, 0.3); }
+.runes__update .grow { display: flex; flex-direction: column; gap: 0.125rem; }
+.runes__update strong { font-size: 0.8125rem; }  /* reste collé aux runes : ne bouge plus quand le message d’import apparaît */
 .runes__status { font-size: 0.75rem; color: var(--good); }
 .runes__status.tone-bad { color: var(--bad); }
 .compact .runes__import { margin-left: 0; }

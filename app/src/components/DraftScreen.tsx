@@ -183,7 +183,7 @@ interface RecoRowProps {
 }
 
 /** Une ligne de la liste des picks : clic = détail, survol = bouton « Présélectionner » (grande fenêtre). */
-export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, role, mine = false, why, fill = [], best = false, inPool = false, showPerso = true }: RecoRowProps) {
+export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPreselect, compact = false, perso, mine = false, why, fill = [], best = false, inPool = false, showPerso = true }: RecoRowProps) {
   const laner = res.details[0];
   const hasPerso = perso != null && perso.value !== "—";
   const key = (e: React.KeyboardEvent) => {
@@ -238,7 +238,6 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
             <FactorTile label={t("Contre le reste de l’équipe")} value={res.counters} />
             <FactorTile label={t("Avec tes alliés")} value={res.synergies} />
           </div>
-          <RunePage stats={stats} champ={res.champ} role={role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
           {compact && (mine
             ? <p className="reco__inclient reco__inclient--block">{t("✓ Présélectionné dans le client")}</p>
             : <button className="btn btn--primary" onClick={onPreselect}>{t("Présélectionner dans le client")}</button>)}
@@ -450,7 +449,8 @@ export function MyPick({ stats, draft, compact = false }: { stats: Stats; draft:
         </span>
       </div>
       <p className="mypick__why">{explain(stats, res, draft.role, allies, stats.params, !draft.myLocked && isBlind(stats, draft.role, enemies))}</p>
-      <RunePage stats={stats} champ={champ} role={draft.role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />
+      {/* runes, sorts et import seulement une fois le pick verrouillé : avant, ils changeraient encore */}
+      {draft.myLocked && <RunePage stats={stats} champ={champ} role={draft.role} laner={laner && laner.p >= 0.5 ? laner.enemy : null} />}
     </div>
   );
 }
