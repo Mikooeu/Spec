@@ -64,27 +64,35 @@ const LP_KEY = "spec.lp.games";
 const BEFORE_KEY = "spec.lp.before";
 const SERIES_KEY = "spec.lp.series";
 
-/** Point de la courbe des LP (Solo/Duo) : LP « absolus » (promotions comprises) à un instant donné. */
+/** Point de la courbe des LP (Solo/Duo ou Flex) : LP « absolus » (promotions comprises) à un instant donné. */
+export type LpQueue = "solo" | "flex" | "5c5";
 export interface LpPoint { at: number; lp: number; game?: number }
 
-// Une courbe par compte : `spec.lp.series.<puuid>`. Le compte affiché est le dernier vu dans le client.
+// Une courbe par compte et par file : `spec.lp.series.<puuid>` (Solo/Duo), `spec.lp.series.flex.<puuid>` (Flex).
+// Le compte affiché est le dernier vu dans le client.
 const ACCOUNT_KEY = "spec.lp.account";
-const seriesKey = (puuid: string) => `${SERIES_KEY}.${puuid}`;
-export function readLpSeries(): LpPoint[] {
+const seriesKey = (puuid: string, q: LpQueue = "solo") => (q === "solo" ? `${SERIES_KEY}.${puuid}` : `${SERIES_KEY}.${q}.${puuid}`);
+/** Type de la file classée 5c5 (le week-end) dans le client : lu dans la liste des files, pas connu d'avance. */
+export async function rankedType5c5(): Promise<string | null> {
+  const list = await queues();
+  for (const [id, q] of list) if (kindOf(id, q) === "5c5" && q.type) return q.type;
+  return null;
+}
+export function readLpSeries(q: LpQueue = "solo"): LpPoint[] {
   const puuid = localStorage.getItem(ACCOUNT_KEY);
   if (!puuid) return [];
-  try { const v = JSON.parse(localStorage.getItem(seriesKey(puuid)) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+  try { const v = JSON.parse(localStorage.getItem(seriesKey(puuid, q)) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 /** Ajoute un point si les LP ont changé depuis le dernier (ou pour lier une partie à un point déjà noté). */
-function pushLpPoint(p: LpPoint) {
-  const list = readLpSeries();
+function pushLpPoint(p: LpPoint, q: LpQueue = "solo") {
+  const list = readLpSeries(q);
   const last = list[list.length - 1];
   if (last && last.lp === p.lp && (!p.game || last.game === p.game)) return;
   if (p.game && list.some((x) => x.game === p.game)) return;
   list.push(p);
   const puuid = localStorage.getItem(ACCOUNT_KEY);
   if (!puuid) return;
-  try { localStorage.setItem(seriesKey(puuid), JSON.stringify(list.slice(-600))); } catch { /* stockage plein */ }
+  try { localStorage.setItem(seriesKey(puuid, q), JSON.stringify(list.slice(-600))); } catch { /* stockage plein */ }
 }
 /** Retient le compte connecté. L'ancienne courbe commune (avant la 0.3.15) n'est gardée
  *  que si elle finit sur les LP actuels de ce compte : sinon elle mélange plusieurs comptes. */
@@ -107,11 +115,16 @@ async function noteAccount(currentLp: number | null): Promise<boolean> {
   }
   return true;
 }
-/** Note les LP Solo/Duo actuels (au chargement du profil, en début de draft). */
+/** Note les LP Solo/Duo et Flex actuels (au chargement du profil, en début de draft). */
 export async function noteSoloLp(r: RankedStats | null) {
   const lp = absoluteLp(r?.queueMap?.RANKED_SOLO_5x5);
   if (!(await noteAccount(lp ?? null))) return;
   if (lp != null) pushLpPoint({ at: Date.now(), lp });
+  const flex = absoluteLp(r?.queueMap?.RANKED_FLEX_SR);
+  if (flex != null) pushLpPoint({ at: Date.now(), lp: flex }, "flex");
+  const type5 = await rankedType5c5().catch(() => null);
+  const five = type5 ? absoluteLp(r?.queueMap?.[type5]) : null;
+  if (five != null) pushLpPoint({ at: Date.now(), lp: five }, "5c5");
 }
 /** « Émeraude II · 47 LP » à partir de LP absolus. */
 export function lpLabel(total: number, short = false): string {
@@ -452,6 +465,8 @@ export function useLpTracking(client: ClientState): number {
             map[String(game.id)] = after - before;
             localStorage.setItem(LP_KEY, JSON.stringify(map));
             if (type === "RANKED_SOLO_5x5") pushLpPoint({ at: game.created + game.duration * 1000, lp: after, game: game.id });
+            if (type === "RANKED_FLEX_SR") pushLpPoint({ at: game.created + game.duration * 1000, lp: after, game: game.id }, "flex");
+            if (game.queue === "5c5") pushLpPoint({ at: game.created + game.duration * 1000, lp: after, game: game.id }, "5c5");
             localStorage.removeItem(BEFORE_KEY);
             setVersion((v) => v + 1);
             return;

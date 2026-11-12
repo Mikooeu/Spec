@@ -14,7 +14,7 @@ import { IMPACT_MIN, IMPACT_RELIABLE, impact, recaps, settle, type Recap } from 
 import { Trend } from "./Trend";
 import {
   QUEUE_LABELS, duoPartner, loadDuos, type Duo, findPlayer, loadGameDetail, loadHistory, loadPlayer, loadServerHistory, mergeHistory, rankText, rankTier,
-  readRanked, readLpSeries, noteSoloLp, lpLabel, type LpPoint, type Game, type GameDetail, type OtherPlayer, type PlayerLine, type QueueKind,
+  readRanked, readLpSeries, noteSoloLp, rankedType5c5, lpLabel, type LpPoint, type LpQueue, type Game, type GameDetail, type OtherPlayer, type PlayerLine, type QueueKind,
 } from "../lib/history";
 import { noteText, noteTone, rateGame, sortedParts, summaryParts, type Contribution, type Criterion, type Rating } from "../lib/rating";
 import { Segmented } from "./Segmented";
@@ -133,6 +133,8 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
   const [role, setRole] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("history");   // le profil s'ouvre toujours sur l'historique
   const [queue, setQueue] = usePersistent<"all" | QueueKind>("spec.profileQueue", "all");   // partagée par Historique et Stats
+  const [lpQueue, setLpQueue] = usePersistent<LpQueue>("spec.lpQueue", "solo");   // courbe des LP : Solo/Duo ou Flex
+  const [queueTiers, setQueueTiers] = useState<{ flex: string | null; "5c5": string | null }>({ flex: null, "5c5": null });
   const [season, setSeason] = useState<SeasonStats | null>(null);
   const [seasonFailed, setSeasonFailed] = useState(false);
   const [duo, setDuo] = useState<DuoFilter | null>(null);
@@ -165,6 +167,8 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
     readRanked().then((r) => {
       noteSoloLp(r).then(() => alive && setSeriesTick((n) => n + 1));   // la courbe suit le compte connecté
       if (alive) { setRank(rankText(r?.queueMap?.RANKED_SOLO_5x5)); setTier(rankTier(r?.queueMap?.RANKED_SOLO_5x5)); }
+      rankedType5c5().catch(() => null).then((type5) => alive && setQueueTiers({
+        flex: rankTier(r?.queueMap?.RANKED_FLEX_SR) ?? null, "5c5": type5 ? rankTier(r?.queueMap?.[type5]) ?? null : null }));
     });
     return () => { alive = false; window.clearTimeout(timer); };
   }, [clientOn, lpVersion, guess, historyRetry]);
@@ -268,7 +272,10 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
                    extra={(tab === "history" && !duo) || tab === "stats" ? <>
                      <QueueFilter queue={queue} onQueue={setQueue} count={queueCount} />
                      <RoleFilter role={role} onRole={setRole} games={games ? inQueue(games) : []} />
-                   </> : null} />
+                   </> : tab === "progress" ? (
+                     <Select label={t("File")} value={lpQueue} onChange={(v) => setLpQueue(v as LpQueue)}
+                             options={[["solo", QUEUE_LABELS.solo], ["flex", QUEUE_LABELS.flex], ["5c5", QUEUE_LABELS["5c5"]]]} />
+                   ) : null} />
 
       <div key={tab} className="profile-view fade-in">
       {tab === "history" && (
@@ -300,7 +307,8 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
         </>
       )}
       {tab === "progress" && (
-        <ProgressView stats={stats} games={games} perso={perso} tier={tier} version={lpVersion + impactVersion + seriesTick} onOpenGame={openGame} />
+        <ProgressView stats={stats} games={games} perso={perso} queue={lpQueue} tier={lpQueue === "solo" ? tier : queueTiers[lpQueue]}
+                      version={lpVersion + impactVersion + seriesTick} onOpenGame={openGame} />
       )}
       {tab === "duo" && account?.puuid && (
         <DuoList stats={stats} client={account.puuid} selected={duo?.key ?? null} onOpen={openDuo} />
@@ -1040,9 +1048,9 @@ function DuoList({ stats, client, selected, onOpen }:
 
 const shortDate = (t: number) => new Date(t).toLocaleDateString(locale(), { day: "numeric", month: "short" });
 
-function ProgressView({ stats, games, tier, version, onOpenGame }:
-  { stats: Stats; games: Game[] | null; perso?: PersonalState; tier?: string | null; version: number; onOpenGame: (id: number) => void }) {
-  const series = useMemo(() => readLpSeries(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
+function ProgressView({ stats, games, queue, tier, version, onOpenGame }:
+  { stats: Stats; games: Game[] | null; perso?: PersonalState; queue: LpQueue; tier?: string | null; version: number; onOpenGame: (id: number) => void }) {
+  const series = useMemo(() => readLpSeries(queue), [version, queue]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = useMemo(() => recaps(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map((games ?? []).map((g) => [g.id, g])), [games]);
   const month = list.filter((r) => Date.now() - r.at < 30 * 86400_000);
