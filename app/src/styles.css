@@ -1801,7 +1801,7 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .tour__hint { font-size: 0.6875rem; color: var(--text-3); }
 
 /* ---- 0.14.1 : confidentialité, suppression, journal ---- */
-.sidebar__privacy { align-self: flex-start; margin-top: -0.25rem; padding: 0; background: none; border: 0; font: inherit; font-size: 0.6875rem; color: var(--text-3); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.sidebar__privacy { align-self: flex-start; margin: 0.25rem 0 0 0.25rem; padding: 0; line-height: 1.35; background: none; border: 0; font: inherit; font-size: 0.6875rem; color: var(--text-3); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .sidebar__privacy:hover { color: var(--text-2); }
 .btn--danger { background: #c4302b; color: #fff; }
 .btn--danger:hover:not(:disabled) { background: #d63a34; }
