@@ -72,6 +72,7 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
           {r.kp != null && <Kpi label={t("KP")} value={pctN(r.kp)} />}
           {lp != null && <Kpi label={t("LP")} value={signed(lp)} tone={lp >= 0 ? "good" : "bad"} />}
         </div>
+        <CopyButton r={r} stats={stats} opp={opp} lp={lp} queue={game.queueName} />
         {onClose && <button className="btn btn--secondary btn--small" onClick={onClose}>{t("Fermer")}</button>}
       </section>
 
@@ -120,6 +121,68 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
       )}
     </div>
   );
+}
+
+/** « Copier » : le récap en image (à coller sur Discord), ou en texte si le presse-papiers refuse l'image. */
+function CopyButton({ r, stats, opp, lp, queue }: { r: Recap; stats: Stats; opp: string | null; lp: number | null; queue?: string }) {
+  const [done, setDone] = useState(false);
+  const copy = async () => {
+    const title = `${r.win ? t("Victoire") : t("Défaite")} · ${champName(stats, r.champ)}${r.role != null ? ` ${ROLE_LABELS[r.role]}` : ""}`;
+    const sub = [queue, clock(r.duration), opp ? t("contre {opp}", { opp }) : null].filter(Boolean).join(" · ");
+    const kpis: [string, string, string?][] = [[t("KDA"), `${r.kills} / ${r.deaths} / ${r.assists}`], [t("CS/min"), dec1(r.csMin)]];
+    if (r.kp != null) kpis.push([t("KP"), pctN(r.kp)]);
+    if (lp != null) kpis.push([t("LP"), signed(lp), lp >= 0 ? "#30d158" : "#ff6259"]);
+    try {
+      const blob = await recapImage(r, title, sub, kpis);
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    } catch {
+      try { await navigator.clipboard.writeText(`${title}\n${sub}\n${kpis.map(([k, v]) => `${k} ${v}`).join(" · ")}\n— Spec`); } catch { return; }
+    }
+    setDone(true); window.setTimeout(() => setDone(false), 2000);
+  };
+  return <button className="btn btn--secondary btn--small" onClick={copy} title={t("Copie le récap en image, à coller sur Discord")}>{done ? t("Copié ✓") : t("Copier")}</button>;
+}
+
+/** Carte 1200 × 630 : résultat, chiffres clés et courbe d'or. Dessinée à la main, sans image externe. */
+async function recapImage(r: Recap, title: string, sub: string, kpis: [string, string, string?][]): Promise<Blob> {
+  const W = 1200, H = 630, c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d")!;
+  const F = (w: number, size: number) => `${w} ${size}px Inter, "Segoe UI", sans-serif`;
+  g.fillStyle = "#0b0b0f"; g.fillRect(0, 0, W, H);
+  const rr = (x: number, y: number, w: number, h: number, rad: number, fill: string) => { g.beginPath(); g.roundRect(x, y, w, h, rad); g.fillStyle = fill; g.fill(); };
+  rr(40, 40, W - 80, H - 80, 28, "#1c1c1f");
+  g.fillStyle = r.win ? "#30d158" : "#ff6259"; g.font = F(700, 52); g.fillText(title, 84, 128);
+  g.fillStyle = "#a1a1a6"; g.font = F(400, 26); g.fillText(sub, 84, 172);
+  kpis.forEach(([k, v, col], i) => {
+    const x = 84 + i * 258; rr(x, 210, 240, 108, 18, "#26262a");
+    g.fillStyle = "#98989d"; g.font = F(500, 22); g.fillText(k, x + 22, 250);
+    g.fillStyle = col ?? "#f5f5f7"; g.font = F(700, 36); g.fillText(v, x + 22, 296);
+  });
+  // courbe d'or
+  const pts = r.curve, X0 = 84, X1 = W - 84, Y0 = 360, Y1 = 520;
+  if (pts.length >= 2) {
+    const end = pts[pts.length - 1].min || 1;
+    const hi = Math.max(600, ...pts.map((p) => p.gold)), lo = Math.min(-600, ...pts.map((p) => p.gold));
+    const x = (m: number) => X0 + (X1 - X0) * (m / end), y = (v: number) => Y0 + (Y1 - Y0) * ((hi - v) / (hi - lo));
+    g.strokeStyle = "rgba(255,255,255,0.18)"; g.lineWidth = 2; g.setLineDash([8, 8]);
+    g.beginPath(); g.moveTo(X0, y(0)); g.lineTo(X1, y(0)); g.stroke(); g.setLineDash([]);
+    for (const [clipTop, col] of [[true, "#409cff"], [false, "#ff6259"]] as const) {
+      g.save(); g.beginPath();
+      if (clipTop) g.rect(0, 0, W, y(0)); else g.rect(0, y(0), W, H);
+      g.clip(); g.strokeStyle = col; g.lineWidth = 5; g.lineJoin = "round"; g.beginPath();
+      pts.forEach((p, i) => (i ? g.lineTo(x(p.min), y(p.gold)) : g.moveTo(x(p.min), y(p.gold))));
+      g.stroke(); g.restore();
+    }
+    g.fillStyle = "#98989d"; g.font = F(500, 20); g.fillText(t("Écart d’or de ton équipe"), X0, Y0 - 12);
+  }
+  g.fillStyle = "#f5f5f7"; g.font = F(700, 26); g.fillText("Spec", 84, H - 66);
+  if (r.laneVerdict) {
+    const v = r.laneVerdict === "won" ? t("Lane gagnée") : r.laneVerdict === "lost" ? t("Lane perdue") : t("Lane équilibrée");
+    g.font = F(600, 22); g.fillStyle = r.laneVerdict === "won" ? "#30d158" : r.laneVerdict === "lost" ? "#ff6259" : "#a1a1a6";
+    g.textAlign = "right"; g.fillText(v, W - 84, H - 66); g.textAlign = "left";
+  }
+  return await new Promise<Blob>((ok, ko) => c.toBlob((b) => (b ? ok(b) : ko(new Error("toBlob"))), "image/png"));
 }
 
 function BarRow({ b }: { b: Bar }) {

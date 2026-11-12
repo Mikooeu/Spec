@@ -320,6 +320,24 @@ export async function handle(req: Request, env: Env, now = Date.now(), fetcher?:
       }, 200, { "Cache-Control": "no-store" });
     }
 
+    // Suppression par le joueur lui-même (Réglages › Supprimer mes données) : compte, appareils et parties.
+    // Seul l'appareil lié connaît son identifiant client : c'est lui qui prouve que la demande vient du joueur.
+    const del = /^\/v1\/players\/([^/]+)$/.exec(path);
+    if (method === "DELETE" && del) {
+      const client = decodeURIComponent(del[1]);
+      if (!CLIENT_RE.test(client)) return error(400, "bad_client");
+      const player = await env.DB.prepare(`SELECT puuid FROM devices WHERE client_hash = ?1`)
+        .bind(await sha256Hex(client)).first<{ puuid: string }>();
+      if (!player) return error(404, "not_registered");
+      await env.DB.batch([
+        env.DB.prepare(`DELETE FROM pending WHERE puuid = ?1`).bind(player.puuid),
+        env.DB.prepare(`DELETE FROM player_matches WHERE puuid = ?1`).bind(player.puuid),
+        env.DB.prepare(`DELETE FROM devices WHERE puuid = ?1`).bind(player.puuid),
+        env.DB.prepare(`DELETE FROM players WHERE puuid = ?1`).bind(player.puuid),
+      ]);
+      return json({ ok: true, deleted: true }, 200, { "Cache-Control": "no-store" });
+    }
+
     // Stats perso d'un joueur inscrit
     const m = /^\/v1\/players\/([^/]+)$/.exec(path);
     if (method === "GET" && m) {

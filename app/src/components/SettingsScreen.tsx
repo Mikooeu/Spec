@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { REGIONS, type Region } from "../lib/api";
+import { REGIONS, deleteMyData, type Region } from "../lib/api";
+import { journalText } from "../lib/journal";
+import { RIOT_LEGAL } from "./PrivacyDialog";
 import type { Account } from "../lib/lcu";
 import { useFlashKey } from "./Runes";
 import { Segmented } from "./Segmented";
-import { appVersion, autostartEnabled, installPath, revealInstall, setAutostart, useDefaultRegion, useLang } from "../lib/settings";
+import { appVersion, autostartEnabled, installPath, revealInstall, setAutostart, useDefaultRegion, useLang, useSelectAlert } from "../lib/settings";
 import type { CheckResult } from "../lib/updater";
 import { t } from "../lib/i18n";
 
@@ -15,10 +17,16 @@ interface Props {
   onCheckUpdate: () => Promise<CheckResult>;
   onReplayOnboarding: () => void;
   onReplayTour: () => void;
+  onPrivacy: () => void;
+  /** Données supprimées du serveur : l'appli relit l'état des stats perso. */
+  onDeleted: () => void;
 }
 
 /** Réglages : langue, démarrage, mode compact, touche du Flash, région par défaut, compte, dossier, version. */
-export function SettingsScreen({ account, registered, compact, onCompact, onTop, onOnTop, onCheckUpdate, onReplayOnboarding, onReplayTour }: Props) {
+export function SettingsScreen({ account, registered, compact, onCompact, onTop, onOnTop, onCheckUpdate, onReplayOnboarding, onReplayTour, onPrivacy, onDeleted }: Props) {
+  const [selectAlert, setSelectAlert] = useSelectAlert();
+  const [copied, setCopied] = useState(false);
+  const [del, setDel] = useState<"idle" | "confirm" | "busy" | "done" | string>("idle");
   const [lang, setLang] = useLang();
   const [flashKey, setFlashKey] = useFlashKey();
   const [region, setRegion] = useDefaultRegion();
@@ -74,6 +82,10 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
         <Row label={t("Touche du Flash")} desc={t("L’ordre de tes sorts quand Spec les importe dans le client : Flash sur D ou sur F.")}>
           <Choice value={flashKey} onChange={setFlashKey} options={[["D", "D"], ["F", "F"]]} />
         </Row>
+        <Row label={t("Alerte au début de la sélection")}
+             desc={t("Si Spec est réduit ou derrière le client, il clignote dans la barre des tâches quand la sélection des champions commence.")}>
+          <Toggle on={selectAlert} onChange={() => setSelectAlert(!selectAlert)} label={t("Alerte au début de la sélection")} />
+        </Row>
         <Row label={t("Région des stats par défaut")}
              desc={t("Région affichée à l’ouverture de la tier list et des pages champion. La draft utilise toujours les stats EUW.")}>
           <Choice value={region} onChange={setRegion} options={REGIONS as [Region, string][]} />
@@ -98,6 +110,42 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
         </Row>
         <Row label={t("Version")} desc={t("Spec {v}{v2}", { v: version ?? "—", v2: checkText ? ` · ${checkText}` : "" })}>
           <button className="btn btn--secondary" onClick={runCheck} disabled={check === "checking"}>{t("Rechercher une mise à jour")}</button>
+        </Row>
+      </Section>
+
+      <Section title={t("Données et confidentialité")}>
+        <Row label={t("Confidentialité")} desc={t("Ce que Spec lit, ce qu’il envoie au serveur et ce qu’il garde.")}>
+          <button className="btn btn--secondary" onClick={onPrivacy}>{t("Lire")}</button>
+        </Row>
+        <Row label={t("Journal de Spec")} desc={t("Copie la version et les dernières erreurs pour signaler un problème. Aucun pseudo ni identifiant de compte.")}>
+          <button className="btn btn--secondary" onClick={async () => {
+            try { await navigator.clipboard.writeText(journalText(version)); setCopied(true); window.setTimeout(() => setCopied(false), 2000); } catch { /* presse-papiers indisponible */ }
+          }}>{copied ? t("Copié ✓") : t("Copier le journal")}</button>
+        </Row>
+        <Row label={t("Supprimer mes données")} error={del !== "idle" && del !== "confirm" && del !== "busy" && del !== "done"}
+             desc={del === "done" ? t("C’est fait : ton compte et tes parties ont été supprimés du serveur Spec.")
+               : del === "confirm" ? t("Ton compte lié et toutes tes parties enregistrées seront effacés du serveur. Ton pool et tes réglages restent sur ce PC.")
+               : del !== "idle" && del !== "busy" ? del
+               : registered ? t("Efface du serveur Spec ton compte lié et tes parties. Tu pourras réactiver les stats perso plus tard.")
+               : t("Aucune donnée sur le serveur : les stats perso ne sont pas activées sur ce PC.")}>
+          {del === "confirm" ? (
+            <span className="settings__confirm">
+              <button className="btn btn--secondary" onClick={() => setDel("idle")}>{t("Annuler")}</button>
+              <button className="btn btn--danger" onClick={async () => {
+                if (!account?.puuid) return;
+                setDel("busy");
+                const err = await deleteMyData(account.puuid);
+                setDel(err ?? "done");
+                if (!err) onDeleted();
+              }}>{t("Supprimer")}</button>
+            </span>
+          ) : (
+            <button className="btn btn--danger-ghost" onClick={() => setDel("confirm")} disabled={!registered || !account?.puuid || del === "busy" || del === "done"}>
+              {del === "busy" ? t("Suppression…") : t("Supprimer mes données")}</button>
+          )}
+        </Row>
+        <Row label={t("Mentions légales")} desc={RIOT_LEGAL}>
+          <span />
         </Row>
       </Section>
     </div>

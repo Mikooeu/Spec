@@ -80,3 +80,12 @@ async function fit(w: Win["w"], LogicalSize: Win["LogicalSize"]): Promise<boolea
   await w.setSize(new LogicalSize(Math.min(size.width, aw), Math.min(size.height, ah)));
   return true;
 }
+
+/** Fait clignoter Spec dans la barre des tâches jusqu'à ce que la fenêtre soit ouverte (début de la sélection). */
+export async function requestAttention(): Promise<void> {
+  if (!IN_APP) return;
+  try {
+    const mod = await import("@tauri-apps/api/window");
+    await mod.getCurrentWindow().requestUserAttention(mod.UserAttentionType.Critical);
+  } catch { /* ignoré */ }
+}

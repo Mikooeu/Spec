@@ -152,6 +152,17 @@ export async function register(client: string, riotId: string, invite: string): 
   }
 }
 
+/** Supprime du serveur le compte lié à ce PC et toutes ses parties. Renvoie un message d'erreur, ou null si c'est fait. */
+export async function deleteMyData(client: string): Promise<string | null> {
+  try {
+    const r = await fetch(`${API_URL}/v1/players/${encodeURIComponent(client)}`, { method: "DELETE" });
+    if (r.ok || r.status === 404) return null;   // 404 : déjà supprimé
+    return t("Le serveur n’a pas pu supprimer tes données. Réessaie dans un instant.");
+  } catch {
+    return t("Serveur injoignable. Vérifie ta connexion.");
+  }
+}
+
 /** Champions les plus joués par rôle cette saison (au moins `min` parties dans ce rôle), pour préremplir le pool. */
 export const PREFILL_MIN_GAMES = 25;
 

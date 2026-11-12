@@ -18,6 +18,8 @@ export function useLang(): [Lang, (l: Lang) => void] {
 export const useDefaultRegion = () => usePersistent<Region>("spec.region.default", "euw");
 export const useRoles = () => usePersistent<Roles>("spec.roles", { main: null, second: null });
 export const useOnboarded = () => usePersistent<boolean>("spec.onboarded", false);
+/** Au début de la sélection des champions, si Spec n'est pas au premier plan : clignote dans la barre des tâches. */
+export const useSelectAlert = () => usePersistent<boolean>("spec.alert.select", true);
 
 /** Lancement au démarrage de Windows (fenêtre réduite dans la barre des tâches). null : inconnu ou hors appli. */
 export async function autostartEnabled(): Promise<boolean | null> {

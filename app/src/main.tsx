@@ -8,6 +8,9 @@ import "./styles.css";
 import App from "./App";
 import { LoadingOverlay, StatsOverlay } from "./components/OverlayViews";
 import { currentView } from "./lib/overlay";
+import { installJournal } from "./lib/journal";
+
+installJournal();
 
 // la même appli sert aussi les fenêtres par-dessus le jeu (?view=overlay, ?view=loading)
 const view = currentView();

@@ -18,7 +18,7 @@ import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui"
 import { importRunes, importSpells, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
 import { RuneImportContext, SpellImportContext } from "./components/Runes";
 import { REGION_LABEL, RegionSelect } from "./components/RegionSelect";
-import { applyCompact, setOnTop, watchCompactExpand } from "./lib/window";
+import { applyCompact, requestAttention, setOnTop, watchCompactExpand } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { InGameView, type GameStart } from "./components/InGameScreen";
 import { RecapView } from "./components/RecapView";
@@ -34,7 +34,8 @@ import { localizeChampions } from "./lib/ddragon";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { Onboarding } from "./components/Onboarding";
 import { Tour, specTour } from "./components/Tour";
-import { useDefaultRegion, useOnboarded, useRoles } from "./lib/settings";
+import { PrivacyDialog } from "./components/PrivacyDialog";
+import { useDefaultRegion, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
 import { t } from "./lib/i18n";
 
 type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "overlay" | "settings";
@@ -210,6 +211,13 @@ export default function App() {
   // visite guidée « Bienvenue sur Spec » : une fois après l'accueil (et une fois pour ceux qui avaient déjà Spec)
   const [tourDone, setTourDone] = usePersistent<boolean>("spec.tour.done", false);
   const [tour, setTour] = useState(false);
+  const [privacy, setPrivacy] = useState(false);
+  // début de la sélection : Spec clignote dans la barre des tâches s'il n'est pas au premier plan
+  const [selectAlert] = useSelectAlert();
+  const inSelect = session != null;
+  useEffect(() => {
+    if (inSelect && selectAlert && (document.hidden || !document.hasFocus())) requestAttention();
+  }, [inSelect]); // eslint-disable-line react-hooks/exhaustive-deps
   // fenêtre compacte agrandie à la main (bouton Agrandir de Windows, bord tiré) : on repasse en affichage complet
   const expandedByUser = useRef(false);
   useEffect(() => {
@@ -331,6 +339,7 @@ export default function App() {
           </span>
         </div>
         <p className="sidebar__legal" title={footer}>{stats ? `${t("Patch {v}", { v: patchLabel(stats.meta.patch) })} · ` : ""}{t("Spec n’est pas approuvé par Riot Games.")}</p>
+        <button className="sidebar__privacy" onClick={() => setPrivacy(true)}>{t("Confidentialité")}</button>
       </aside>
 
       <main className="main">
@@ -364,7 +373,8 @@ export default function App() {
           <SettingsScreen account={me} registered={perso.kind === "ready"}
                           compact={compact} onCompact={setCompact} onTop={onTop} onOnTop={setOnTopPref}
                           onCheckUpdate={checkUpdate} onReplayOnboarding={() => { setReplayOnboarding(true); setOnboarding(true); }}
-                          onReplayTour={() => { setScreen("draft"); setTour(true); }} />
+                          onReplayTour={() => { setScreen("draft"); setTour(true); }}
+                          onPrivacy={() => setPrivacy(true)} onDeleted={refreshPerso} />
         )}
         {stats && screen === "draft" && live && (
           <DraftScreen stats={stats} draft={live} pool={pools[live.role]} wide={wide} live
@@ -395,6 +405,7 @@ export default function App() {
                        onChange={setDraft} onEnd={() => setDraft(null)} perso={perso} />
         )}
       </main>
+      {privacy && <PrivacyDialog onClose={() => setPrivacy(false)} />}
       {tour && stats && (
         <Tour steps={specTour()} onClose={() => { setTour(false); setTourDone(true); }}
               onDemo={draft ? undefined : () => { setScreen("draft"); setDraft(demoDraft(stats)); }} />

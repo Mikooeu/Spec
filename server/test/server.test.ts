@@ -436,3 +436,19 @@ test("runes de la partie en cours : inscrits seulement, spectator sur la platefo
   assert.deepEqual(JSON.parse(text), { runes: [[103, 100, 8112, 8200], [122, 200, 8010, 8400]] });
   assert.ok(!text.includes(P1) && !text.includes("MIKO"));
 });
+
+test("suppression par le joueur : tout part, seul l'appareil lié peut la demander", async () => {
+  const e = env();
+  assert.equal((await reg(e, C1, "MIKO#KCORP", "K7Q2-M9XD")).status, 201);
+  assert.equal((await reg(e, C2, "Heavenly Sword#2822", "K7Q2-M9XD")).status, 201);
+  assert.equal((await call(e, "DELETE", "/v1/players/court")).status, 400);
+  assert.equal((await call(e, "DELETE", "/v1/players/" + "1a1b2c3d-1111-5222-9333-444455556666")).status, 404);
+  assert.equal((await call(e, "DELETE", "/v1/players/" + C1)).status, 200);
+  assert.equal((await call(e, "GET", "/v1/players/" + C1)).status, 404);
+  const db = (e.DB as unknown as { raw: DatabaseSync }).raw;
+  assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM players WHERE puuid = ?`).get(P1) as { n: number }).n, 0);
+  assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM devices WHERE puuid = ?`).get(P1) as { n: number }).n, 0);
+  // l'autre joueur n'est pas touché, et le compte supprimé peut se réinscrire
+  assert.equal((await call(e, "GET", "/v1/players/" + C2)).status, 200);
+  assert.equal((await reg(e, C1, "MIKO#KCORP", "K7Q2-M9XD")).status, 201);
+});
