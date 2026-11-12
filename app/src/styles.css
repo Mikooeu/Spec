@@ -1852,3 +1852,51 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
   .skeleton span { background-image: none; animation: spec-pulse 1.4s ease-in-out infinite; }
   .btn:active, .icon-btn:active, .nav:active, .segmented button:active, .reco__line:active, .tier-row--link:active, .game:active, .pool2-tile:active { transform: none; }
 }
+
+/* Notes de matchup (0.14.13) */
+.mnote { display: flex; flex-direction: column; gap: 0.375rem; padding: 0.625rem 0.875rem 0.75rem; border-radius: 12px;
+  background: rgba(64, 156, 255, 0.08); border: 1px solid rgba(64, 156, 255, 0.25); cursor: default; }
+.mnote__head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.mnote__label { font-size: 0.6875rem; font-weight: 600; color: var(--accent); }
+.mnote__text { font-size: 0.8125rem; line-height: 1.5; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.mnote__add { align-self: flex-start; font-size: 0.75rem; }
+.mnote--compact { padding: 0.5rem 0.75rem 0.625rem; }
+.mnote-dialog { width: min(30rem, 100%); display: flex; flex-direction: column; gap: 0.875rem; padding: 1.375rem 1.5rem 1.25rem; }
+.mnote-dialog h2 { font-size: 1.125rem; font-weight: 700; }
+.mnote-dialog__area { width: 100%; resize: vertical; min-height: 7rem; padding: 0.75rem 0.875rem; border-radius: 10px; font: inherit; font-size: 0.875rem; line-height: 1.5;
+  color: var(--text); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); }
+.mnote-dialog__area:focus { outline: none; border-color: var(--accent); }
+.mnote-dialog__meta { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.75rem; color: var(--text-3); }
+.mnote-dialog__actions, .goals-dialog__actions { display: flex; align-items: center; gap: 0.625rem; }
+.mnote-dialog__actions .tone-bad { color: #ff453b; }
+
+/* Objectifs de la semaine (0.14.13) */
+.week-goals { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.875rem; padding-top: 0.875rem; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.week-goals__head { display: flex; align-items: center; justify-content: space-between; }
+.week-goals__head h3 { font-size: 0.8125rem; font-weight: 600; }
+.week-goals__foot { font-size: 0.6875rem; color: var(--text-3); }
+.goal-list { list-style: none; display: flex; flex-direction: column; gap: 0.75rem; }
+.goal { display: flex; flex-direction: column; gap: 0.375rem; }
+.goal__top { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.75rem; color: var(--text-2); }
+.goal__value { font-weight: 600; white-space: nowrap; }
+.goal__value--run { color: var(--accent); } .goal__value--good { color: #30d159; } .goal__value--bad { color: #ff453b; }
+.goal__track { display: block; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.goal__fill { display: block; height: 100%; border-radius: 2px; transition: width 0.3s ease; }
+.goal__fill--run { background: var(--accent); } .goal__fill--good { background: #30d159; } .goal__fill--bad { background: #ff453b; }
+.goals-dialog { width: min(32rem, 100%); display: flex; flex-direction: column; gap: 0.875rem; padding: 1.375rem 1.5rem 1.25rem; }
+.goals-dialog__head { display: flex; align-items: center; justify-content: space-between; }
+.goals-dialog__head h2 { font-size: 1.125rem; font-weight: 700; }
+.goals-dialog__count { font-size: 0.75rem; font-weight: 600; color: var(--accent); }
+.goals-dialog__list { list-style: none; display: flex; flex-direction: column; gap: 0.375rem; }
+.goals-opt { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; }
+.goals-opt--on { background: rgba(64, 156, 255, 0.08); border-color: rgba(64, 156, 255, 0.3); }
+.goals-opt--full { opacity: 0.55; }
+.goals-opt__check { flex: 1; display: flex; align-items: center; gap: 0.75rem; font-size: 0.875rem; cursor: pointer; color: var(--text-2); }
+.goals-opt--on .goals-opt__check { color: var(--text); font-weight: 500; }
+.goals-opt__check input { width: 1rem; height: 1rem; accent-color: var(--accent-strong); }
+.goals-opt__target { display: flex; align-items: center; gap: 0.25rem; padding: 0.125rem; border-radius: 8px; background: rgba(255, 255, 255, 0.06); }
+.goals-opt__target--off { opacity: 0.45; }
+.goals-opt__target strong { min-width: 3.25rem; text-align: center; font-size: 0.8125rem; font-weight: 600; }
+.goals-opt__target button { width: 1.75rem; height: 1.75rem; border: 0; border-radius: 6px; background: none; color: var(--text-2); font: inherit; font-size: 0.9375rem; cursor: pointer; }
+.goals-opt__target button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.goals-opt__target button:disabled { cursor: default; }

@@ -7,6 +7,7 @@ import { loadRecap } from "../lib/recap";
 import { ROLE_LABELS, tierList, type Stats } from "../lib/score";
 import { champName, patchLabel, pct } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
+import { WeekGoals } from "./Goals";
 
 interface Props {
   stats: Stats;
@@ -40,7 +41,7 @@ export function HomeScreen({ stats, clientOn, clientText, me, pools, mainRole, v
   useEffect(() => {
     if (!clientOn) { setGames(null); return; }
     let alive = true;
-    loadHistory(20).then((g) => alive && setGames(g)).catch(() => alive && setGames([]));
+    loadHistory(50).then((g) => alive && setGames(g)).catch(() => alive && setGames([]));
     return () => { alive = false; };
   }, [clientOn, version]);
 
@@ -168,6 +169,7 @@ export function HomeScreen({ stats, clientOn, clientText, me, pools, mainRole, v
               <div><small>{t("Parties")}</small><strong>{week.length}</strong></div>
             </div>
           )}
+          {clientOn && games != null && <WeekGoals stats={stats} games={games} defaultChamp={pool[0] ?? null} />}
         </section>
       </div>
     </div>

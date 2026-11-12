@@ -13,6 +13,7 @@ import { Segmented } from "./Segmented";
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 const signed = (x: number) => (x > 0 ? `+${int(x)}` : x < 0 ? `−${int(-x)}` : "0");
 
+import { RecapGoals } from "./Goals";
 interface Props {
   stats: Stats;
   game: Game;
@@ -120,6 +121,7 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
           </ul>
         </section>
       )}
+      <RecapGoals stats={stats} game={game} />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { SITUATION_LABEL } from "./Adaptations";
 import { ChampionIcon } from "./ChampionIcon";
 import { groupIcons, ItemIcon, mergeStarts, SkillGrid } from "./ChampionScreen";
 
+import { MatchupNote } from "./MatchupNote";
 interface Props {
   stats: Stats;
   champ: number;
@@ -74,6 +75,7 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
         </div>
         <span className="ingame__pill"><span className="dot" /><GameClock game={game} /></span>
       </header>
+      {opponent != null && <MatchupNote stats={stats} champ={champ} enemy={opponent} compact={compact} />}
 
       <Card title={t("Ordre des sorts")}
             sub={page?.skills ? t("Priorité {replace} · {share} des parties", { replace: page.skills[1].replace(/ > /g, " › "), share: page.tg ? pct(page.skills[2] / page.tg) : "—" }) : undefined}>
