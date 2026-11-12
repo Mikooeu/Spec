@@ -332,7 +332,7 @@ function Tile({ label, value, detail, tone }: { label: string; value: string; de
 
 export type RecoItem = { res: Result; kind: "pool" | "discovery" };
 
-/** Recommandations de la draft : ton pool d’abord, puis 4 découvertes (ou le top du rôle en autofill). */
+/** Recommandations de la draft : ton pool d’abord, complété par des découvertes jusqu’à 6 picks (ou le top du rôle en autofill). */
 export function useRecos(stats: Stats, draft: Draft, pool: number[]) {
   return useMemo(() => {
     const allies = draft.allies.filter((c, i): c is number => c != null && i !== draft.role);

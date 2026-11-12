@@ -1139,15 +1139,15 @@ button.dcard:hover { box-shadow: inset 0 0 0 1px var(--separator); }
 /* fenêtres par-dessus le jeu : transparentes, tout en vh / vw pour suivre la résolution */
 html.is-overlay, html.is-overlay body, html.is-overlay #root { background: transparent !important; overflow: hidden; }
 /* écran de chargement par-dessus celui du jeu : fond transparent, nos cartes posées sur les siennes.
-   Repère 2560 × 1440, mesuré sur le patch 16.22 : cartes de 339 × 614 à x = 315 + 395 × colonne, y = 91 et 790,
-   mis à l'échelle et centré. */
+   Repère 2560 × 1440, mesuré sur le patch 16.22 : cartes du jeu de 339 × 614 à x = 315 + 395 × colonne, y = 91 et 790.
+   Les nôtres débordent de 10 px de chaque côté pour recouvrir tout le cadre doré. Mis à l'échelle et centré. */
 .ov-loading { position: fixed; inset: 0; overflow: hidden; }
 .ov-loading__stage { position: absolute; left: 50%; top: 50%; width: 2560px; height: 1440px;
                      transform: translate(-50%, -50%) scale(var(--s)); transform-origin: center; }
-.lcards--full { --cw: 339px; position: absolute; left: 315px; top: 91px; gap: 0; }
-.lcards--full .lcards__row { grid-template-columns: repeat(5, 339px); gap: 56px; }
-.lcards--full .lcards__duels { grid-template-columns: repeat(5, 339px); gap: 56px; height: 85px; align-items: center; }
-.lcards--full .lcard { aspect-ratio: auto; height: 614px; border-radius: 2px; }
+.lcards--full { --cw: 359px; position: absolute; left: 305px; top: 81px; gap: 0; }
+.lcards--full .lcards__row { grid-template-columns: repeat(5, 359px); gap: 36px; }
+.lcards--full .lcards__duels { grid-template-columns: repeat(5, 359px); gap: 36px; height: 65px; align-items: center; }
+.lcards--full .lcard { aspect-ratio: auto; height: 634px; border-radius: 4px; }
 .lcards--full .lduel svg { width: 40px; height: 40px; }
 .lcards--full .lcard__name { font-size: 2em; }
 .lcards--full .lcard { box-shadow: 0 6px 24px rgba(0,0,0,.45); }

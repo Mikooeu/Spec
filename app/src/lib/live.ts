@@ -22,7 +22,7 @@ export interface LiveGame {
 }
 
 const POLL_MS = 3000;   // assez pour suivre niveau, or et achats sans charger le PC pendant la partie
-const START_POLL_MS = 500;   // écran de chargement : on guette le début du chrono pour fermer l'overlay aussitôt
+const START_POLL_MS = 250;   // écran de chargement : on guette le début du chrono pour fermer l'overlay aussitôt
 /** Le chrono de la partie tourne (pendant le chargement, l'API du jeu peut déjà répondre avec 0). */
 export const STARTED_AT = 0.2;
 export const POSITION_ROLE: Record<string, number> = { TOP: 0, JUNGLE: 1, MIDDLE: 2, BOTTOM: 3, UTILITY: 4 };

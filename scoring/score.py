@@ -226,7 +226,7 @@ def lane_opponent_known(stats: Stats, role: str, enemies: list[int]) -> bool:
     return any(stats.role_probability(e, role) >= 0.5 for e in enemies)
 
 
-CONTEXT_WEIGHT = 0.5       # classement : l’effet de la draft compte une fois et demie (le score affiché reste calibré)
+CONTEXT_WEIGHT = 0.75      # classement : l’effet de la draft compte 1,75 fois (le score affiché reste calibré)
 DISCOVERY_MIN_BASE = 0.5   # découverte : champion fort ce patch obligatoire
 
 

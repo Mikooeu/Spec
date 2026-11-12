@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { loadItems, useInfo, type InfoMap } from "../lib/ddragon";
 import { t } from "../lib/i18n";
-import { useLiveGame, type LiveGame } from "../lib/live";
+import { STARTED_AT, useLiveGame, type LiveGame } from "../lib/live";
 import { useSavedLoading } from "../lib/loading";
 import { OVERLAY_STATS, readOverlay, setOverlayInteractive, useOverlaySettings, type OverlayStat } from "../lib/overlay";
 import { dec1, int, pctN } from "../lib/ui";
@@ -23,7 +23,10 @@ export function LoadingOverlay() {
   const data = useSavedLoading();
   const [settings] = useOverlaySettings();
   const scale = useGameScale();
-  if (!data || !settings.loading) return null;
+  // la fenêtre guette elle-même le début de la partie : elle s'efface dès que le chrono tourne,
+  // sans attendre que l'appli lui demande de se fermer
+  const game = useLiveGame(true, true);
+  if (!data || !settings.loading || (game && game.time > STARTED_AT)) return null;
   // Le jeu dessine ses cartes dans une zone 16:9 mise à l'échelle et centrée : on pose les nôtres pile dessus.
   return (
     <div className="ov-loading" style={{ ["--s" as string]: String(scale) }}>

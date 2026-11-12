@@ -17,9 +17,11 @@ export const DISCOVERY_MIN_GAMES = 200;
 export const DISCOVERY_MIN_PICKRATE = 0.03;
 /** Découvertes : champion fort ce patch obligatoire (winrate de base lissé d'au moins 50 %). */
 export const DISCOVERY_MIN_BASE = 0.5;
-/** Classement : l'effet de la draft (vis-à-vis, counters, synergies, composition) compte une fois et demie ;
+/** Classement : l'effet de la draft (vis-à-vis, counters, synergies, composition) compte 1,75 fois ;
  *  la force du champion ce patch reste la base. Le % affiché reste l'estimation calibrée. */
-export const CONTEXT_WEIGHT = 0.5;
+export const CONTEXT_WEIGHT = 0.75;
+/** Picks proposés en tout : ton pool (3 au plus), complété par des découvertes. */
+export const RECO_TOTAL = 6;
 /** Botlane : partenaire de lane (ADC ↔ support). */
 const BOT_PARTNER: Record<number, number> = { 3: 4, 4: 3 };
 const BOT_SYNERGY_BOOST = 1;   // synergie avec ton partenaire de lane : ×2
@@ -385,7 +387,7 @@ export function rankValue(stats: Stats, r: Result, blind: boolean): number {
 
 export function recommend(
   stats: Stats, role: number, pool: number[], allies: number[], enemies: number[],
-  bans: number[] = [], top = 3, discoveries = 4,
+  bans: number[] = [], top = 3, total = RECO_TOTAL,
 ): { pool: Result[]; discoveries: Result[]; blind: boolean } {
   const blind = isBlind(stats, role, enemies);
   const rank = (a: Result, b: Result) => rankValue(stats, b, blind) - rankValue(stats, a, blind);
@@ -405,7 +407,9 @@ export function recommend(
     if (r.base >= DISCOVERY_MIN_BASE) others.push(r);
   }
   others.sort(rank);
-  return { pool: poolResults.slice(0, top), discoveries: others.slice(0, discoveries), blind };
+  const mine = poolResults.slice(0, top);
+  // toujours `total` picks : 1 de ton pool → 5 découvertes, 2 → 4, 3 → 3
+  return { pool: mine, discoveries: others.slice(0, Math.max(0, total - mine.length)), blind };
 }
 
 /** Pick rate dans ce rôle d'au moins 3 % (sans données de parties, on ne filtre pas). */
