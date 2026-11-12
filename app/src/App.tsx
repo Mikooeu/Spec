@@ -16,7 +16,9 @@ import { recordPick } from "./lib/impact";
 import { loadStats, register, usePersonal, useRegionStats, type Region } from "./lib/api";
 import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
 import { importRunes, importSpells, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
-import { RuneImportContext, SpellImportContext } from "./components/Runes";
+import { ItemSetImportContext, RuneImportContext, SpellImportContext } from "./components/Runes";
+import { importItemSet, useItemSetSetting } from "./lib/itemset";
+import { loadItems, useInfo } from "./lib/ddragon";
 import { REGION_LABEL, RegionSelect } from "./components/RegionSelect";
 import { applyCompact, requestAttention, setOnTop, watchCompactExpand } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
@@ -90,6 +92,19 @@ export default function App() {
   const session = client.status === "champselect" ? client.session : null;
   useEffect(() => { if (!session) setRoleOverride(null); }, [session == null]); // eslint-disable-line react-hooks/exhaustive-deps
   const live = session ? sessionToDraft(session, roleOverride) : null;
+  // set d'objets du shop : remis à jour quand la draft se termine (ton champion et les 5 adversaires verrouillés)
+  const [itemSetOn] = useItemSetSetting();
+  const itemInfo = useInfo(loadItems, stats?.ddragon ?? "");
+  const itemSetDone = useRef("");
+  const draftEnd = live && live.myLocked && live.myChamp && live.enemies.every((e) => e != null) && live.enemies.length === 5
+    ? `${live.myChamp}|${live.role}|${live.enemies.join(",")}` : "";
+  useEffect(() => {
+    if (!draftEnd || !itemSetOn || !stats || !itemInfo || itemSetDone.current === draftEnd) return;
+    itemSetDone.current = draftEnd;
+    const [champ, role, foes] = draftEnd.split("|");
+    importItemSet(stats, Number(champ), Number(role), foes.split(",").map(Number), itemInfo)
+      .then((err) => { if (err) console.warn("[item set]", err); });
+  }, [draftEnd, itemSetOn, stats, itemInfo]);
   const [roles, setRoles] = useRoles();
   const [tierRole, setTierRole] = useState(roles.main ?? 0);
   // région des stats de la tier list et des pages champion : celle des réglages à chaque lancement (la draft reste en EUW)
@@ -266,6 +281,9 @@ export default function App() {
 
   const runeImporter = live ? importRunes : null;
   const spellImporter = live ? importSpells : null;
+  const itemSetImporter = live && itemSetOn && stats
+    ? (champ: number, role: number) => importItemSet(stats, champ, role, live.enemies.filter((e): e is number => e != null), itemInfo)
+    : null;
 
   if (onboarding && stats) {
     return (
@@ -286,6 +304,7 @@ export default function App() {
     return (
       <RuneImportContext.Provider value={runeImporter}>
       <SpellImportContext.Provider value={spellImporter}>
+      <ItemSetImportContext.Provider value={itemSetImporter}>
       <CompactScreen stats={stats} draft={current} pool={current ? pools[current.role] : []} live={!!live}
                      onTop={onTop} clientOn={clientOn} clientText={clientText}
                      onRole={(r) => (live ? setRoleOverride(r) : draft && setDraft({ ...draft, role: r }))}
@@ -294,6 +313,7 @@ export default function App() {
                      onDemoPick={(c) => draft && setDraft({ ...draft, myChamp: c, myLocked: false })}
                      onPreselect={live ? doPreselect : undefined} onBan={live ? doBan : undefined} perso={perso} game={game}
                      onPool={onPool} />
+      </ItemSetImportContext.Provider>
       </SpellImportContext.Provider>
       </RuneImportContext.Provider>
     );
@@ -302,6 +322,7 @@ export default function App() {
   return (
     <RuneImportContext.Provider value={runeImporter}>
     <SpellImportContext.Provider value={spellImporter}>
+    <ItemSetImportContext.Provider value={itemSetImporter}>
     <div className="window">
       <aside className="sidebar">
         <div className="brand">
@@ -411,6 +432,7 @@ export default function App() {
               onDemo={draft ? undefined : () => { setScreen("draft"); setDraft(demoDraft(stats)); }} />
       )}
     </div>
+    </ItemSetImportContext.Provider>
     </SpellImportContext.Provider>
     </RuneImportContext.Provider>
   );

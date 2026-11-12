@@ -14,6 +14,8 @@ export type RuneData = Map<number, RuneInfo>;
 const CDN = "https://ddragon.leagueoflegends.com/cdn";
 
 /** Import dans le client : fourni en direct, absent en démo. Renvoie un message d'erreur, ou null. */
+/** Écrit le set d'objets du champion dans le client (null : réglage coupé ou hors draft en direct). */
+export const ItemSetImportContext = createContext<((champ: number, role: number) => Promise<string | null>) | null>(null);
 export const RuneImportContext = createContext<((page: Page, champion: string) => Promise<string | null>) | null>(null);
 /** Import des sorts d'invocateur (D puis F) : fourni en direct pendant la draft, absent sinon. */
 export const SpellImportContext = createContext<((spell1: number, spell2: number) => Promise<string | null>) | null>(null);
@@ -102,15 +104,16 @@ export function RunePage({ stats, champ, role, laner }: { stats: Stats; champ: n
       : <p className="runes__empty">{t("Pas encore assez de parties pour conseiller des runes.")}</p>;
   }
   const { page, vs } = found;
-  return <RunePageView stats={stats} champ={champ} page={page} vs={vs} data={data}
+  return <RunePageView stats={stats} champ={champ} role={role} page={page} vs={vs} data={data}
                        spells={spellsFor(stats, champ, role, laner)} />;
 }
 
-function RunePageView({ stats, champ, page, vs, data, spells }:
-  { stats: Stats; champ: number; page: Page; vs: number | null; data: RuneData | null;
+function RunePageView({ stats, champ, role, page, vs, data, spells }:
+  { stats: Stats; champ: number; role: number; page: Page; vs: number | null; data: RuneData | null;
     spells: { spells: [number, number]; vs: number | null } | null }) {
   const importer = useContext(RuneImportContext);
   const spellImporter = useContext(SpellImportContext);
+  const itemImporter = useContext(ItemSetImportContext);
   const spellInfo = useInfo(loadSpells, stats.ddragon);
   const [flashKey, setFlashKey] = useFlashKey();
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
@@ -125,10 +128,13 @@ function RunePageView({ stats, champ, page, vs, data, spells }:
     const name = champName(stats, champ);
     const error = await importer(page, name);
     const spellError = !error && ordered && spellImporter ? await spellImporter(ordered[0], ordered[1]) : null;
+    const itemError = !error && itemImporter ? await itemImporter(champ, role) : null;
     setBusy(false);
     setStatus(error ? { ok: false, text: error }
       : spellError ? { ok: false, text: t("Runes importées, mais pas les sorts : {spellError}", { spellError: spellError }) }
-      : { ok: true, text: t("Runes importées dans ta page « Spec : {name} runes »{v}.", { name: name, v: ordered && spellImporter ? t(", sorts choisis") : "" }) });
+      : itemError ? { ok: false, text: t("Runes et sorts importés, mais pas le set d’objets : {itemError}", { itemError }) }
+      : { ok: true, text: t("Runes importées dans ta page « Spec : {name} runes »{v}{w}.", { name: name,
+          v: ordered && spellImporter ? t(", sorts choisis") : "", w: itemImporter ? t(", set d’objets dans ton shop") : "" }) });
   };
   const wr = page.games ? pct(page.wins / page.games) : "";
   return (
@@ -144,7 +150,7 @@ function RunePageView({ stats, champ, page, vs, data, spells }:
         <span className="runes__sep" />
         {page.shards.map((r, i) => <Rune key={`f${i}`} data={data} id={r} size="shard" />)}
         <button className="btn btn--secondary btn--tiny runes__import" onClick={run} disabled={busy}>
-          {busy ? "Import…" : ordered ? t("Importer runes et sorts") : t("Importer dans le client")}
+          {busy ? "Import…" : ordered ? (itemImporter ? t("Importer runes, sorts et objets") : t("Importer runes et sorts")) : t("Importer dans le client")}
         </button>
       </div>
       {ordered && (

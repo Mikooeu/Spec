@@ -5,6 +5,7 @@ import { RIOT_LEGAL } from "./PrivacyDialog";
 import type { Account } from "../lib/lcu";
 import { useFlashKey } from "./Runes";
 import { Segmented } from "./Segmented";
+import { useItemSetSetting } from "../lib/itemset";
 import { appVersion, autostartEnabled, installPath, revealInstall, setAutostart, useDefaultRegion, useLang, useSelectAlert } from "../lib/settings";
 import type { CheckResult } from "../lib/updater";
 import { t } from "../lib/i18n";
@@ -25,6 +26,7 @@ interface Props {
 /** Réglages : langue, démarrage, mode compact, touche du Flash, région par défaut, compte, dossier, version. */
 export function SettingsScreen({ account, registered, compact, onCompact, onTop, onOnTop, onCheckUpdate, onReplayOnboarding, onReplayTour, onPrivacy, onDeleted }: Props) {
   const [selectAlert, setSelectAlert] = useSelectAlert();
+  const [itemSet, setItemSet] = useItemSetSetting();
   const [copied, setCopied] = useState(false);
   const [del, setDel] = useState<"idle" | "confirm" | "busy" | "done" | string>("idle");
   const [lang, setLang] = useLang();
@@ -85,6 +87,10 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
         <Row label={t("Alerte au début de la sélection")}
              desc={t("Si Spec est réduit ou derrière le client, il clignote dans la barre des tâches quand la sélection des champions commence.")}>
           <Toggle on={selectAlert} onChange={() => setSelectAlert(!selectAlert)} label={t("Alerte au début de la sélection")} />
+        </Row>
+        <Row label={t("Set d’objets dans le shop")}
+             desc={t("Spec crée un set à son nom et le met à jour à la fin de la draft. Tes propres sets ne sont jamais modifiés.")}>
+          <Toggle on={itemSet} onChange={() => setItemSet(!itemSet)} label={t("Set d’objets dans le shop")} />
         </Row>
         <Row label={t("Région des stats par défaut")}
              desc={t("Région affichée à l’ouverture de la tier list et des pages champion. La draft utilise toujours les stats EUW.")}>

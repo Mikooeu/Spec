@@ -445,9 +445,62 @@ impl Lcu {
             Err(format!("http_{}", resp.status().as_u16()))
         }
     }
+
+    /// Set d'objets « Spec · Ahri Mid » du shop : remplace le set de Spec (reconnu à son uid), garde tous les autres.
+    pub async fn set_item_set(&self, champion: u32, title: &str, blocks: &[ItemBlock]) -> Result<(), String> {
+        let ours = item_set_body(champion, title, blocks)?; // validation avant tout appel
+        let me: Value = self.raw(reqwest::Method::GET, "/lol-summoner/v1/current-summoner", None).await?
+            .json().await.map_err(|_| "bad_json".to_string())?;
+        let id = me["summonerId"].as_u64().ok_or("no_summoner")?;
+        let path = format!("/lol-item-sets/v1/item-sets/{id}/sets");
+        let current: Value = self.raw(reqwest::Method::GET, &path, None).await?.json().await.map_err(|_| "bad_json".to_string())?;
+        let body = merge_item_sets(&current, ours);
+        self.raw(reqwest::Method::PUT, &path, Some(&body)).await.map(|_| ())
+    }
 }
 
 pub const RUNE_PAGE_NAME: &str = "Spec";
+
+/// Bloc d'un set d'objets : titre (« Départ », « Build »…) et objets dans l'ordre.
+#[derive(serde::Deserialize, Clone, Debug)]
+pub struct ItemBlock { pub title: String, pub items: Vec<u32> }
+
+/// Début de l'uid des sets créés par Spec : seuls ces sets-là sont remplacés, jamais ceux du joueur.
+pub const ITEM_SET_UID: &str = "5bec0000-5bec-4000-8000-";
+
+/// Corps du set d'objets : un champion, la Faille, 6 blocs au plus, 12 objets par bloc, identifiants vérifiés.
+pub fn item_set_body(champion: u32, title: &str, blocks: &[ItemBlock]) -> Result<Value, String> {
+    let item_ok = |i: u32| (1000..=999_999).contains(&i);
+    if !(1..=9999).contains(&champion) || blocks.is_empty() || blocks.len() > 6
+        || blocks.iter().any(|b| b.items.is_empty() || b.items.len() > 12 || !b.items.iter().all(|&i| item_ok(i))) {
+        return Err("bad_item_set".into());
+    }
+    let clean = |s: &str, n: usize| -> String { s.chars().filter(|c| !c.is_control()).take(n).collect::<String>().trim().to_string() };
+    let title = clean(title, 60);
+    Ok(json!({
+        "uid": format!("{ITEM_SET_UID}{champion:012}"),
+        "title": if title.is_empty() { RUNE_PAGE_NAME.to_string() } else { title },
+        "type": "custom", "map": "any", "mode": "any", "sortrank": 0, "startedFrom": "blank",
+        "associatedChampions": [champion], "associatedMaps": [11], "preferredItemSlots": [],
+        "blocks": blocks.iter().map(|b| json!({
+            "type": clean(&b.title, 40),
+            "items": b.items.iter().map(|i| json!({ "id": i.to_string(), "count": 1 })).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+    }))
+}
+
+/// Liste envoyée au client : les sets du joueur tels quels, sans les anciens sets de Spec, plus le nouveau.
+pub fn merge_item_sets(current: &Value, ours: Value) -> Value {
+    let mut sets: Vec<Value> = current["itemSets"].as_array().cloned().unwrap_or_default().into_iter()
+        .filter(|s| !s["uid"].as_str().is_some_and(|u| u.starts_with(ITEM_SET_UID)))
+        .collect();
+    sets.push(ours);
+    let mut out = current.clone();
+    if !out.is_object() { out = json!({}); }
+    out["itemSets"] = Value::Array(sets);
+    out
+}
+
 
 /// Noms à essayer, du plus complet au plus court : « Spec : Ahri runes », « Spec : Ahri », « Spec ».
 /// Le nom du champion est nettoyé (lettres, espaces, apostrophes, « & » et « . » seulement).
@@ -505,6 +558,33 @@ pub fn preselect_body(champion_id: u32) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn item_set_keeps_the_players_own_sets() {
+        let blocks = vec![ItemBlock { title: "Départ".into(), items: vec![1056, 2003] }, ItemBlock { title: "Build".into(), items: vec![6655, 3020, 3089] }];
+        let ours = item_set_body(103, "Spec · Ahri Mid", &blocks).unwrap();
+        assert_eq!(ours["associatedChampions"], json!([103]));
+        assert_eq!(ours["blocks"][1]["items"][1], json!({ "id": "3020", "count": 1 }));
+        let current = json!({ "accountId": 42, "timestamp": 1, "itemSets": [
+            { "uid": "mine-1", "title": "Mon set" },
+            { "uid": format!("{ITEM_SET_UID}{:012}", 157), "title": "Spec · Yasuo Mid" },
+        ] });
+        let out = merge_item_sets(&current, ours);
+        let sets = out["itemSets"].as_array().unwrap();
+        assert_eq!(sets.len(), 2);
+        assert_eq!(sets[0]["uid"], "mine-1");
+        assert_eq!(sets[1]["title"], "Spec · Ahri Mid");
+        assert_eq!(out["accountId"], 42);
+    }
+
+    #[test]
+    fn item_set_rejects_bad_input() {
+        let ok = vec![ItemBlock { title: "Build".into(), items: vec![6655] }];
+        assert!(item_set_body(0, "x", &ok).is_err());
+        assert!(item_set_body(103, "x", &[]).is_err());
+        assert!(item_set_body(103, "x", &[ItemBlock { title: "B".into(), items: vec![12] }]).is_err());
+        assert!(item_set_body(103, "x", &vec![ok[0].clone(); 7]).is_err());
+    }
 
     #[test]
     fn lockfile_ok() {

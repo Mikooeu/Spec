@@ -24,7 +24,7 @@ const TRINKETS = new Set([3340, 3363, 3364]);
 const VS_MIN_GAMES = 30;   // sorts d'invocateur propres au vis-à-vis à partir de ce nombre de parties
 const MAX_ADAPT = 3;
 
-interface Step { id: number; state: "done" | "next" | "later" }
+export interface Step { id: number; state: "done" | "next" | "later" }
 
 /** Ce que la draft a laissé : ton champion verrouillé, ton rôle et les adversaires (vide si Spec a été ouvert en pleine partie). */
 export interface GameStart { champ: number | null; role: number | null; enemies: number[] }
@@ -197,7 +197,7 @@ function Start({ page, items, spells, opponent, compact }: { page: ChampPage | n
 /** Chemin d'objets du meilleur build complet, avec ce que tu as déjà acheté. */
 /** Build dans l'ordre d'achat, bottes comprises : elles se placent après le nombre d'objets finis
  *  le plus fréquent en Master+ (`bootsAt`). Sans cette donnée, elles restent dans leur carte. */
-function buildSteps(page: ChampPage | null, owned: number[], bootId: number | null, ownsBoots: boolean): Step[] {
+export function buildSteps(page: ChampPage | null, owned: number[], bootId: number | null, ownsBoots: boolean): Step[] {
   let seq = page?.builds[0]?.[0];
   if (!seq?.length && page?.items.length) {
     // pas encore de build complet : l'objet le plus acheté à chaque rang, sans doublon
@@ -222,7 +222,7 @@ function buildSteps(page: ChampPage | null, owned: number[], bootId: number | nu
 }
 
 /** Bottes les plus jouées et, s'il y en a, l'alternative que les joueurs Master+ prennent face à ce type d'équipe. */
-function bootChoice(stats: Stats, page: ChampPage | null, champ: number, role: number, foes: number[], items: InfoMap | null) {
+export function bootChoice(stats: Stats, page: ChampPage | null, champ: number, role: number, foes: number[], items: InfoMap | null) {
   if (!page?.boots.length) return null;
   const main = page.boots[0][0];
   for (const a of adaptationsFor(stats, champ, role, foes)) {
@@ -233,10 +233,10 @@ function bootChoice(stats: Stats, page: ChampPage | null, champ: number, role: n
   return { main, alt: second ? { id: second[0], why: t("Pris dans {v} des parties", { v: pct(second[1] / page.g) }) } : null };
 }
 
-interface Adapt { id: number; situation: Situation; rin: number; rout: number; champs: number[]; at: number | null }
+export interface Adapt { id: number; situation: Situation; rin: number; rout: number; champs: number[]; at: number | null }
 
 /** Objets à adapter face à l'équipe adverse (sans les bottes, déjà dans leur carte), les plus nets d'abord. */
-function adaptItems(stats: Stats, champ: number, role: number, foes: number[], items: InfoMap | null, steps: Step[], owned: number[]): Adapt[] {
+export function adaptItems(stats: Stats, champ: number, role: number, foes: number[], items: InfoMap | null, steps: Step[], owned: number[]): Adapt[] {
   const out: Adapt[] = [];
   const nextAt = steps.findIndex((s) => s.state === "next");
   for (const a of adaptationsFor(stats, champ, role, foes)) {

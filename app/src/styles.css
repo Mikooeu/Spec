@@ -306,6 +306,7 @@ h3 { font-size: 0.9375rem; font-weight: 600; }
 .btn--tiny { padding: 0.25rem 0.625rem; font-size: 0.75rem; border-radius: 0.5rem; }
 .runes__import { margin-left: 0.5rem; }  /* reste collé aux runes : ne bouge plus quand le message d’import apparaît */
 .runes__status { font-size: 0.75rem; color: var(--good); }
+.runes__status.tone-bad { color: var(--bad); }
 .compact .runes__import { margin-left: 0; }
 /* barre latérale 0.2 : bouton mode compact à côté du logo */
 .brand { padding-right: 0; }

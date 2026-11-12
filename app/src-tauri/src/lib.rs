@@ -117,6 +117,12 @@ async fn lcu_set_spells(state: tauri::State<'_, Lcu>, spell1: u32, spell2: u32) 
     state.set_spells(spell1, spell2).await
 }
 
+/// Set d'objets de Spec dans le shop (remplace seulement le set de Spec, jamais ceux du joueur).
+#[tauri::command]
+async fn lcu_set_item_set(state: tauri::State<'_, Lcu>, champion: u32, title: String, blocks: Vec<lcu::ItemBlock>) -> Result<(), String> {
+    state.set_item_set(champion, &title, &blocks).await
+}
+
 /// Chemin de Spec.exe sur ce PC (affiché dans les réglages, « Ouvrir le dossier »).
 #[tauri::command]
 fn install_path() -> Result<String, String> {
@@ -146,7 +152,7 @@ pub fn run() {
         .manage(Lcu::new())
         .invoke_handler(tauri::generate_handler![
             lcu_get, lcu_preselect, lcu_set_rune_page, lcu_match_history,
-            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, live_game, overlay_open, overlay_close, overlay_interactive, install_path
+            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, lcu_set_item_set, live_game, overlay_open, overlay_close, overlay_interactive, install_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
