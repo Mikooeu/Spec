@@ -57,7 +57,7 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
 
   const boots = bootChoice(stats, page, champ, role, foes, items);
   const ownsBoots = owned.some((id) => items?.get(id)?.boots);
-  const steps = buildSteps(page, owned, boots?.main ?? null, ownsBoots);
+  const steps = buildSteps(page, role, owned, boots?.main ?? null, ownsBoots);
   const next = steps.find((s) => s.state === "next") ?? null;
   const name = (id: number) => items?.get(id)?.name ?? t("Objet {id}", { id });
   const adapts = adaptItems(stats, champ, role, foes, items, steps, owned);
@@ -195,23 +195,27 @@ function Start({ page, items, spells, opponent, compact }: { page: ChampPage | n
 }
 
 /** Chemin d'objets du meilleur build complet, avec ce que tu as déjà acheté. */
+/** Objets finis du build : 5 pour tous les postes, 6 en ADC (les bottes en plus). */
+export const buildSize = (role: number) => (role === 3 ? 6 : 5);
+/** Sans donnée sur le moment des bottes : après le premier objet, le cas le plus courant. */
+const DEFAULT_BOOTS_AT = 1;
+
 /** Build dans l'ordre d'achat, bottes comprises : elles se placent après le nombre d'objets finis
- *  le plus fréquent en Master+ (`bootsAt`). Sans cette donnée, elles restent dans leur carte. */
-export function buildSteps(page: ChampPage | null, owned: number[], bootId: number | null, ownsBoots: boolean): Step[] {
-  let seq = page?.builds[0]?.[0];
+ *  le plus fréquent en Master+ (`bootsAt`). */
+export function buildSteps(page: ChampPage | null, role: number, owned: number[], bootId: number | null, ownsBoots: boolean): Step[] {
+  const size = buildSize(role);
+  let seq = page?.builds[0]?.[0]?.slice(0, size);
   if (!seq?.length && page?.items.length) {
     // pas encore de build complet : l'objet le plus acheté à chaque rang, sans doublon
     seq = [];
-    for (const [, list] of page.items.slice(0, 6)) {
+    for (const [, list] of page.items.slice(0, size)) {
       const best = [...list].sort((a, b) => b[1] - a[1]).find(([id]) => !seq!.includes(id));
       if (best) seq.push(best[0]);
     }
   }
   if (!seq) return [];
-  if (bootId != null && page?.bootsAt && !seq.includes(bootId)) {
-    seq = [...seq];
-    seq.splice(Math.min(page.bootsAt[0], seq.length), 0, bootId);
-  }
+  seq = seq.filter((id) => id !== bootId).slice(0, size);
+  if (bootId != null) seq.splice(Math.min(page?.bootsAt?.[0] ?? DEFAULT_BOOTS_AT, seq.length), 0, bootId);
   const have = new Set(owned);
   let nextSet = false;
   return seq.map((id) => {

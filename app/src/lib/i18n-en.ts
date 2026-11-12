@@ -305,7 +305,7 @@ export const EN: Record<string, string> = {
   "Le serveur n’a pas accepté l’inscription. Réessaie dans un instant.": "The server didn’t accept the sign-up. Try again in a moment.",
   "Les 2 combinaisons les plus jouées": "The 2 most played combinations",
   "Les 3 combinaisons les plus jouées": "The 3 most played combinations",
-  "Les 3 enchaînements de {ranks} objets avec le meilleur winrate": "The 3 {ranks}-item paths with the best win rate",
+  "Les 3 enchaînements de {ranks} objets avec le meilleur winrate, bottes comprises": "The 3 {ranks}-item paths with the best win rate, boots included",
   "Les 3 plus jouées": "The 3 most played",
   "Les LP ne sont connus que pour les parties jouées avec Spec ouvert : le client LoL ne garde pas l’historique des LP.": "LP is only known for games played with Spec open: the LoL client doesn’t keep LP history.",
   "Les champions que tu sais jouer. Spec les met en avant dans ses recommandations, et te propose aussi quelques découvertes hors de ton pool. Tu pourras le modifier à tout moment.": "The champions you know how to play. Spec puts them first in its recommendations, and also suggests a few discoveries outside your pool. You can change it anytime.",

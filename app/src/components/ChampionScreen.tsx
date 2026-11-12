@@ -1,6 +1,6 @@
 import { useContext, useState, type ReactNode } from "react";
 import {
-  ROLE_LABELS, gamesIn, tierLetter, tierScore, type Stats,
+  ROLE_LABELS, gamesIn, tierLetter, tierScore, type ChampPage, type Stats,
 } from "../lib/score";
 import { champName, int, patchLabel, pct, wrTone } from "../lib/ui";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
@@ -178,13 +178,13 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
       )}
 
       {!!page?.builds.length && (
-      <Card title={t("Builds complets")} sub={t("Les 3 enchaînements de {ranks} objets avec le meilleur winrate", { ranks: ranks })}>
+      <Card title={t("Builds complets")} sub={t("Les 3 enchaînements de {ranks} objets avec le meilleur winrate, bottes comprises", { ranks: ranks })}>
         {page?.builds.length ? (
           <div className="builds">
             {page.builds.map(([seq, bg, bw]) => (
               <div key={seq.join("-")} className="build">
                 <span className="build__items">
-                  {seq.map((id, i) => (
+                  {withBoots(seq, page).map((id, i) => (
                     <span key={`${id}-${i}`} className="build__step">
                       {i > 0 && <span className="build__arrow" aria-hidden>›</span>}
                       <ItemIcon id={id} data={items} />
@@ -328,4 +328,14 @@ export function SkillGrid({ order, current, spent }: { order: string; current?: 
       ))}
     </div>
   );
+}
+
+/** Build complet avec les bottes les plus jouées, placées au moment où les joueurs Master+ les achètent
+ *  (après le 1er objet si cette donnée manque encore). */
+function withBoots(seq: number[], page: ChampPage): number[] {
+  const boots = page.boots[0]?.[0];
+  if (boots == null || seq.includes(boots)) return seq;
+  const out = [...seq];
+  out.splice(Math.min(page.bootsAt?.[0] ?? 1, out.length), 0, boots);
+  return out;
 }

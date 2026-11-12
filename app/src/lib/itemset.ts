@@ -26,7 +26,7 @@ export function itemSetBlocks(stats: Stats, champ: number, role: number, enemies
   const start = (page.start[0]?.[0] ?? "").split(",").map(Number).filter((n) => n > 0);
   if (start.length) blocks.push({ title: t("Départ"), items: start });
   const boots = bootChoice(stats, page, champ, role, enemies, items);
-  const steps = buildSteps(page, [], boots?.main ?? null, false);
+  const steps = buildSteps(page, role, [], boots?.main ?? null, false);
   if (steps.length) blocks.push({ title: t("Build"), items: steps.map((s) => s.id) });
   const adapts = adaptItems(stats, champ, role, enemies, items, steps, []).slice(0, 6).map((a) => a.id);
   if (adapts.length) blocks.push({ title: t("Face à leur équipe"), items: adapts });
