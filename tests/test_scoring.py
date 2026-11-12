@@ -229,7 +229,7 @@ def test_export_includes_ban_counts(tmp_path, champions):
 
 
 def test_champion_builds_from_details():
-    from scoring.builds import compute_builds, legendary_order, skill_priority, starting_items
+    from scoring.builds import boots_position, compute_builds, legendary_order, skill_priority, starting_items
     from scoring.items import Items
     items = Items({"items": {
         "1001": {"gold": 300, "purchasable": True, "tags": ["Boots"], "into": ["3020"], "rift": True},
@@ -244,6 +244,9 @@ def test_champion_builds_from_details():
     assert items.boots == {3020} and items.legendary == {3089, 6655, 3135}
     buys = "1056@14,2003@15,2003@15,1058@600,6655@700,3020@800,3089@1300,6655@1400,3135@1900"
     assert legendary_order(buys, items) == [6655, 3089, 3135]
+    assert boots_position(buys, items) == 1      # bottes finies après le premier objet
+    assert boots_position("1001@300,3020@500,6655@900", items) == 0
+    assert boots_position("6655@700", items) is None
     assert starting_items(buys) == "1056,2003,2003"
     # la balise de départ ne change pas le combo (sinon Doran sortait deux fois, avec et sans totem)
     assert starting_items("1055@2,2003@3,3340@4") == starting_items("1055@2,2003@3") == "1055,2003"
@@ -258,6 +261,7 @@ def test_champion_builds_from_details():
     assert e["start"] == [["1056,2003,2003", 6.0, 6.0]]
     assert e["skills"][:2] == ["QEWQQRQWQWRWWEE", "R > Q > W > E"]
     assert e["items"][0] == [6.0, [[6655, 6.0, 6.0]]]
+    assert e["bootsAt"] == [1, 6.0]
     assert e["builds"] == []   # 3 objets finis seulement, il en faut 5 pour un build complet
 
 

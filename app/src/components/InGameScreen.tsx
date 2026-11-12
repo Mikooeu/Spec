@@ -55,11 +55,12 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
   const opponent = liveEnemies?.find((e) => e.role === role)?.id ?? null;
   const owned = game ? game.items.filter((id) => !TRINKETS.has(id)) : [];
 
-  const steps = buildSteps(page, owned);
+  const boots = bootChoice(stats, page, champ, role, foes, items);
+  const ownsBoots = owned.some((id) => items?.get(id)?.boots);
+  const steps = buildSteps(page, owned, boots?.main ?? null, ownsBoots);
   const next = steps.find((s) => s.state === "next") ?? null;
   const name = (id: number) => items?.get(id)?.name ?? t("Objet {id}", { id });
   const adapts = adaptItems(stats, champ, role, foes, items, steps, owned);
-  const boots = bootChoice(stats, page, champ, role, foes, items);
 
   return (
     <div className={`content ingame${compact ? " ingame--compact" : ""}`}>
@@ -194,7 +195,9 @@ function Start({ page, items, spells, opponent, compact }: { page: ChampPage | n
 }
 
 /** Chemin d'objets du meilleur build complet, avec ce que tu as déjà acheté. */
-function buildSteps(page: ChampPage | null, owned: number[]): Step[] {
+/** Build dans l'ordre d'achat, bottes comprises : elles se placent après le nombre d'objets finis
+ *  le plus fréquent en Master+ (`bootsAt`). Sans cette donnée, elles restent dans leur carte. */
+function buildSteps(page: ChampPage | null, owned: number[], bootId: number | null, ownsBoots: boolean): Step[] {
   let seq = page?.builds[0]?.[0];
   if (!seq?.length && page?.items.length) {
     // pas encore de build complet : l'objet le plus acheté à chaque rang, sans doublon
@@ -205,10 +208,14 @@ function buildSteps(page: ChampPage | null, owned: number[]): Step[] {
     }
   }
   if (!seq) return [];
+  if (bootId != null && page?.bootsAt && !seq.includes(bootId)) {
+    seq = [...seq];
+    seq.splice(Math.min(page.bootsAt[0], seq.length), 0, bootId);
+  }
   const have = new Set(owned);
   let nextSet = false;
   return seq.map((id) => {
-    if (have.has(id)) return { id, state: "done" };
+    if (have.has(id) || (id === bootId && ownsBoots)) return { id, state: "done" };
     if (!nextSet) { nextSet = true; return { id, state: "next" }; }
     return { id, state: "later" };
   });

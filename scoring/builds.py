@@ -49,6 +49,20 @@ def legendary_order(purchases: str, items: Items) -> list[int]:
     return out
 
 
+def boots_position(purchases: str, items: Items) -> int | None:
+    """Nombre d'objets légendaires finis avant les bottes (0 : bottes avant le premier objet). None : pas de bottes."""
+    seen: list[int] = []
+    for part in purchases.split(","):
+        if not part:
+            continue
+        item = int(part.split("@")[0])
+        if item in items.boots:
+            return len(seen)
+        if item in items.legendary and item not in seen:
+            seen.append(item)
+    return None
+
+
 def starting_items(purchases: str) -> str | None:
     first = sorted(item for item, at in (map(int, p.split("@")) for p in purchases.split(",") if p)
                    if at <= START_MAX_SECONDS and item not in TRINKETS)
@@ -88,7 +102,7 @@ def spells_vs(default: tuple, by_opp: dict) -> list:
 def compute_builds(rows, items: Items) -> list:
     """rows : (champ, role, win, w, spell1, spell2, items, skills, purchases[, adversaire de lane]).
     Lues une seule fois (un générateur suffit). Renvoie [[champ, role, {...}], ...] pour l'export JSON."""
-    per: dict = defaultdict(lambda: {"g": 0.0, "tg": 0.0, "spells": {}, "boots": {}, "start": {},
+    per: dict = defaultdict(lambda: {"g": 0.0, "tg": 0.0, "spells": {}, "boots": {}, "boots_at": {}, "start": {},
                                      "skills": {}, "ranks": defaultdict(dict), "rank_g": Counter(), "seq": {},
                                      "vs": defaultdict(dict), "support": {}})
     for row in rows:
@@ -115,6 +129,9 @@ def compute_builds(rows, items: Items) -> list:
             _add(d["start"], start, win, w)
         if skills and len(skills) >= SKILL_FALLBACK:
             _add(d["skills"], skills[:SKILL_LEVELS] if len(skills) >= SKILL_LEVELS else skills[:SKILL_FALLBACK], win, w)
+        at = boots_position(purchases, items)
+        if at is not None:
+            _add(d["boots_at"], at, win, w)
         order = legendary_order(purchases, items)
         for k, item in enumerate(order[:6]):
             _add(d["ranks"][k], item, win, w)
@@ -142,6 +159,9 @@ def compute_builds(rows, items: Items) -> list:
                       for k in sorted(d["ranks"])],
             "builds": [[list(k), _r(g), _r(w)] for k, (g, w) in seqs[:3]],
         }
+        if d["boots_at"]:   # place des bottes dans le build : la plus fréquente
+            (at, (g, _)), = _top(d["boots_at"], 1)
+            entry["bootsAt"] = [at, _r(g)]
         if d["support"]:
             entry["support"] = [[i, _r(g), _r(w)] for i, (g, w) in _top(d["support"], 5)]
         top_spells = _top(d["spells"], 1)
