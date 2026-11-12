@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CDN } from "../lib/ddragon";
 import { gameLp, type Game } from "../lib/history";
-import { t } from "../lib/i18n";
-import { loadRecap, useRoleGuess, type Bar, type Mark, type Point, type Recap, type Spot } from "../lib/recap";
+import { plural, t } from "../lib/i18n";
+import { loadRecap, useRoleGuess, type Bar, type Mark, type Recap, type Spot, type Tip } from "../lib/recap";
 import { recaps } from "../lib/impact";
 import { ROLE_LABELS, type Stats } from "../lib/score";
 import { champName, dec1, int, pctN } from "../lib/ui";
@@ -27,6 +27,7 @@ interface Props {
 export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, onClose }: Props) {
   const guess = useRoleGuess(stats);
   const [recap, setRecap] = useState<Recap | null | "error" | "none">(null);
+  const [focus, setFocus] = useState<number | null>(null);   // moment surligné sur la courbe (« Voir à … min »)
   useEffect(() => {
     let alive = true;
     setRecap(null);
@@ -44,15 +45,18 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
   const opp = r.oppChamp != null ? champName(stats, r.oppChamp) : null;
   const fill = (s: string) => s.replace("{opp}", opp ?? t("ton vis-à-vis"));
   const draft = recaps().find((x) => x.game === game.id);
-  const tips = [...r.tips];
+  const tips: Tip[] = [...r.tips];
   if (draft) {
     const me = champName(stats, draft.champ), best = draft.top[0] != null ? champName(stats, draft.top[0]) : null;
-    const tip: Point = draft.rank === 1
-      ? { title: t("Conseil de Spec suivi"), detail: t("{c} était le n°1 de Spec dans cette draft.", { c: me }) + (r.laneVerdict === "won" ? ` ${t("Lane gagnée : garde-le face à {opp}.", { opp: opp ?? "" })}` : ""), weight: 0 }
-      : { title: best ? t("Spec conseillait {c}", { c: best }) : t("Hors des conseils de Spec"),
-          detail: draft.rank != null ? t("{c} était n°{n} de Spec dans cette draft.", { c: me, n: draft.rank }) : t("{c} n’était pas dans les conseils de Spec pour cette draft.", { c: me }), weight: 0 };
+    const tip: Tip = draft.rank === 1
+      ? { kind: "draft", title: t("{c}, conseil suivi", { c: me }), weight: 0, metric: t("n°1 de Spec"),
+          detail: t("C’était le n°1 de Spec dans cette draft.") + (r.laneVerdict === "won" && opp ? ` ${t("Lane gagnée : garde-le face à {opp}.", { opp })}` : "") }
+      : { kind: "draft", title: best ? t("Spec conseillait {c}", { c: best }) : t("Hors des conseils de Spec"), weight: 0,
+          metric: draft.rank != null ? t("n°{n} de Spec", { n: draft.rank }) : t("Hors conseils"),
+          detail: draft.rank != null ? t("{c} était n°{n} de Spec dans cette draft.", { c: me, n: draft.rank }) : t("{c} n’était pas dans les conseils de Spec pour cette draft.", { c: me }) };
     tips.splice(Math.min(tips.length, 2), tips.length, tip);
   }
+  const keep = tips.filter((x) => x.kind === "keep").length, work = tips.filter((x) => x.kind === "work").length;
   return (
     <div className={`grecap${embedded ? " grecap--embedded" : ""}`}>
       <section className={`grecap-hero grecap-hero--${r.win ? "win" : "loss"}`}>
@@ -71,7 +75,7 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
         {onClose && <button className="btn btn--secondary btn--small" onClick={onClose}>{t("Fermer")}</button>}
       </section>
 
-      {r.curve.length >= 4 && <GoldCurve r={r} />}
+      {r.curve.length >= 4 && <GoldCurve r={r} focus={focus} />}
 
       <div className="grecap-row">
         <section className="card grecap-card">
@@ -90,11 +94,28 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
       </div>
 
       {tips.length > 0 && (
-        <section className="card grecap-card">
-          <h2>{t("À retenir pour la prochaine")}</h2>
-          <div className="grecap-tips">
-            {tips.map((p) => <div key={p.title} className="grecap-tile grecap-tip"><strong>{fill(p.title)}</strong><small>{fill(p.detail)}</small></div>)}
+        <section className="card grecap-card grecap-tips">
+          <div className="grecap-head">
+            <h2>{t("À retenir pour la prochaine")}</h2><span className="grow" />
+            {(keep > 0 || work > 0) && <span className="muted small">{[keep ? plural(keep, "{n} à garder", "{n} à garder") : null, work ? plural(work, "{n} à travailler", "{n} à travailler") : null].filter(Boolean).join(" · ")}</span>}
           </div>
+          <ul className="grecap-tips__list">
+            {tips.map((p) => (
+              <li key={p.title} className={`grecap-tip grecap-tip--${p.kind}`}>
+                <div className="grecap-tip__text">
+                  <p><span className="grecap-tip__kind">{p.kind === "keep" ? t("À garder") : p.kind === "work" ? t("À travailler") : t("Draft")}</span><strong>{fill(p.title)}</strong></p>
+                  <small>{fill(p.detail)}</small>
+                </div>
+                <div className="grecap-tip__side">
+                  {p.metric && <span className="grecap-tip__metric">{fill(p.metric)}</span>}
+                  {p.at != null && r.curve.length >= 4 && (
+                    <button className="link-btn" onClick={() => { setFocus(p.at!); document.querySelector(".grecap-curve")?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>
+                      {t("Voir à {m} min", { m: Math.floor(p.at) })} ›</button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
     </div>
@@ -118,7 +139,7 @@ const MARK_LABEL: Record<Mark["kind"], () => string> = {
 };
 
 /** Écart d'or de ton équipe sur toute la partie, découpé en phases, avec tes kills et tes morts et les objectifs des deux équipes. */
-function GoldCurve({ r }: { r: Recap }) {
+function GoldCurve({ r, focus }: { r: Recap; focus: number | null }) {
   const [hover, setHover] = useState<number | null>(null);
   const end = r.duration / 60;
   const objs = r.marks.filter((m) => m.kind !== "kill" && m.kind !== "death");
@@ -162,6 +183,7 @@ function GoldCurve({ r }: { r: Recap }) {
           <text x={L - 8} y={y(0) + 4} textAnchor="end" className="grecap-curve__axis">0</text>
           <path d={d} className="grecap-curve__line is-up" clipPath="url(#gc-up)" />
           <path d={d} className="grecap-curve__line is-down" clipPath="url(#gc-down)" />
+          {focus != null && <rect x={x(Math.max(0, focus - 1))} y={4} width={Math.max(6, x(Math.min(end, focus + 1)) - x(Math.max(0, focus - 1)))} height={B - 4} rx={6} className="grecap-curve__focus" />}
           {hover != null && h && <line x1={x(h.min)} x2={x(h.min)} y1={4} y2={B} className="grecap-curve__cursor" />}
           {onCurve.map((m, i) => <circle key={`c${i}`} cx={x(m.min)} cy={y(goldAt(m.min))} r={5} className={`mk mk--${m.kind}`}><title>{`${MARK_LABEL[m.kind]()} · ${Math.floor(m.min)} min`}</title></circle>)}
           {objs.length > 0 && <>

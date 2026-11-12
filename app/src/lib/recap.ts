@@ -29,6 +29,8 @@ export interface Bar { label: string; me: number; opp: number }
 export type MarkKind = "kill" | "death" | "dragon" | "tower" | "baron" | "herald";
 /** Un évènement placé sur la courbe : tes kills et tes morts, les objectifs des deux équipes. */
 export interface Mark { min: number; kind: MarkKind; ally: boolean }
+/** Une ligne de « À retenir » : à garder, à travailler ou liée à la draft, avec son chiffre clé et le moment à revoir sur la courbe. */
+export interface Tip { kind: "keep" | "work" | "draft"; title: string; detail: string; metric?: string; at?: number; weight: number }
 
 export interface Recap {
   gameId: number;
@@ -61,7 +63,7 @@ export interface Recap {
   lane: Bar[] | null;
   laneVerdict: "won" | "lost" | "even" | null;
   /** « À retenir pour la prochaine » (sans le conseil de draft, ajouté à l'affichage). */
-  tips: Point[];
+  tips: Tip[];
   /** Zones où tu as passé le plus de temps (« en top », « dans la rivière »…). */
   zones: string[];
 }
@@ -330,18 +332,39 @@ export function makeRecap(g: RawGame, tl: Timeline, me: string, guess?: Guess): 
   const laneVerdict = laneGold == null ? null : laneGold >= 500 ? "won" : laneGold <= -500 ? "lost" : "even";
 
   // --- à retenir
-  const tips: Point[] = [];
-  if (laneGold != null && laneGold >= 500 && teamGold15 != null && goldEnd < teamGold15) {
-    const after = (k: MarkKind) => marks.filter((m) => m.kind === k && m.ally && m.min >= 15).length;
-    tips.push({ title: t("Convertis ton avance"), detail: t("{g} d’or d’avance sur {opp} à 15 min, puis {d} et {tw} pour ton équipe ensuite.", {
-      g: int(laneGold), opp: oppName, d: plural(after("dragon"), "{n} dragon", "{n} dragons"), tw: plural(after("tower"), "{n} tour", "{n} tours") }), weight: 3 });
+  const tips: Tip[] = [];
+  const myDeaths = kills.filter((e) => isMe(e.victimId));
+  if (laneGold != null && opp && has15) {
+    const f15 = (id: number | undefined) => frameAt(15, id), csOf = (f?: PFrame) => (f?.minionsKilled ?? 0) + (f?.jungleMinionsKilled ?? 0);
+    const csD = csOf(f15(myId)) - csOf(f15(opp.participantId));
+    const soloMine = kills.filter((e) => minOf(e) < 15 && e.killerId === myId && e.victimId === opp.participantId && !(e.assistingParticipantIds ?? []).length);
+    if (laneGold >= 500) tips.push({ kind: "keep", title: t("Ta lane"),
+      detail: soloMine.length ? t("{cs} CS et {k} sur {opp} avant 15 min.", { cs: sign(csD), k: plural(soloMine.length, "{n} solo kill", "{n} solo kills"), opp: oppName })
+        : t("{cs} CS sur {opp} à 15 min.", { cs: sign(csD), opp: oppName }),
+      metric: t("{g} d’or à 15 min", { g: sign(laneGold) }), at: soloMine.length ? minOf(soloMine[0]) : undefined, weight: 4 });
+    else if (laneGold <= -500) {
+      const byOpp = myDeaths.filter((e) => minOf(e) < 15 && e.killerId === opp.participantId);
+      tips.push({ kind: "work", title: t("Ta lane"),
+        detail: byOpp.length ? t("{cs} CS à 15 min et {k} par {opp}.", { cs: sign(csD), k: plural(byOpp.length, "{n} mort", "{n} morts"), opp: oppName })
+          : t("{cs} CS sur {opp} à 15 min.", { cs: sign(csD), opp: oppName }),
+        metric: t("{g} d’or à 15 min", { g: sign(laneGold) }), at: byOpp.length ? minOf(byOpp[0]) : undefined, weight: 4 });
+    }
   }
-  const lateDeaths = kills.filter((e) => isMe(e.victimId) && minOf(e) >= 20).length;
-  const earlyDeaths = kills.filter((e) => isMe(e.victimId) && minOf(e) < 15).length;
-  if (lateDeaths >= 3) tips.push({ title: t("Évite les morts après 20 min"), detail: t("{n} morts sur tes {d} : c’est là que les combats se jouent.", { n: lateDeaths, d: s.deaths }), weight: lateDeaths });
-  if (earlyDeaths >= 3) tips.push({ title: t("Joue plus prudemment en début de partie"), detail: t("{n} morts avant 15 min.", { n: earlyDeaths }), weight: earlyDeaths });
-  for (const p of top([...bad])) if (tips.length < 3 && !tips.some((x) => x.title === p.title)) tips.push(p);
-  if (win) for (const p of top([...good])) if (tips.length < 3) tips.push(p);
+  const late = myDeaths.filter((e) => minOf(e) >= 20), early = myDeaths.filter((e) => minOf(e) < 15);
+  if (late.length >= 3) {
+    const barons = marks.filter((m) => m.kind === "baron" && !m.ally).map((m) => m.min);
+    const beforeBaron = late.filter((e) => barons.some((b) => b - minOf(e) >= 0 && b - minOf(e) <= 2)).length;
+    tips.push({ kind: "work", title: t("Les morts tardives"),
+      detail: (beforeBaron ? t("{n} de tes {d} morts après 20 min, dont {b} juste avant le Nashor.", { n: late.length, d: s.deaths, b: beforeBaron })
+        : t("{n} de tes {d} morts après 20 min, quand les combats décident de la partie.", { n: late.length, d: s.deaths })),
+      metric: t("{n} morts après 20 min", { n: late.length }), at: minOf(late[0]), weight: late.length });
+  }
+  if (early.length >= 3) tips.push({ kind: "work", title: t("Les morts en début de partie"), detail: (() => { const k = opp ? early.filter((e) => e.killerId === opp.participantId).length : 0;
+      return k ? t("{n} morts avant 15 min, dont {k} face à {opp}.", { n: early.length, k, opp: oppName }) : t("{n} morts avant 15 min.", { n: early.length }); })(),
+    metric: t("{n} morts avant 15 min", { n: early.length }), at: minOf(early[0]), weight: early.length });
+  for (const p of top([...bad])) if (tips.length < 3 && !tips.some((x) => x.title === p.title)) tips.push({ kind: "work", title: p.title, detail: p.detail, weight: p.weight });
+  for (const p of top([...good])) if (tips.length < 3 && !tips.some((x) => x.title === p.title)) tips.push({ kind: "keep", title: p.title, detail: p.detail, weight: p.weight });
+  tips.sort((x, y) => (x.kind === y.kind ? y.weight - x.weight : x.kind === "keep" ? -1 : 1));
 
   // --- zones
   const zoneOf = (p: Spot) => {

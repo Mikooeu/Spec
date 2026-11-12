@@ -1071,6 +1071,7 @@ type Period = "7" | "30" | "all";
 const TIER_KEYS = ["iron", "bronze", "silver", "gold", "platinum", "emerald", "diamond"];
 const APEX = TIER_KEYS.length * 400;
 const tierIndex = (lp: number) => Math.min(TIER_KEYS.length, Math.floor(lp / 400));   // 7 = Maître et plus
+const CREST_URL = "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests";
 const tierColorOf = (lp: number) => TIER_COLOR[lp >= APEX ? "master" : TIER_KEYS[Math.max(0, tierIndex(lp))]];
 
 
@@ -1121,78 +1122,82 @@ function LpChart({ stats, series, games, tier }: { stats: Stats; series: LpPoint
   const step = vmax - vmin > 700 ? 400 : 100;
   let lo = Math.floor(vmin / step) * step, hi = Math.ceil((vmax + 1) / step) * step;
   if (hi - lo < 2 * step) { lo = Math.max(0, lo - step); hi = lo + 2 * step; }
-  const W = 900, H = 264, L = 92, R = 14, T = 44, B = H - 22;   // T : place pour l'étiquette « Maintenant » au-dessus du point le plus haut
+  const W = 900, H = 260, L = 44, R = 8, T = 24, B = H - 24;
   const x = (i: number) => L + 6 + ((W - L - R - 12) * i) / (pts.length - 1);
   const y = (v: number) => T + (B - T) * (1 - (v - lo) / (hi - lo));
   const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p.lp).toFixed(1)}`).join(" ");
   const area = `${line} L${x(pts.length - 1).toFixed(1)} ${B} L${x(0).toFixed(1)} ${B} Z`;
-  const bands: number[] = [];
-  for (let v = lo; v < hi; v += step) bands.push(v);
-  const promos = pts.map((p, i) => (i && tierIndex(p.lp) !== tierIndex(pts[i - 1].lp) ? i : -1)).filter((i) => i > 0 && i < pts.length - 1).slice(-3);   // le dernier point a déjà son étiquette
   const ticks = [...new Set([0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (pts.length - 1))))];
   const h = hover != null ? pts[hover] : null, hg = h?.game != null ? games.get(h.game) : undefined, hd = hover != null ? deltas[hover] : 0;
   const tone = gain > 0 ? "good" : gain < 0 ? "bad" : "neutral";
+  const crestKey = (lp: number) => (lp >= APEX ? (tier && APEX_NAME[tier] ? tier : "master") : TIER_KEYS[Math.max(0, tierIndex(lp))]);
+  const crest = (lp: number, cls: string) => <img className={cls} alt="" src={`${CREST_URL}/${crestKey(lp)}.svg`} onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />;
+  // la courbe prend la couleur du rang : dégradé vertical à paliers nets aux changements de rang
+  const tierStops: { off: number; color: string }[] = [];
+  // du rang le plus haut au plus bas : à offset égal, la couleur du rang du dessus passe avant (le tri garde l'ordre)
+  for (let v = Math.floor((hi - 1) / 400) * 400; v >= Math.floor(lo / 400) * 400; v -= 400) {
+    const a = Math.max(lo, v), b = Math.min(hi, v + 400);
+    const o1 = (y(b) - T) / (B - T), o2 = (y(a) - T) / (B - T), col = tierColorOf(v);
+    tierStops.push({ off: Math.max(0, o1), color: col }, { off: Math.min(1, o2), color: col });
+  }
+  tierStops.sort((p, q) => p.off - q.off);
+  const tierLines: number[] = [], divLines: number[] = [];
+  for (let v = Math.ceil(lo / 100) * 100; v <= hi; v += 100) (v % 400 === 0 && v <= APEX ? tierLines : step === 100 ? divLines : []).push(v);
   return (
     <section className="card lp2">
       {head}
-      <div className="lp2__kpis">
-        <div><small>{t("Bilan")}</small><strong className={`tone-${tone}`}>{lpText(gain)}</strong>
-          <small>{period === "all" ? t("depuis le {d}", { d: shortDate(first.at) }) : t("sur {n} jours", { n: period })}</small></div>
-        <div><small>{t("Parties suivies")}</small><strong>{wins + losses}</strong><small>{t("{w} V – {l} D", { w: wins, l: losses })}</small></div>
-        <div><small>{t("Plus haut")}</small><strong>{tierNameOf(pts[peakI].lp)}</strong><small>{fullLabel(pts[peakI].lp).split(" · ")[1] ?? ""} · {shortDate(pts[peakI].at)}</small></div>
-        <div><small>{t("Série en cours")}</small>
-          <strong className={streak ? `tone-${lastSign > 0 ? "good" : "bad"}` : ""}>
-            {streak ? plural(streak, lastSign > 0 ? "{n} victoire" : "{n} défaite", lastSign > 0 ? "{n} victoires" : "{n} défaites") : "—"}</strong>
-          <small>{streak ? t("d’affilée") : t("pas de série")}</small></div>
-      </div>
       <div className="lp2__plot" onMouseLeave={() => setHover(null)}>
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("Courbe des LP : de {a} à {b}", { a: fullLabel(first.lp), b: fullLabel(last.lp) })}>
           <defs>
             <linearGradient id="lp2-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="var(--accent)" stopOpacity="0.26" />
-              <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
+              <stop offset="0" stopColor="#fff" stopOpacity="0.07" />
+              <stop offset="1" stopColor="#fff" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="lp2-tiers" gradientUnits="userSpaceOnUse" x1="0" y1={T} x2="0" y2={B}>
+              {tierStops.map((st, i) => <stop key={i} offset={st.off} stopColor={st.color} />)}
             </linearGradient>
           </defs>
-          {bands.map((v, i) => (
-            <g key={v}>
-              <rect x={L} width={W - L - R} y={y(v + step)} height={y(v) - y(v + step)} fill={tierColorOf(v)} opacity={i % 2 ? 0.045 : 0.075} />
-              <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} className={v % 400 === 0 ? "lp2__tier-line" : "lp2__grid"} />
-              <text x={L - 10} y={(y(v) + y(v + step)) / 2 + 4} textAnchor="end" className="lp2__band" fill={tierColorOf(v)}>
-                {v >= APEX ? (step === 400 ? apexName : `${v - APEX} LP`) : step === 400 ? tierNameOf(v) : lpLabel(v, true)}</text>
+          {divLines.map((v) => <line key={`d${v}`} x1={L} x2={W - R} y1={y(v)} y2={y(v)} className="lp2__grid" />)}
+          {tierLines.map((v) => (
+            <g key={`t${v}`}>
+              <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} className="lp2__tier-line" />
+              <text x={L + 6} y={y(v) + 14} className="lp2__band">{tierNameOf(v)}</text>
             </g>
           ))}
           <path d={area} fill="url(#lp2-fill)" />
-          <path d={line} className="lp2__line" />
-          {hover != null && <line x1={x(hover)} x2={x(hover)} y1={T} y2={B} className="lp2__cursor" />}
-          {pts.map((p, i) => i > 0 && (
-            <circle key={i} cx={x(i)} cy={y(p.lp)} r={i === pts.length - 1 || hover === i ? 5 : 3.5}
-                    className={`lp2__dot ${deltas[i] > 0 ? "is-up" : deltas[i] < 0 ? "is-down" : ""}`} />
-          ))}
-          {promos.map((i) => {
-            const up = pts[i].lp > pts[i - 1].lp, label = `${up ? t("Promu") : t("Rétrogradé")} ${tierNameOf(pts[i].lp)}`;
-            return <text key={`p${i}`} x={x(i)} y={y(pts[i].lp) - 12} textAnchor="middle" className="lp2__promo" fill={tierColorOf(pts[i].lp)}>{label}</text>;
-          })}
-          {pts.map((p, i) => i > 0 && (
-            <circle key={`h${i}`} cx={x(i)} cy={y(p.lp)} r={12} fill="transparent" onMouseEnter={() => setHover(i)} />
+          <path d={line} className="lp2__line" stroke="url(#lp2-tiers)" />
+          {hover != null && <line x1={x(hover)} x2={x(hover)} y1={T - 10} y2={B} className="lp2__cursor" />}
+          <circle cx={x(pts.length - 1)} cy={y(last.lp)} r={5} fill={tierColorOf(last.lp)} className="lp2__dot" />
+          {hover != null && h && <circle cx={x(hover)} cy={y(h.lp)} r={7} fill={tierColorOf(h.lp)} className="lp2__dot lp2__dot--hover" />}
+          {pts.map((_, i) => (
+            <rect key={`h${i}`} x={x(i) - Math.max(4, (W - L) / pts.length / 2)} y={T - 10} width={Math.max(8, (W - L) / pts.length)} height={B - T + 10} fill="transparent" onMouseEnter={() => setHover(i)} />
           ))}
           {ticks.map((i) => (
-            <text key={`d${i}`} x={x(i)} y={H - 4} textAnchor={i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"} className="lp2__date">{shortDate(pts[i].at)}</text>
+            <text key={`x${i}`} x={x(i)} y={H - 4} textAnchor={i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"} className="lp2__date">
+              {i === pts.length - 1 ? t("Maintenant") : shortDate(pts[i].at)}</text>
           ))}
         </svg>
-        <span className="lp2__now" style={{ left: `${(x(pts.length - 1) / W) * 100}%`, top: `${(y(last.lp) / H) * 100}%` }}>
-          {t("Maintenant · {v}", { v: fullLabel(last.lp) })}</span>
+        {/* emblèmes de rang sur l'axe, à chaque changement de rang */}
+        {tierLines.map((v) => (
+          <span key={`c${v}`} className="lp2__crest" style={{ top: `${(y(v) / H) * 100}%` }}>{crest(v, "")}</span>
+        ))}
         {h && hover != null && (
-          <div className={`lp2__tip${x(hover) > W * 0.7 ? " is-left" : ""}`} style={{ left: `${(x(hover) / W) * 100}%`, top: `${(y(h.lp) / H) * 100}%` }}>
-            <p>{hg && <ChampionIcon stats={stats} champ={hg.champ} size={1.25} />}
-              <strong>{hg ? `${champName(stats, hg.champ)} · ${hg.win ? t("Victoire") : t("Défaite")}` : hd > 0 ? t("Victoire") : hd < 0 ? t("Défaite") : t("Partie")}</strong></p>
-            <p className={`tone-${hd > 0 ? "good" : hd < 0 ? "bad" : "neutral"}`}>{lpText(hd)} → {fullLabel(h.lp)}</p>
-            <small>{shortDate(h.at)}{hg ? ` · ${hg.kills} / ${hg.deaths} / ${hg.assists}` : ""}</small>
+          <div className={`lp2__tip${x(hover) > W * 0.62 ? " is-left" : ""}`} style={{ left: `${(x(hover) / W) * 100}%`, top: `${(y(h.lp) / H) * 100}%` }}>
+            {crest(h.lp, "lp2__tip-crest")}
+            <span>
+              <strong style={{ color: tierColorOf(h.lp) }}>{fullLabel(h.lp)}</strong>
+              <small>{[shortDate(h.at), hg ? `${champName(stats, hg.champ)} · ${hg.win ? t("Victoire") : t("Défaite")}` : null, hover ? lpText(hd) : null].filter(Boolean).join(" · ")}</small>
+            </span>
           </div>
         )}
       </div>
-      <div className="lp2__legend">
-        <span><i className="tone-bg-good" />{t("Victoire")}</span><span><i className="tone-bg-bad" />{t("Défaite")}</span>
-        <span className="muted">{t("Survole un point pour voir la partie. Les LP sont suivis depuis que Spec est installé.")}</span>
+      <div className="lp2__strip">
+        <div><small>{t("Bilan")}</small><strong className={`tone-${tone}`}>{lpText(gain)}</strong></div>
+        <div><small>{t("Pic")}</small>{crest(pts[peakI].lp, "lp2__strip-crest")}<strong style={{ color: tierColorOf(pts[peakI].lp) }}>{fullLabel(pts[peakI].lp)}</strong></div>
+        <div><small>{t("Parties")}</small><strong>{wins + losses}</strong><span className="muted">{t("{w} V – {l} D", { w: wins, l: losses })}</span></div>
+        <div><small>{t("Série")}</small>
+          <strong className={streak ? `tone-${lastSign > 0 ? "good" : "bad"}` : ""}>
+            {streak ? plural(streak, lastSign > 0 ? "{n} victoire" : "{n} défaite", lastSign > 0 ? "{n} victoires" : "{n} défaites") : "—"}</strong></div>
       </div>
     </section>
   );
