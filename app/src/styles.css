@@ -1910,9 +1910,6 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .mups__head h2 { font-size: 0.9375rem; font-weight: 600; }
 .mups__notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 0.75rem; }
 .mups__who { display: inline-flex; align-items: center; gap: 0.625rem; font-size: 0.8125rem; font-weight: 500; color: var(--text); }
-.mups__search { width: 14rem; height: 2rem; padding: 0 0.75rem; border-radius: 8px; font: inherit; font-size: 0.75rem; color: var(--text);
-  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); }
-.mups__search:focus { outline: none; border-color: var(--accent); }
 .mups__table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
 .mups__table th { height: 2rem; padding: 0 0.5rem; text-align: left; font-size: 0.8125rem; font-weight: 500; color: var(--text-3); }
 .mups__sort { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0; font: inherit; color: inherit; cursor: pointer; }
