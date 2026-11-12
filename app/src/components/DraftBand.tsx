@@ -69,7 +69,7 @@ const ROLE_WORD = ["top", "jungle", "mid", "ADC", "support"];
 function Bans({ stats, champs, label, end = false }: { stats: Stats; champs: number[]; label: string; end?: boolean }) {
   const slots = [...champs.slice(0, 5), ...Array(Math.max(0, 5 - champs.length)).fill(null)] as (number | null)[];
   return (
-    <div className={`dbans${end ? " dbans--end" : ""}`} aria-label={label}>
+    <div className={`dbans${end ? " dbans--end" : ""}`} role="group" aria-label={label}>
       {slots.map((c, i) => (
         <span key={i} className={`dbans__slot${c != null ? " is-banned" : ""}`} title={c != null ? champName(stats, c) : undefined}>
           {c != null && <img src={iconUrl(stats, c)} alt={champName(stats, c)} draggable={false} />}

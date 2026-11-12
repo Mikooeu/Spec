@@ -1012,4 +1012,5 @@ export const EN: Record<string, string> = {
   "Agrandir": "Expand",
   "Agrandir la carte": "Expand the map",
   "Pas de positions pour cette partie.": "No positions for this game.",
+  "{n}. {c}, tier {tier}, {wr} de victoires : ouvrir sa page": "{n}. {c}, tier {tier}, {wr} win rate: open page",
 };

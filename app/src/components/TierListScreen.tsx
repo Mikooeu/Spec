@@ -79,14 +79,14 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
         </div>
       </div>
 
-      <div className={`tier-table${hasBan ? "" : " tier-table--noban"}`} role="table" aria-label={t("Tier list {v}", { v: scope })}>
-        <div className="tier-row tier-row--head" role="row">
-          <span className="tier-row__rank" role="columnheader">#</span>
-          <span className="tier-row__tier" role="columnheader">{t("Tier")}</span>
-          <span className="tier-row__champ" role="columnheader">{t("Champion")}</span>
+      <div className={`tier-table${hasBan ? "" : " tier-table--noban"}`} role="region" aria-label={t("Tier list {v}", { v: scope })}>
+        <div className="tier-row tier-row--head">
+          <span className="tier-row__rank" aria-hidden="true">#</span>
+          <span className="tier-row__tier" aria-hidden="true">{t("Tier")}</span>
+          <span className="tier-row__champ" aria-hidden="true">{t("Champion")}</span>
           {sorts.map(([key, label]) => (
-            <button key={key} role="columnheader" className={`tier-row__num${sort === key ? " is-sorted" : ""}`}
-                    onClick={() => choose(key)} aria-sort={sort === key ? (asc ? "ascending" : "descending") : "none"}
+            <button key={key} className={`tier-row__num${sort === key ? " is-sorted" : ""}`}
+                    onClick={() => choose(key)} aria-pressed={sort === key}
                     title={sort === key ? (asc ? t("Trier du plus haut au plus bas") : t("Trier du plus bas au plus haut")) : t("Trier par {v}", { v: label })}>
               {label}<span className="tier-sort__arrow" aria-hidden="true">{sort === key ? arrow : "↕"}</span>
             </button>
@@ -95,7 +95,8 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
         </div>
         <div className="stagger tier-table__rows" key={`${all ? "all" : role}-${sort}-${asc}`}>
         {rows.map(({ r, rank }) => (
-          <button key={`${r.champ}-${r.role}`} className="tier-row tier-row--link" role="row" onClick={() => onOpen(r.champ, r.role)}
+          <button key={`${r.champ}-${r.role}`} className="tier-row tier-row--link" onClick={() => onOpen(r.champ, r.role)}
+                  aria-label={t("{n}. {c}, tier {tier}, {wr} de victoires : ouvrir sa page", { n: rank, c: champName(stats, r.champ), tier: r.tier, wr: pct(r.winrate) })}
                   title={t("Ouvrir la page de {champName}", { champName: champName(stats, r.champ) })}>
             <span className="tier-row__rank">{rank}</span>
             <span className={`tier-row__tier tier--${r.tier}`}>{r.tier}</span>

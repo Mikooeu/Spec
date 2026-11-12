@@ -7,6 +7,7 @@ import type { Account } from "../lib/lcu";
 import { ChampionIcon } from "./ChampionIcon";
 import { TIER_COLOR } from "../lib/ui";
 import { RecapView } from "./RecapView";
+import { InButton } from "./Runes";
 import { Rune, useRuneData, type RuneData } from "./Runes";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
 import { IMPACT_MIN, IMPACT_RELIABLE, impact, recaps, settle, type Recap } from "../lib/impact";
@@ -622,7 +623,11 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onTogg
   const kda = g.deaths ? (g.kills + g.assists) / g.deaths : g.kills + g.assists;
   const min = Math.round(g.duration / 60);
   return (
-    <button className={`game game--${result}${open ? " is-open" : ""}`} onClick={onToggle} aria-expanded={open}>
+    <InButton.Provider value={true}>
+    <button className={`game game--${result}${open ? " is-open" : ""}`} onClick={onToggle} aria-expanded={open}
+            aria-label={[result === "remake" ? t("Remake") : g.win ? t("Victoire") : t("Défaite"), champName(stats, g.champ),
+              `${g.kills} / ${g.deaths} / ${g.assists}`, t("{n} min", { n: min }), ago(g.created),
+              ...(showLp && g.lp != null ? [lpText(g.lp)] : [])].join(" · ")}>
       <ChampionIcon stats={stats} champ={g.champ} size={2.5} />
       <Loadout spells={g.spells} keystone={g.keystone} subStyle={g.subStyle} assets={assets} size="md" />
       <span className="game__id">
@@ -673,6 +678,7 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onTogg
         <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </button>
+    </InButton.Provider>
   );
 }
 

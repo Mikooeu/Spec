@@ -4,6 +4,9 @@ import { champName, pct, usePersistent } from "../lib/ui";
 import { loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
 import { t, ddragonLocale } from "../lib/i18n";
 
+/** Dans un bouton (ligne de partie), les icônes ne prennent pas le focus : le bouton porte déjà le résumé. */
+export const InButton = createContext(false);
+
 // Noms, descriptions et icônes officiels des runes (Data Dragon, en français).
 interface RuneInfo { name: string; icon: string; desc: string }
 export type RuneData = Map<number, RuneInfo>;
@@ -73,8 +76,9 @@ export function useRuneData(version: string): RuneData | null {
 export function Rune({ data, id, size }: { data: RuneData | null; id: number; size: "key" | "minor" | "shard" }) {
   const info = data?.get(id);
   const [failed, setFailed] = useState(false);
+  const inButton = useContext(InButton);
   return (
-    <span className={`rune rune--${size}`} tabIndex={0} aria-label={info?.name ?? t("Rune {id}", { id: id })}>
+    <span className={`rune rune--${size}`} tabIndex={inButton ? undefined : 0} aria-hidden={inButton || undefined} aria-label={info?.name ?? t("Rune {id}", { id: id })}>
       {info && !failed
         ? <img src={info.icon} alt="" draggable={false} onError={() => setFailed(true)} />
         : <span className="rune__fallback" aria-hidden>{info?.name.slice(0, 1) ?? "?"}</span>}

@@ -3,6 +3,8 @@ import { IN_APP } from "./lcu";
 
 export const COMPACT = { width: 400, height: 720, minWidth: 360, minHeight: 560 };
 const FULL = { width: 1280, height: 800 };
+/** Taille minimale de la grande fenêtre : tient sur un écran 1366 × 768 ou en 1080p avec une mise à l'échelle de 150 à 200 %. */
+const MIN = { width: 960, height: 600 };
 
 let previous: { width: number; height: number } | null = null;
 
@@ -31,7 +33,8 @@ export async function applyCompact(on: boolean, onTop: boolean, keepSize = false
       await w.setAlwaysOnTop(false);
       const back = previous ?? FULL;
       await w.setSize(new LogicalSize(back.width, back.height));
-      await w.setMinSize(new LogicalSize(FULL.width, FULL.height));
+      await w.setMinSize(new LogicalSize(MIN.width, MIN.height));
+      await fit(w, LogicalSize);
       await w.center();
     }
   } catch {
@@ -64,4 +67,16 @@ export async function watchCompactExpand(onExpand: () => void): Promise<() => vo
   } catch {
     return () => undefined;
   }
+}
+
+type Win = Awaited<ReturnType<typeof win>>;
+
+/** Réduit la fenêtre si elle dépasse l'écran (petits écrans, mise à l'échelle Windows élevée). */
+async function fit(w: Win["w"], LogicalSize: Win["LogicalSize"]): Promise<boolean> {
+  const scale = await w.scaleFactor();
+  const size = (await w.innerSize()).toLogical(scale);
+  const aw = Math.max(MIN.width, window.screen.availWidth - 16), ah = Math.max(MIN.height, window.screen.availHeight - 40);
+  if (size.width <= aw && size.height <= ah) return false;
+  await w.setSize(new LogicalSize(Math.min(size.width, aw), Math.min(size.height, ah)));
+  return true;
 }

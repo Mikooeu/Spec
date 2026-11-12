@@ -214,7 +214,7 @@ function PositionCard({ stats, r }: { stats: Stats; r: Recap }) {
       {big && (
         <div className="grecap-modal" role="dialog" aria-modal="true" aria-label={t("Ta position")} onClick={() => setBig(false)}>
           <div className="card grecap-card grecap-modal__box" onClick={(e) => e.stopPropagation()}>
-            <div className="grecap-head"><h2>{t("Tes déplacements")}</h2><span className="grow" /><button className="btn btn--secondary btn--small" onClick={() => setBig(false)}>{t("Fermer")}</button></div>
+            <div className="grecap-head"><h2>{t("Tes déplacements")}</h2><span className="grow" /><button className="btn btn--secondary btn--small" autoFocus onClick={() => setBig(false)}>{t("Fermer")}</button></div>
             <Heatmap stats={stats} heat={r.heat} side={r.side} duration={r.duration} />
           </div>
         </div>

@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useContext, useState, type ReactNode } from "react";
 import {
   ROLE_LABELS, gamesIn, tierLetter, tierScore, type Stats,
 } from "../lib/score";
 import { champName, int, patchLabel, pct, wrTone } from "../lib/ui";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
 import { ChampionIcon } from "./ChampionIcon";
+import { InButton } from "./Runes";
 import { RuneTree } from "./Runes";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
@@ -265,8 +266,9 @@ function Card({ title, sub, children }: { title: string; sub?: string; children:
 export function ItemIcon({ id, data, size = "md" }: { id: number; data: InfoMap | null; size?: "md" | "sm" }) {
   const info = data?.get(id);
   const [failed, setFailed] = useState(false);
+  const inButton = useContext(InButton);
   return (
-    <span className={`item-ic item-ic--${size}`} tabIndex={0} aria-label={info?.name ?? t("Objet {id}", { id: id })}>
+    <span className={`item-ic item-ic--${size}`} tabIndex={inButton ? undefined : 0} aria-hidden={inButton || undefined} aria-label={info?.name ?? t("Objet {id}", { id: id })}>
       {info && !failed ? <img src={info.icon} alt="" draggable={false} onError={() => setFailed(true)} /> : null}
       {info && (
         <span className="rune__tip" role="tooltip">
