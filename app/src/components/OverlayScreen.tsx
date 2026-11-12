@@ -11,7 +11,7 @@ const STAT: Record<OverlayStat, [() => string, () => string]> = {
   kp: [() => t("Participation aux kills"), () => t("Kills et assists")],
   vision: [() => t("Vision par minute"), () => t("Score de vision")],
   kda: [() => t("KDA"), () => t("(K + A) / morts")],
-  goldDiff: [() => t("Écart d’or"), () => t("Face à ton vis-à-vis")],
+  goldDiff: [() => t("Écart d’objets"), () => t("Valeur des objets face à ton vis-à-vis")],
 };
 const CORNERS: [Corner, () => string][] = [["tl", () => t("Haut gauche")], ["tr", () => t("Haut droite")], ["bl", () => t("Bas gauche")], ["br", () => t("Bas droite")]];
 

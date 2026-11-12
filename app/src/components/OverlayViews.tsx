@@ -48,7 +48,7 @@ function useGameScale(): number {
 }
 
 export const LABEL: Record<OverlayStat, () => string> = {
-  cs: () => t("CS/min"), gold: () => t("Or/min"), kp: () => t("KP"), vision: () => t("Vision/min"), kda: () => t("KDA"), goldDiff: () => t("Écart d’or"),
+  cs: () => t("CS/min"), gold: () => t("Or/min"), kp: () => t("KP"), vision: () => t("Vision/min"), kda: () => t("KDA"), goldDiff: () => t("Écart d’objets"),
 };
 
 /** Valeur des objets (prix Data Dragon), sans les balises. */

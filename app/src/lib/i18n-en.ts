@@ -57,6 +57,8 @@ export const EN: Record<string, string> = {
   "KP": "KP",
   "Vision/min": "Vision/min",
   "Écart d’or": "Gold gap",
+  "Écart d’objets": "Item gap",
+  "Valeur des objets face à ton vis-à-vis": "Item value vs your lane opponent",
   "Parfait": "Perfect",
   "Sur ses {n} dernières parties": "Over their last {n} games",
   "Ses champions": "Their champions",
