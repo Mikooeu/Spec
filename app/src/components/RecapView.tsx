@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CDN } from "../lib/ddragon";
 import { gameLp, type Game } from "../lib/history";
 import { plural, t } from "../lib/i18n";
@@ -296,14 +297,14 @@ function PositionCard({ stats, r }: { stats: Stats; r: Recap }) {
         {!r.heat.path.length && <p className="grecap-map__empty">{t("Pas de positions pour cette partie.")}</p>}
       </button>
       {zones && <small className="muted">{zones}</small>}
-      {big && (
+      {/* portail : les animations d’entrée (transform) des cartes enfermeraient la fenêtre dans la carte */}
+      {big && createPortal(
         <div className="grecap-modal" role="dialog" aria-modal="true" aria-label={t("Ta position")} onClick={() => setBig(false)}>
           <div className="card grecap-card grecap-modal__box" onClick={(e) => e.stopPropagation()}>
             <div className="grecap-head"><h2>{t("Tes déplacements")}</h2><span className="grow" /><button className="btn btn--secondary btn--small" autoFocus onClick={() => setBig(false)}>{t("Fermer")}</button></div>
             <Heatmap stats={stats} heat={r.heat} side={r.side} duration={r.duration} />
           </div>
-        </div>
-      )}
+        </div>, document.body)}
     </section>
   );
 }

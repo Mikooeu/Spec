@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Stats } from "../lib/score";
 import { normalize } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
@@ -30,7 +31,8 @@ export function ChampionPicker({ stats, title, taken, canClear, onPick, onClose 
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [stats, query, taken]);
 
-  return (
+  // portail : les animations d’entrée (transform) de l’écran enfermeraient la fenêtre dans son conteneur
+  return createPortal(
     <div className="overlay" onMouseDown={onClose}>
       <div className="picker" role="dialog" aria-label={title} onMouseDown={(e) => e.stopPropagation()}>
         <div className="picker__head">
@@ -50,6 +52,5 @@ export function ChampionPicker({ stats, title, taken, canClear, onPick, onClose 
           {list.length === 0 && <p className="muted">{t("Aucun champion ne correspond.")}</p>}
         </div>
       </div>
-    </div>
-  );
+    </div>, document.body);
 }
