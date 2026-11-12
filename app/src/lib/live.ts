@@ -22,6 +22,9 @@ export interface LiveGame {
 }
 
 const POLL_MS = 3000;   // assez pour suivre niveau, or et achats sans charger le PC pendant la partie
+const START_POLL_MS = 500;   // écran de chargement : on guette le début du chrono pour fermer l'overlay aussitôt
+/** Le chrono de la partie tourne (pendant le chargement, l'API du jeu peut déjà répondre avec 0). */
+export const STARTED_AT = 0.2;
 export const POSITION_ROLE: Record<string, number> = { TOP: 0, JUNGLE: 1, MIDDLE: 2, BOTTOM: 3, UTILITY: 4 };
 
 /** Ce qui change l'affichage (tout sauf le chrono, qui avance tout seul entre deux lectures). */
@@ -35,14 +38,15 @@ export function useLiveGame(active: boolean, background = false): LiveGame | nul
     if (!active) { setGame(null); return; }
     let stop = false;
     let timer: ReturnType<typeof setTimeout>;
-    let last = "", seen = false, fails = 0;
+    let last = "", seen = false, fails = 0, started = false;
     const tick = async () => {
       // fenêtre principale : on lit même réduite (c'est elle qui ouvre et ferme les overlays)
       if (background || !document.hidden) {
         try {
           const g = await invoke<Omit<LiveGame, "at">>("live_game");
           seen = true; fails = 0;
-          const key = shown(g);
+          started = g.time > STARTED_AT;
+          const key = `${shown(g)}|${started}`;
           if (!stop && key !== last) { last = key; setGame({ ...g, at: Date.now() }); }
         } catch {
           // avant le début : partie pas encore chargée, on garde la dernière lecture.
@@ -50,7 +54,7 @@ export function useLiveGame(active: boolean, background = false): LiveGame | nul
           if (seen && ++fails >= 3 && !stop) { seen = false; last = ""; setGame(null); }
         }
       }
-      if (!stop) timer = setTimeout(tick, POLL_MS);
+      if (!stop) timer = setTimeout(tick, started ? POLL_MS : START_POLL_MS);
     };
     // fenêtre ré-affichée : lecture tout de suite plutôt qu'au prochain tour
     const onShow = () => { if (!document.hidden) { clearTimeout(timer); tick(); } };

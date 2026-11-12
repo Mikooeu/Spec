@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  LOW_DATA_GAMES, ROLE_LABELS, banSuggestions, explain, isBlind, recommend,
+  LOW_DATA_GAMES, ROLE_LABELS, banSuggestions, draftGain, explain, isBlind, recommend,
   scoreChampion, topForRole, type Result, type Stats,
 } from "../lib/score";
 import { RunePage } from "./Runes";
-import { champName, int, patchLabel, pct, pts, wrTone } from "../lib/ui";
+import { champName, dec1, int, patchLabel, pct, pts, wrTone } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import type { PersonalState } from "../lib/api";
 import { ChampionPicker } from "./ChampionPicker";
@@ -207,6 +207,7 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
             {!compact && fill.length > 0 && (
               <span className="badge badge--muted" title={t("Ce champion comble ce qui manque à ton équipe")}>{t("Comble : ")}{fill.map((g) => GAP_LABEL[g]).join(" · ")}</span>
             )}
+            {!compact && <GainBadge res={res} />}
             {res.games < LOW_DATA_GAMES && <span className="badge badge--muted">{t("Peu de données")}</span>}
             {compact && (perso?.short
               ? <span className={`tone-${perso.tone}`}>{perso.short} <Trend tone={perso.tone} /></span>
@@ -244,6 +245,19 @@ export function RecoRow({ stats, res, rank, discovery, open, onToggle, onPresele
         </div>
       )}
     </div>
+  );
+}
+
+/** Ce que cette draft change pour le champion, en points (affiché à partir de 0,3 point). */
+function GainBadge({ res }: { res: Result }) {
+  const g = draftGain(res);
+  if (Math.abs(g) < 0.003) return null;
+  const v = `${g > 0 ? "+" : "−"}${dec1(Math.abs(g) * 100)}`;
+  return (
+    <span className={`badge badge--gain ${g > 0 ? "is-up" : "is-down"}`}
+          title={t("Effet de cette draft : vis-à-vis, reste de leur équipe, tes alliés et la composition")}>
+      {t("{v} pt dans cette draft", { v })}
+    </span>
   );
 }
 

@@ -43,7 +43,7 @@ def test_parse_role():
 
 
 def synthetic_db(path, n_matches=3000, seed=7):
-    """Parties fictives : au mid, Ahri bat Syndra 70 % du temps ; Orianna est neutre."""
+    """Parties fictives : au mid, Ahri bat Syndra 70 % du temps, Taliyah 58 % ; Orianna est neutre."""
     rng = random.Random(seed)
     store = Store(path)
     teams = {"TOP": [7, 12], "JUNGLE": [4, 8], "BOTTOM": [9, 5], "UTILITY": [6, 10]}
@@ -53,6 +53,9 @@ def synthetic_db(path, n_matches=3000, seed=7):
         if {mid_blue, mid_red} == {1, 2}:
             ahri_wins = rng.random() < 0.70
             blue_wins = ahri_wins if mid_blue == 1 else not ahri_wins
+        elif {mid_blue, mid_red} == {11, 2}:   # Taliyah, forte ce patch : la découverte attendue
+            taliyah_wins = rng.random() < 0.58
+            blue_wins = taliyah_wins if mid_blue == 11 else not taliyah_wins
         else:
             blue_wins = rng.random() < 0.5
         mid = f"EUW1_{i}"
@@ -366,7 +369,7 @@ def test_export_includes_damage_profile(tmp_path, champions):
 
 
 def test_blind_pick_prefers_champions_hard_to_counter(tmp_path, champions):
-    from scoring.score import Params, blind_exposure, lane_opponent_known, rank_value
+    from scoring.score import CONTEXT_WEIGHT, Params, blind_exposure, draft_gain, lane_opponent_known, rank_value
     db = tmp_path / "draft.duckdb"
     synthetic_db(db)
     build_stats(db, tmp_path / "stats.duckdb")
@@ -378,7 +381,8 @@ def test_blind_pick_prefers_champions_hard_to_counter(tmp_path, champions):
     best, _ = recommend(stats, "MIDDLE", pool=[2, 3], allies=[], enemies=[4])
     assert best[0].champ == 3 and best[1].exposure < 0
     r = best[1]
-    assert rank_value(r, True, Params()) < r.score == rank_value(r, False, Params())
+    sighted = r.score + CONTEXT_WEIGHT * draft_gain(r)
+    assert rank_value(r, True, Params()) < sighted == rank_value(r, False, Params())
 
 
 def test_composition_term_rewards_filling_a_gap(tmp_path, champions):

@@ -843,6 +843,8 @@ export const EN: Record<string, string> = {
   "Toi sur {c}": "You on {c}",
   "Vis-à-vis pas encore choisi": "Lane opponent not picked yet",
   "Hors de ton pool, mais forts dans cette draft": "Outside your pool, but strong in this draft",
+  "{v} pt dans cette draft": "{v} pt in this draft",
+  "Effet de cette draft : vis-à-vis, reste de leur équipe, tes alliés et la composition": "Effect of this draft: lane opponent, rest of their team, your allies and team composition",
   "Tes meilleurs picks": "Your best picks",
   "✓ Présélectionné dans le client": "✓ Hovered in the client",
   // accueil

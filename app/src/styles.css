@@ -1265,6 +1265,8 @@ html.is-overlay, html.is-overlay body, html.is-overlay #root { background: trans
 .badge--best { color: var(--good); background: rgba(48, 209, 88, 0.14); }
 .badge--picked { color: var(--accent); background: var(--accent-tint); }
 .badge--discovery { color: var(--discovery); background: rgba(191, 90, 242, 0.14); }
+.badge--gain.is-up { color: var(--good); background: rgba(48, 209, 88, 0.14); }
+.badge--gain.is-down { color: var(--bad); background: rgba(255, 98, 89, 0.14); }
 .tone-bg-good { background: var(--good); }
 .tone-bg-bad { background: var(--bad); }
 .tone-bg-neutral { background: var(--text-3); }

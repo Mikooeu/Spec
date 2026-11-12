@@ -226,8 +226,17 @@ def lane_opponent_known(stats: Stats, role: str, enemies: list[int]) -> bool:
     return any(stats.role_probability(e, role) >= 0.5 for e in enemies)
 
 
+CONTEXT_WEIGHT = 0.5       # classement : l’effet de la draft compte une fois et demie (le score affiché reste calibré)
+DISCOVERY_MIN_BASE = 0.5   # découverte : champion fort ce patch obligatoire
+
+
+def draft_gain(r: Result) -> float:
+    """Ce que la draft ajoute au winrate de base : vis-à-vis, counters, synergies, composition."""
+    return r.lane + r.counters + r.synergies + r.composition
+
+
 def rank_value(r: Result, blind: bool, params: Params | None) -> float:
-    return r.score + ((params or Params()).blind * r.exposure if blind else 0.0)
+    return r.score + CONTEXT_WEIGHT * draft_gain(r) + ((params or Params()).blind * r.exposure if blind else 0.0)
 
 
 def recommend(stats: Stats, role: str, pool: list[int], allies: list[int], enemies: list[int],
@@ -244,7 +253,8 @@ def recommend(stats: Stats, role: str, pool: list[int], allies: list[int], enemi
     pool_set = set(pool)
     candidates = [c for (c, r), (g, _) in stats.base.items()
                   if r == role and g >= DISCOVERY_MIN_GAMES and c not in pool_set and c not in taken]
-    discovery = max((score_champion(stats, c, role, allies, enemies, params) for c in candidates),
+    scored = (score_champion(stats, c, role, allies, enemies, params) for c in candidates)
+    discovery = max((r for r in scored if r.base >= DISCOVERY_MIN_BASE),
                     key=lambda r: rank_value(r, blind, params), default=None)
     return pool_results[:top], discovery
 

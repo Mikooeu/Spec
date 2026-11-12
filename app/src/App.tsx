@@ -23,7 +23,7 @@ import { CompactScreen } from "./components/CompactScreen";
 import { InGameView, type GameStart } from "./components/InGameScreen";
 import { RecapView } from "./components/RecapView";
 import { HomeScreen } from "./components/HomeScreen";
-import { useLiveGame } from "./lib/live";
+import { STARTED_AT, useLiveGame } from "./lib/live";
 import { OverlayScreen } from "./components/OverlayScreen";
 import { LoadingCards } from "./components/LoadingCards";
 import { closeOverlay, openOverlay, useOverlaySettings } from "./lib/overlay";
@@ -155,7 +155,7 @@ export default function App() {
   // écran de chargement : les 10 joueurs, lus une fois la draft terminée (la partie n'a pas encore commencé)
   const [loading, setLoading] = useState<LoadingData | null>(null);
   // l'API du jeu peut répondre dès l'écran de chargement : la partie n'a vraiment commencé qu'avec le chrono qui tourne
-  const started = liveGame != null && liveGame.time > 1;
+  const started = liveGame != null && liveGame.time > STARTED_AT;
   // une fois la partie commencée, l'écran de chargement ne revient plus (fin de partie : le jeu se ferme avant le client)
   const [hadStart, setHadStart] = useState(false);
   useEffect(() => { if (started) setHadStart(true); else if (!inGame) setHadStart(false); }, [started, inGame]);

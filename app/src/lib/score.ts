@@ -15,6 +15,11 @@ export const ROLE_SHORT = ["TOP", "JGL", "MID", "ADC", "SUP"];
 export const DISCOVERY_MIN_GAMES = 200;
 /** Découvertes : champions joués dans au moins 3 % des parties de ce rôle (pas de top proposé en mid). */
 export const DISCOVERY_MIN_PICKRATE = 0.03;
+/** Découvertes : champion fort ce patch obligatoire (winrate de base lissé d'au moins 50 %). */
+export const DISCOVERY_MIN_BASE = 0.5;
+/** Classement : l'effet de la draft (vis-à-vis, counters, synergies, composition) compte une fois et demie ;
+ *  la force du champion ce patch reste la base. Le % affiché reste l'estimation calibrée. */
+export const CONTEXT_WEIGHT = 0.5;
 /** Botlane : partenaire de lane (ADC ↔ support). */
 const BOT_PARTNER: Record<number, number> = { 3: 4, 4: 3 };
 const BOT_SYNERGY_BOOST = 1;   // synergie avec ton partenaire de lane : ×2
@@ -366,9 +371,15 @@ export function isBlind(stats: Stats, role: number, enemies: number[]): boolean 
   return enemies.length < 5 && !laneOpponentKnown(stats, role, enemies);
 }
 
-/** Valeur de classement : le score, moins une part de l'exposition quand on pick à l'aveugle. */
+/** Ce que la draft ajoute (ou retire) au winrate de base : vis-à-vis, counters, synergies, composition. */
+export function draftGain(r: Result): number {
+  return r.lane + r.counters + r.synergies + r.composition;
+}
+
+/** Valeur de classement : le score, plus l'effet de la draft une seconde fois, moins une part de l'exposition
+ *  quand on pick à l'aveugle. */
 export function rankValue(stats: Stats, r: Result, blind: boolean): number {
-  return r.score + (blind ? (stats.params.blind ?? 0.5) * r.exposure : 0);
+  return r.score + CONTEXT_WEIGHT * draftGain(r) + (blind ? (stats.params.blind ?? 0.5) * r.exposure : 0);
 }
 
 export function recommend(
@@ -389,7 +400,8 @@ export function recommend(
     const [cs, rs] = key.split("|");
     const c = Number(cs);
     if (Number(rs) !== role || g < DISCOVERY_MIN_GAMES || !playedInRole(stats, g) || poolSet.has(c) || taken.has(c)) continue;
-    others.push(scoreChampion(stats, c, role, allies, enemies));
+    const r = scoreChampion(stats, c, role, allies, enemies);
+    if (r.base >= DISCOVERY_MIN_BASE) others.push(r);
   }
   others.sort(rank);
   return { pool: poolResults.slice(0, top), discoveries: others.slice(0, discoveries), blind };
