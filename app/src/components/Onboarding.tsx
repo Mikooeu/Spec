@@ -4,7 +4,7 @@ import { champName, normalize } from "../lib/ui";
 import { loadHistory, type Game } from "../lib/history";
 import type { Account } from "../lib/lcu";
 import type { PersonalState } from "../lib/api";
-import type { Roles } from "../lib/settings";
+import { useLang, type Roles } from "../lib/settings";
 import type { Pools } from "./PoolScreen";
 import { ChampionIcon } from "./ChampionIcon";
 import { Logo } from "./Logo";
@@ -18,12 +18,15 @@ interface Props {
   clientOn: boolean; account: Account | null; perso: PersonalState;
   onRegister: (code: string) => Promise<string | null>;
   onDone: () => void;
+  /** Ouvre directement les réglages (« Revoir l'accueil » depuis Réglages) au lieu de l'écran de bienvenue. */
+  skipWelcome?: boolean;
 }
 
 const STEPS = [t("Tes rôles"), t("Ton champion pool"), t("Ton compte")];
 
 /** Premier lancement : rôles, champion pool, liaison du compte. Chaque étape peut être passée. */
-export function Onboarding({ stats, roles, onRoles, pools, onPools, clientOn, account, perso, onRegister, onDone }: Props) {
+export function Onboarding({ stats, roles, onRoles, pools, onPools, clientOn, account, perso, onRegister, onDone, skipWelcome = false }: Props) {
+  const [welcome, setWelcome] = useState(!skipWelcome);
   const [step, setStep] = useState(0);
   const chosen = [roles.main, roles.second].filter((r): r is number => r != null);
   const poolRoles = chosen.length ? chosen : [2];
@@ -38,6 +41,7 @@ export function Onboarding({ stats, roles, onRoles, pools, onPools, clientOn, ac
     else if (step < 2) setStep(step + 1);
     else onDone();
   };
+  if (welcome) return <Welcome onStart={() => setWelcome(false)} />;
   return (
     <div className="onboarding">
       <div className="onboarding__inner">
@@ -69,6 +73,41 @@ export function Onboarding({ stats, roles, onRoles, pools, onPools, clientOn, ac
           <button className="btn btn--primary" onClick={next}>
             {nextRole != null ? t("Suivant : {role}", { role: ROLE_LABELS[nextRole] }) : step < 2 ? t("Suivant") : t("Terminer")}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Premier écran : ce que fait Spec, en trois cartes, et le choix de la langue. */
+function Welcome({ onStart }: { onStart: () => void }) {
+  const [lang, setLang] = useLang();
+  const cards: [string, string, string][] = [
+    [t("Pendant la draft"), t("Tes meilleurs picks"), t("Classés selon ton pool, leur équipe et la tienne, avec les runes à importer.")],
+    [t("En partie"), t("Ton build et l’overlay"), t("Ordre des sorts, objets face à leur équipe, et leurs stats en jeu.")],
+    [t("Après la partie"), t("Ton récap"), t("Ce qui a marché, ce qui a coincé, et ta progression en LP.")],
+  ];
+  return (
+    <div className="onboarding welcome">
+      <div className="welcome__inner fade-in">
+        <Logo className="welcome__logo" />
+        <div className="welcome__title">
+          <h1>{t("Bienvenue sur Spec")}</h1>
+          <p>{t("Ton assistant de draft pour League of Legends.")}</p>
+        </div>
+        <ul className="welcome__cards">
+          {cards.map(([k, h, d]) => (
+            <li key={k} className="card welcome__card"><small>{k}</small><strong>{h}</strong><span>{d}</span></li>
+          ))}
+        </ul>
+        <div className="welcome__start">
+          <button className="btn btn--primary" onClick={onStart} autoFocus>{t("Commencer")}</button>
+          <small>{t("3 réglages, puis une visite de 1 minute")}</small>
+        </div>
+        <div className="welcome__lang" role="group" aria-label={t("Langue")}>
+          <button className={lang === "fr" ? "is-active" : ""} aria-pressed={lang === "fr"} onClick={() => setLang("fr")}>Français</button>
+          <span aria-hidden>·</span>
+          <button className={lang === "en" ? "is-active" : ""} aria-pressed={lang === "en"} onClick={() => setLang("en")}>English</button>
         </div>
       </div>
     </div>

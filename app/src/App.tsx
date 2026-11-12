@@ -33,6 +33,7 @@ import { Logo } from "./components/Logo";
 import { localizeChampions } from "./lib/ddragon";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { Onboarding } from "./components/Onboarding";
+import { Tour, specTour } from "./components/Tour";
 import { useDefaultRegion, useOnboarded, useRoles } from "./lib/settings";
 import { t } from "./lib/i18n";
 
@@ -205,6 +206,10 @@ export default function App() {
   // applique la taille de fenêtre au lancement et à chaque bascule
   const [onboarded, setOnboarded] = useOnboarded();
   const [onboarding, setOnboarding] = useState(false);
+  const [replayOnboarding, setReplayOnboarding] = useState(false);
+  // visite guidée « Bienvenue sur Spec » : une fois après l'accueil (et une fois pour ceux qui avaient déjà Spec)
+  const [tourDone, setTourDone] = usePersistent<boolean>("spec.tour.done", false);
+  const [tour, setTour] = useState(false);
   // fenêtre compacte agrandie à la main (bouton Agrandir de Windows, bord tiré) : on repasse en affichage complet
   const expandedByUser = useRef(false);
   useEffect(() => {
@@ -232,13 +237,16 @@ export default function App() {
 
   // accueil au premier lancement ; ceux qui ont déjà un pool (versions précédentes) ne le voient pas
   useEffect(() => {
-    if (!stats || onboarded) return;
-    if (pools.some((p) => p.length)) setOnboarded(true);
+    if (!stats) return;
+    if (onboarded) { if (!tourDone) setTour(true); return; }   // déjà configuré : la visite une seule fois
+    if (pools.some((p) => p.length)) { setOnboarded(true); if (!tourDone) setTour(true); }
     else setOnboarding(true);
   }, [stats]); // eslint-disable-line react-hooks/exhaustive-deps
   const finishOnboarding = () => {
     setOnboarded(true);
     setOnboarding(false);
+    if (!tourDone && !replayOnboarding) setTour(true);
+    setReplayOnboarding(false);
     if (roles.main != null) setTierRole(roles.main);
     setScreen("draft");
   };
@@ -254,7 +262,7 @@ export default function App() {
   if (onboarding && stats) {
     return (
       <Onboarding stats={stats} roles={roles} onRoles={setRoles} pools={pools} onPools={setPools}
-                  clientOn={clientOn} account={me} perso={perso} onDone={finishOnboarding}
+                  clientOn={clientOn} account={me} perso={perso} onDone={finishOnboarding} skipWelcome={replayOnboarding}
                   onRegister={async (code) => {
                     const err = me?.puuid ? await register(me.puuid, me.name, code) : t("Lance le client LoL pour lier ton compte.");
                     if (!err) refreshPerso();
@@ -291,7 +299,7 @@ export default function App() {
         <div className="brand">
           <Logo className="brand__mark" />
           <span className="brand__name">{t("Spec")}</span>
-          <button className="icon-btn brand__compact has-tip" onClick={() => setCompact(true)} disabled={!stats}
+          <button className="icon-btn brand__compact has-tip" data-tour="compact" onClick={() => setCompact(true)} disabled={!stats}
                   data-tip={t("Mode compact")} data-tip-sub={t("Petite fenêtre à côté du client")} aria-label={t("Passer en mode compact")}>
             <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
               <path d="M2 3h12v10H2zM8.5 8h4v3.5h-4z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
@@ -302,7 +310,7 @@ export default function App() {
           {SCREENS.map(([key, label]) => (
             <Fragment key={key}>
               {key === "overlay" && <span className="nav__sep" aria-hidden />}
-              <button className={`nav${screen === key || (key === "tier" && screen === "champion") ? " is-active" : ""}`}
+              <button data-tour={key} className={`nav${screen === key || (key === "tier" && screen === "champion") ? " is-active" : ""}`}
                       onClick={() => setScreen(key)} aria-current={screen === key ? "page" : undefined}>
                 <NavIcon screen={key} />
                 <span className="nav__label">{label}</span>
@@ -355,7 +363,8 @@ export default function App() {
         {screen === "settings" && (
           <SettingsScreen account={me} registered={perso.kind === "ready"}
                           compact={compact} onCompact={setCompact} onTop={onTop} onOnTop={setOnTopPref}
-                          onCheckUpdate={checkUpdate} onReplayOnboarding={() => setOnboarding(true)} />
+                          onCheckUpdate={checkUpdate} onReplayOnboarding={() => { setReplayOnboarding(true); setOnboarding(true); }}
+                          onReplayTour={() => { setScreen("draft"); setTour(true); }} />
         )}
         {stats && screen === "draft" && live && (
           <DraftScreen stats={stats} draft={live} pool={pools[live.role]} wide={wide} live
@@ -386,6 +395,10 @@ export default function App() {
                        onChange={setDraft} onEnd={() => setDraft(null)} perso={perso} />
         )}
       </main>
+      {tour && stats && (
+        <Tour steps={specTour()} onClose={() => { setTour(false); setTourDone(true); }}
+              onDemo={draft ? undefined : () => { setScreen("draft"); setDraft(demoDraft(stats)); }} />
+      )}
     </div>
     </SpellImportContext.Provider>
     </RuneImportContext.Provider>

@@ -14,10 +14,11 @@ interface Props {
   onTop: boolean; onOnTop: (on: boolean) => void;
   onCheckUpdate: () => Promise<CheckResult>;
   onReplayOnboarding: () => void;
+  onReplayTour: () => void;
 }
 
 /** Réglages : langue, démarrage, mode compact, touche du Flash, région par défaut, compte, dossier, version. */
-export function SettingsScreen({ account, registered, compact, onCompact, onTop, onOnTop, onCheckUpdate, onReplayOnboarding }: Props) {
+export function SettingsScreen({ account, registered, compact, onCompact, onTop, onOnTop, onCheckUpdate, onReplayOnboarding, onReplayTour }: Props) {
   const [lang, setLang] = useLang();
   const [flashKey, setFlashKey] = useFlashKey();
   const [region, setRegion] = useDefaultRegion();
@@ -87,6 +88,9 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
         </Row>
         <Row label={t("Accueil")} desc={t("Revoir les 3 étapes du premier lancement : rôles, champion pool, compte.")}>
           <button className="btn btn--secondary" onClick={onReplayOnboarding}>{t("Revoir l’accueil")}</button>
+        </Row>
+        <Row label={t("Visite guidée")} desc={t("Revoir la présentation des écrans de Spec, en 5 étapes.")}>
+          <button className="btn btn--secondary" onClick={onReplayTour}>{t("Revoir la visite")}</button>
         </Row>
         <Row label={t("Dossier d’installation")}
              desc={t("{v} · Pour déplacer Spec : désinstalle-le puis réinstalle-le en choisissant le dossier. Ton pool et tes réglages sont gardés.", { v: folder ?? t("Choisi à l’installation") })}>

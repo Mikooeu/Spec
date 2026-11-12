@@ -1764,3 +1764,38 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .lp2__strip strong { font-size: 0.9375rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lp2__strip .muted { font-size: 0.75rem; white-space: nowrap; }
 .lp2__strip-crest { width: 1.375rem; height: 1.375rem; object-fit: contain; flex: none; }
+
+/* ---- 0.14.0 : bienvenue et visite guidée ---- */
+.welcome { align-items: center; }
+.welcome__inner { width: min(52rem, 100% - 3rem); display: flex; flex-direction: column; align-items: center; gap: 1.75rem; padding: 2.5rem 0; text-align: center; }
+.welcome__logo { width: 3.5rem; height: 3.5rem; }
+.welcome__title { display: flex; flex-direction: column; gap: 0.625rem; }
+.welcome__title h1 { font-size: 2.125rem; font-weight: 700; letter-spacing: -0.01em; }
+.welcome__title p { font-size: 0.9375rem; color: var(--text-2); }
+.welcome__cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.875rem; width: 100%; align-items: stretch; }
+.welcome__card { display: flex; flex-direction: column; gap: 0.5rem; padding: 1.125rem 1.125rem 1.25rem; text-align: left; height: 100%; box-sizing: border-box; }
+.welcome__card small { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+.welcome__card strong { font-size: 1rem; font-weight: 600; }
+.welcome__card span { font-size: 0.8125rem; line-height: 1.45; color: var(--text-2); }
+.welcome__start { display: flex; flex-direction: column; align-items: center; gap: 0.625rem; }
+.welcome__start small { font-size: 0.75rem; color: var(--text-3); }
+.welcome__lang { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-3); }
+.welcome__lang button { background: none; border: 0; padding: 0.25rem; font: inherit; color: var(--text-3); cursor: pointer; }
+.welcome__lang button.is-active { color: var(--text); font-weight: 600; }
+@media (max-width: 720px) { .welcome__cards { grid-template-columns: 1fr; } }
+
+.tour { position: fixed; inset: 0; z-index: 100; }
+.tour__veil { position: fixed; background: rgba(0, 0, 0, 0.62); }
+.tour__ring { position: fixed; border: 2px solid var(--accent); border-radius: 0.625rem; pointer-events: none; box-shadow: 0 0 0 4px rgba(64, 156, 255, 0.18); }
+.tour__bubble { position: fixed; width: 20rem; display: flex; flex-direction: column; gap: 0.625rem; padding: 1rem 1.125rem; border-radius: 0.875rem;
+                background: #232327; border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5); }
+.tour__bubble.is-center { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 23.75rem; align-items: center; text-align: center; padding: 1.5rem; }
+.tour__bubble h2 { font-size: 1rem; font-weight: 600; }
+.tour__bubble.is-center h2 { font-size: 1.25rem; font-weight: 700; }
+.tour__bubble p { font-size: 0.8125rem; line-height: 1.45; color: var(--text-2); }
+.tour__count { font-size: 0.6875rem; font-weight: 600; color: var(--accent); }
+.tour__actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem; width: 100%; }
+.tour__actions .grow { flex: 1; }
+.tour__actions--center { justify-content: center; }
+.tour__skip { color: var(--text-3); font-weight: 500; }
+.tour__hint { font-size: 0.6875rem; color: var(--text-3); }
