@@ -466,80 +466,76 @@ export function orderSpells([a, b]: [number, number], flashKey: "D" | "F"): [num
   return flashKey === "D" ? [FLASH, other] : [other, FLASH];
 }
 
-/** Ban conseillé. `vs` : le joueur de ton équipe que ce champion gênerait le plus (toi, un allié, ou personne
- *  si aucun pick n'est connu dans son rôle) ; `winrate` : son winrate face à lui, sinon le winrate du champion. */
+/** Ban conseillé (toujours un champion de ton rôle). `vs` : toi si ton matchup décide, un allié s'il est le plus
+ *  gêné, sinon null ; `winrate` : le winrate de ce joueur face à lui, sinon le winrate du champion. */
 export interface BanSuggestion { champ: number; role: number; winrate: number; games: number; vs: number | null; mine: boolean }
 
-/** Ton vis-à-vis compte une fois et demie : c'est ta lane que le ban protège d'abord. */
-const BAN_MY_LANE = 1.5;
-/** Champions retenus : au moins 1 % des parties de ce rôle (pas de pick hors méta). */
+/** Ton matchup compte une fois et demie : c'est d'abord ta lane que le ban protège. */
+const BAN_MATCHUP = 1.5;
+/** Champions retenus : au moins 1 % des parties de ton rôle (pas de pick hors méta). */
 const BAN_MIN_PICKRATE = 0.01;
+/** Pick rate à partir duquel un champion compte entièrement (en dessous, on a moins de chances de l'affronter). */
+const BAN_FULL_PICKRATE = 0.05;
 
 /**
- * 3 bans conseillés, d'après la draft : pour chaque champion, la perte de winrate qu'il ferait subir à ton équipe,
- * multipliée par la probabilité de l'affronter (son pick rate dans chaque rôle).
- *  - rôle où un champion de ton équipe est connu (ta présélection, ou un allié qui survole ou a verrouillé) :
- *    écart entre le winrate de ce champion et son winrate face à lui (vrai matchup), plus ce qu'il coûte aux
- *    autres champions connus quand il est ailleurs sur la carte (counters) ;
- *  - rôle encore inconnu : sa force ce patch (winrate − 50 %).
- * Ta lane compte une fois et demie. Les bans changent donc avec chaque présélection.
+ * 3 bans conseillés, tous dans ton rôle. Pour chaque champion de ton rôle, ce qu'il coûterait à ton équipe :
+ *  - sa force ce patch (winrate − 50 %) ;
+ *  - ton matchup si tu as présélectionné (ton winrate de base − ton winrate face à lui), compté 1,5 fois ;
+ *  - ce qu'il coûte aux champions déjà connus de ton équipe (counters) ;
+ *  - ses synergies avec les champions déjà connus de l'équipe adverse.
+ * Le total est pondéré par la probabilité de l'affronter (pick rate, plein à partir de 5 %).
  */
 export function banSuggestions(stats: Stats, role: number, myChamp: number | null, allies: (number | null)[],
-                               taken: number[], n = 3, params: Params = stats.params): BanSuggestion[] {
-  const skip = new Set(taken);
-  const ours: (number | null)[] = [0, 1, 2, 3, 4].map((r) => (r === role ? myChamp : allies[r] ?? null));
-  for (const c of ours) if (c != null) skip.add(c);
-  const known = ours.map((c, r) => ({ c, r })).filter((x): x is { c: number; r: number } => x.c != null);
-  const baseOf = new Map(known.map(({ c, r }) => {
-    const [g, w] = stats.base.get(k2(c, r)) ?? [0, 0];
-    return [r, smoothed(g, w, 0.5, params.k_base)];
-  }));
+                               enemies: number[], taken: number[], n = 3, params: Params = stats.params): BanSuggestion[] {
+  const skip = new Set([...taken, ...enemies]);
+  const team = allies.map((c, r) => ({ c, r })).filter((x): x is { c: number; r: number } => x.c != null && x.r !== role);
+  if (myChamp != null) skip.add(myChamp);
+  for (const a of team) skip.add(a.c);
+  const baseOf = (c: number, r: number) => { const [g, w] = stats.base.get(k2(c, r)) ?? [0, 0]; return smoothed(g, w, 0.5, params.k_base); };
+  const myBase = myChamp != null ? baseOf(myChamp, role) : 0.5;
+  const teamBase = team.map((a) => baseOf(a.c, a.r));
   const total = stats.matchesWeighted;
-  type Best = { value: number; role: number; winrate: number; games: number; vs: number | null };
-  const scored: (BanSuggestion & { value: number })[] = [];
-  const byChamp = new Map<number, { value: number; best: Best | null }>();
+  const out: (BanSuggestion & { value: number })[] = [];
   for (const [key, [g, w]] of stats.base) {
     const [cs, rs] = key.split("|");
-    const c = Number(cs), r = Number(rs);
-    if (skip.has(c) || g < DISCOVERY_MIN_GAMES) continue;
-    const presence = total ? g / total : 1;
-    if (total && presence < BAN_MIN_PICKRATE) continue;
+    const c = Number(cs);
+    if (Number(rs) !== role || skip.has(c) || g < DISCOVERY_MIN_GAMES) continue;
+    const pickrate = total ? g / total : BAN_FULL_PICKRATE;
+    if (pickrate < BAN_MIN_PICKRATE) continue;
     const strength = smoothed(g, w, 0.5, params.k_base);
-    // ce que ce champion coûte à ton équipe s'il joue ce rôle
-    const o = ours[r];
-    let lane: number, winrate: number, games: number;
-    if (o != null) {
-      const base = baseOf.get(r)!;
-      const [lg, lw] = stats.lane.get(k3(o, r, c)) ?? [0, 0];
-      winrate = smoothed(lg, lw, base, params.k_delta);
-      lane = base - winrate;
-      games = lg;
-    } else {
-      lane = strength - 0.5;
-      winrate = strength;
-      games = g;
+    let matchup = 0, myWr = strength, myGames = 0;
+    if (myChamp != null) {
+      const [lg, lw] = stats.lane.get(k3(myChamp, role, c)) ?? [0, 0];
+      myWr = smoothed(lg, lw, myBase, params.k_delta);
+      matchup = myBase - myWr;
+      myGames = lg;
     }
-    let counters = 0;
-    for (const k of known) {
-      if (k.r === r) continue;
-      const [vg, vw] = stats.vs.get(k3(k.c, k.r, c)) ?? [0, 0];
-      const base = baseOf.get(k.r)!;
-      counters += params.alpha * (base - smoothed(vg, vw, base, params.k_delta));
+    // ce qu'il coûte aux alliés connus, et l'allié qu'il gêne le plus
+    let counters = 0, worst: { ally: number; loss: number; wr: number; games: number } | null = null;
+    team.forEach((a, i) => {
+      const [vg, vw] = stats.vs.get(k3(a.c, a.r, c)) ?? [0, 0];
+      const wr = smoothed(vg, vw, teamBase[i], params.k_delta);
+      const loss = teamBase[i] - wr;
+      counters += params.alpha * loss;
+      if (!worst || loss > worst.loss) worst = { ally: a.c, loss, wr, games: vg };
+    });
+    // ses synergies avec les adversaires déjà connus
+    let synergy = 0;
+    for (const e of enemies) {
+      const [ag, aw] = stats.ally.get(k3(c, role, e)) ?? [0, 0];
+      synergy += params.beta * (smoothed(ag, aw, strength, params.k_delta) - strength);
     }
-    const weight = r === role ? BAN_MY_LANE : 1;
-    const value = presence * weight * (lane + counters);
-    const entry = byChamp.get(c) ?? { value: 0, best: null };
-    entry.value += value;
-    if (!entry.best || value > entry.best.value) entry.best = { value, role: r, winrate, games, vs: o };
-    byChamp.set(c, entry);
+    const threat = (strength - 0.5) + BAN_MATCHUP * matchup + counters + synergy;
+    const value = threat * Math.sqrt(Math.min(1, pickrate / BAN_FULL_PICKRATE));
+    // raison affichée : ton matchup s'il pèse le plus, sinon l'allié le plus gêné, sinon la force du champion
+    const w2 = worst as { ally: number; loss: number; wr: number; games: number } | null;
+    const allyWins = w2 != null && params.alpha * w2.loss > BAN_MATCHUP * matchup && params.alpha * w2.loss > strength - 0.5 && w2.loss > 0.01;
+    if (myChamp != null && !allyWins && myGames > 0) out.push({ champ: c, role, winrate: myWr, games: myGames, vs: myChamp, mine: true, value });
+    else if (allyWins) out.push({ champ: c, role, winrate: w2!.wr, games: w2!.games, vs: w2!.ally, mine: false, value });
+    else out.push({ champ: c, role, winrate: strength, games: g, vs: null, mine: false, value });
   }
-  for (const [champ, { value, best }] of byChamp) {
-    if (!best || value <= 0) continue;
-    scored.push({ champ, role: best.role, winrate: best.winrate, games: best.games, vs: best.vs,
-                  mine: best.vs != null && best.role === role, value });
-  }
-  scored.sort((a, b) => b.value - a.value);
-  return scored.slice(0, n).map(({ value: _, ...b }) => b);
+  out.sort((a, b) => b.value - a.value);
+  return out.slice(0, n).map(({ value: _, ...b }) => b);
 }
 
 /** Phrase courte qui explique pourquoi un champion est (ou n'est pas) un bon choix dans cette draft. */

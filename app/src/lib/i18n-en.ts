@@ -1169,4 +1169,6 @@ export const EN: Record<string, string> = {
   "Accepter": "Accept",
   "Envoi…": "Sending…",
   "Le client n’a pas accepté. Accepte la partie dans le client.": "The client didn’t accept. Accept the match in the client.",
+  "Les {role} les plus dangereux pour ton pick et ton équipe": "The most dangerous {role} picks for you and your team",
+  "Pas encore de présélection : les {role} les plus forts et les plus joués": "No hover yet: the strongest and most played {role} picks",
 };

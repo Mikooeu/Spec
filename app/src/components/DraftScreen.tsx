@@ -461,12 +461,14 @@ export function MyPick({ stats, draft, compact = false }: { stats: Stats; draft:
 /** Phase de bans : 3 champions à bannir. */
 export function BanPanel({ stats, draft, compact = false, titled = true, onSelect }:
   { stats: Stats; draft: Draft; compact?: boolean; titled?: boolean; onSelect?: (champ: number) => void }) {
-  const taken = draft.enemies.filter((c): c is number => c != null).concat(draft.bans, draft.allyBans ?? [], draft.enemyBans ?? []);
-  const list = banSuggestions(stats, draft.role, draft.myChamp ?? null, draft.allies, taken);
+  const enemies = draft.enemies.filter((c): c is number => c != null);
+  const list = banSuggestions(stats, draft.role, draft.myChamp ?? null, draft.allies, enemies,
+                              [...draft.bans, ...(draft.allyBans ?? []), ...(draft.enemyBans ?? [])]);
   if (!list.length) return null;
   const anyPick = draft.myChamp != null || draft.allies.some((c, r) => c != null && r !== draft.role);
-  const intro = anyPick ? t("D’après ta présélection, celles de ton équipe et les champions les plus joués")
-    : t("Pas encore de présélection : les champions les plus menaçants et les plus joués ce patch");
+  const role = ROLE_LABELS[draft.role];
+  const intro = anyPick || enemies.length ? t("Les {role} les plus dangereux pour ton pick et ton équipe", { role })
+    : t("Pas encore de présélection : les {role} les plus forts et les plus joués", { role });
   const why = (b: BanSuggestion) => b.vs == null
     ? t("{pct} de winrate en {role}", { pct: pct(b.winrate), role: ROLE_LABELS[b.role] })
     : b.mine ? t("Tu gagnes {pct} contre lui", { pct: pct(b.winrate) })
