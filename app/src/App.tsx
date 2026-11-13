@@ -37,7 +37,8 @@ import { SettingsScreen } from "./components/SettingsScreen";
 import { Onboarding } from "./components/Onboarding";
 import { Tour, specTour } from "./components/Tour";
 import { PrivacyDialog } from "./components/PrivacyDialog";
-import { useDefaultRegion, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
+import { ReadyCheckToast } from "./components/ReadyCheck";
+import { appVersion, useDefaultRegion, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
 import { t } from "./lib/i18n";
 
 type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "overlay" | "settings";
@@ -87,6 +88,9 @@ export default function App() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pools, setPools] = usePersistent<Pools>("spec.pools", [[], [], [], [], []]);
   const client = useLolClient();
+  const readyCheck = client.status === "idle" ? client.readyCheck : null;
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => { appVersion().then(setVersion); }, []);
   const [roleOverride, setRoleOverride] = useState<number | null>(null);
 
   const session = client.status === "champselect" ? client.session : null;
@@ -190,9 +194,10 @@ export default function App() {
   }, [inGame != null, stats != null]); // eslint-disable-line react-hooks/exhaustive-deps
   // fenêtres par-dessus le jeu : l'écran de chargement, puis les stats dès que la partie a commencé
   useEffect(() => {
-    if (loadingPhase && loading && overlay.loading) openOverlay("loading"); else closeOverlay("loading");
+    // écran de chargement : seulement dans Spec (la fenêtre par-dessus le jeu était trop instable)
+    closeOverlay("loading");
     if ((inGame && started && overlay.enabled) || overlay.editing) openOverlay("overlay"); else closeOverlay("overlay");
-  }, [loadingPhase, loading != null, started, inGame != null, overlay.loading, overlay.enabled, overlay.editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [started, inGame != null, overlay.enabled, overlay.editing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (stats) localStorage.setItem("spec.ddragon", stats.ddragon); }, [stats]);
   // « Spec t'aide-t-il à gagner ? » : au lock, on note la place du champion dans les recos de Spec
   useEffect(() => {
@@ -313,6 +318,7 @@ export default function App() {
                      onDemoPick={(c) => draft && setDraft({ ...draft, myChamp: c, myLocked: false })}
                      onPreselect={live ? doPreselect : undefined} onBan={live ? doBan : undefined} perso={perso} game={game}
                      onPool={onPool} />
+      <ReadyCheckToast check={readyCheck} compact />
       </ItemSetImportContext.Provider>
       </SpellImportContext.Provider>
       </RuneImportContext.Provider>
@@ -360,7 +366,10 @@ export default function App() {
           </span>
         </div>
         <p className="sidebar__legal" title={footer}>{stats ? `${t("Patch {v}", { v: patchLabel(stats.meta.patch) })} · ` : ""}{t("Spec n’est pas approuvé par Riot Games.")}</p>
-        <button className="sidebar__privacy" onClick={() => setPrivacy(true)}>{t("Confidentialité")}</button>
+        <div className="sidebar__foot">
+          <button className="sidebar__privacy" onClick={() => setPrivacy(true)}>{t("Confidentialité")}</button>
+          {version && <span className="sidebar__version">v{version}</span>}
+        </div>
       </aside>
 
       <main className="main">
@@ -427,6 +436,7 @@ export default function App() {
                        onChange={setDraft} onEnd={() => setDraft(null)} perso={perso} />
         )}
       </main>
+      <ReadyCheckToast check={readyCheck} />
       {privacy && <PrivacyDialog onClose={() => setPrivacy(false)} />}
       {tour && stats && (
         <Tour steps={specTour()} onClose={() => { setTour(false); setTourDone(true); }}

@@ -49,11 +49,6 @@ export function OverlayScreen({ settings: s, onChange: save, inGame }: { setting
           <div className="ovs-row"><span className="ovs-row__label">{t("Opacité")}</span>
             <Choice value={String(s.opacity) as "60" | "80" | "100"} onChange={(o) => save({ ...s, opacity: Number(o) as 60 | 80 | 100 })}
                     options={[["60", "60 %"], ["80", "80 %"], ["100", "100 %"]]} /></div>
-          <div className="ovs-row ovs-row--top">
-            <span className="ovs-row__text"><span className="ovs-row__label">{t("Écran de chargement")}</span>
-              <small>{t("Les cartes Spec par-dessus l’écran de chargement du jeu.")}</small></span>
-            <Toggle on={s.loading} onChange={() => save({ ...s, loading: !s.loading })} label={t("Écran de chargement")} />
-          </div>
         </section>
 
         <section className="card ovs-card ovs-preview">

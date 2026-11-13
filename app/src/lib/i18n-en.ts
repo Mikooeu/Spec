@@ -1160,4 +1160,13 @@ export const EN: Record<string, string> = {
   "Le serveur n’a pas pu supprimer tes données. Réessaie dans un instant.": "The server couldn’t delete your data. Try again in a moment.",
   "Copier": "Copy",
   "Copie le récap en image, à coller sur Discord": "Copies the recap as an image, to paste on Discord",
+  "D’après ta présélection, celles de ton équipe et les champions les plus joués": "Based on your hover, your team’s hovers and the most played champions",
+  "Pas encore de présélection : les champions les plus menaçants et les plus joués ce patch": "No hover yet: the most threatening and most played champions this patch",
+  "{name} gagne {pct} contre lui": "{name} wins {pct} against them",
+  "Partie trouvée": "Match found",
+  "Acceptée. En attente des autres joueurs.": "Accepted. Waiting for the other players.",
+  "{n} s pour accepter": "{n} s to accept",
+  "Accepter": "Accept",
+  "Envoi…": "Sending…",
+  "Le client n’a pas accepté. Accepte la partie dans le client.": "The client didn’t accept. Accept the match in the client.",
 };

@@ -32,6 +32,7 @@ pub const READ_PATHS: &[&str] = &[
     "/lol-game-queues/v1/queues",            // noms des files (Solo/Duo, Flex, 5c5)
     "/lol-gameflow/v1/session",              // les 10 joueurs de la partie, à l'écran de chargement
     "/lol-perks/v1/currentpage",             // tes runes, à l'écran de chargement
+    "/lol-matchmaking/v1/ready-check",       // partie trouvée : déjà acceptée ou non
 ];
 
 /// Profil, rang et historique (au plus 100 parties) d'un joueur (chemin construit ici, jamais par l'appli).
@@ -360,6 +361,11 @@ impl Lcu {
         Ok(json!({ "summoner": summoner, "ranked": ranked, "history": history }))
     }
 
+    /// Accepte la partie trouvée (ready check). Seulement sur un clic du joueur, jamais automatiquement.
+    pub async fn accept_ready_check(&self) -> Result<(), String> {
+        self.raw(reqwest::Method::POST, "/lol-matchmaking/v1/ready-check/accept", None).await.map(|_| ())
+    }
+
     /// Choisit les deux sorts d'invocateur (D puis F) pendant la draft.
     pub async fn set_spells(&self, spell1: u32, spell2: u32) -> Result<(), String> {
         let body = spells_body(spell1, spell2)?;
@@ -622,6 +628,8 @@ mod tests {
         assert!(!is_allowed("/lol-login/v1/session"));
         assert!(!is_allowed("/lol-champ-select/v1/session/../../lol-login/v1/session"));
         assert!(!is_allowed("http://evil.example/"));
+        assert!(is_allowed("/lol-matchmaking/v1/ready-check"));
+        assert!(!is_allowed("/lol-matchmaking/v1/ready-check/accept"));
     }
 
     #[test]

@@ -25,8 +25,22 @@ export interface Session {
 export type ClientState =
   | { status: "browser" }                      // aperçu web, hors de l'appli
   | { status: "offline" }                      // client LoL fermé
-  | { status: "idle"; account: Account | null; phase: string }
+  | { status: "idle"; account: Account | null; phase: string; readyCheck?: ReadyCheck | null }
   | { status: "champselect"; account: Account | null; session: Session };
+
+/** Partie trouvée : ta réponse et le temps restant (secondes écoulées sur 12 environ). */
+export interface ReadyCheck { response: "None" | "Accepted" | "Declined"; timer: number }
+
+/** Accepte la partie trouvée. Uniquement sur un clic du joueur. Message d'erreur, ou null si c'est fait. */
+export async function acceptQueue(): Promise<string | null> {
+  if (!IN_APP) return t("Disponible dans l’appli Spec");
+  try {
+    await invoke("lcu_accept_queue");
+    return null;
+  } catch {
+    return t("Le client n’a pas accepté. Accepte la partie dans le client.");
+  }
+}
 
 /** Draft en direct : comme la draft de démo, plus l'état lock / survol des alliés. */
 export interface LiveDraft {
@@ -175,6 +189,14 @@ export function useLolClient(): ClientState {
           } catch {
             if (!stopped) setState({ status: "idle", account: account.current, phase });
           }
+        } else if (phase === "ReadyCheck") {
+          delay = 500;
+          let readyCheck: ReadyCheck | null = null;
+          try {
+            const rc = await lcuGet<{ playerResponse?: ReadyCheck["response"]; timer?: number }>("/lol-matchmaking/v1/ready-check");
+            readyCheck = { response: rc.playerResponse ?? "None", timer: rc.timer ?? 0 };
+          } catch { /* lecture facultative */ }
+          if (!stopped) setState({ status: "idle", account: account.current, phase, readyCheck });
         } else if (!stopped) {
           setState({ status: "idle", account: account.current, phase });
         }

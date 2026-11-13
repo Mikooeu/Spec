@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  LOW_DATA_GAMES, ROLE_LABELS, banSuggestions, draftGain, explain, isBlind, recommend,
+  LOW_DATA_GAMES, ROLE_LABELS, banSuggestions, type BanSuggestion, draftGain, explain, isBlind, recommend,
   scoreChampion, topForRole, type Result, type Stats,
 } from "../lib/score";
 import { RunePage } from "./Runes";
@@ -461,16 +461,16 @@ export function MyPick({ stats, draft, compact = false }: { stats: Stats; draft:
 /** Phase de bans : 3 champions à bannir. */
 export function BanPanel({ stats, draft, compact = false, titled = true, onSelect }:
   { stats: Stats; draft: Draft; compact?: boolean; titled?: boolean; onSelect?: (champ: number) => void }) {
-  const taken = [...draft.allies, ...draft.enemies].filter((c): c is number => c != null).concat(draft.bans);
-  const list = banSuggestions(stats, draft.role, draft.myChamp ?? null, taken);
+  const taken = draft.enemies.filter((c): c is number => c != null).concat(draft.bans, draft.allyBans ?? [], draft.enemyBans ?? []);
+  const list = banSuggestions(stats, draft.role, draft.myChamp ?? null, draft.allies, taken);
   if (!list.length) return null;
-  const counters = list.filter((b) => b.against).length;
-  const me = champName(stats, draft.myChamp ?? null);
-  const role = ROLE_LABELS[draft.role];
-  const intro = draft.myChamp == null ? t("Pas de présélection : les meilleurs winrates en {role}", { role: role })
-    : counters === list.length ? t("Les matchups que {me} perd le plus en {role}", { me: me, role: role })
-    : counters > 0 ? t("Les matchups que {me} perd, puis les plus forts en {role}", { me: me, role: role })
-    : t("{me} n’a pas de matchup nettement perdant : les meilleurs winrates en {role}", { me: me, role: role });
+  const anyPick = draft.myChamp != null || draft.allies.some((c, r) => c != null && r !== draft.role);
+  const intro = anyPick ? t("D’après ta présélection, celles de ton équipe et les champions les plus joués")
+    : t("Pas encore de présélection : les champions les plus menaçants et les plus joués ce patch");
+  const why = (b: BanSuggestion) => b.vs == null
+    ? t("{pct} de winrate en {role}", { pct: pct(b.winrate), role: ROLE_LABELS[b.role] })
+    : b.mine ? t("Tu gagnes {pct} contre lui", { pct: pct(b.winrate) })
+    : t("{name} gagne {pct} contre lui", { name: champName(stats, b.vs), pct: pct(b.winrate) });
   return (
     <div className={`card bans${compact ? " bans--compact" : ""}`}>
       {titled && <p className="bans__title">{t("Bans recommandés")}</p>}
@@ -485,7 +485,7 @@ export function BanPanel({ stats, draft, compact = false, titled = true, onSelec
             <span className="bans__text">
               <span className="bans__name">{champName(stats, b.champ)}</span>
               <span className="muted small">
-                {b.against ? t("Tu gagnes {pct} contre lui", { pct: pct(b.winrate) }) : t("{pct} de winrate en {role}", { pct: pct(b.winrate), role: role })} · {t("{n} parties", { n: int(b.games) })}
+                {why(b)} · {t("{n} parties", { n: int(b.games) })}
               </span>
             </span>
           </button>

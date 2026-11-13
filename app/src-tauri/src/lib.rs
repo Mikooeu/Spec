@@ -17,6 +17,12 @@ async fn lcu_preselect(state: tauri::State<'_, Lcu>, action_id: u64, champion_id
     state.preselect(action_id, champion_id).await
 }
 
+/// Accepte la partie trouvée (sur clic du joueur).
+#[tauri::command]
+async fn lcu_accept_queue(state: tauri::State<'_, Lcu>) -> Result<(), String> {
+    state.accept_ready_check().await
+}
+
 /// Dernières parties du joueur connecté (historique du profil).
 #[tauri::command]
 async fn lcu_match_history(state: tauri::State<'_, Lcu>, count: u32) -> Result<Value, String> {
@@ -151,7 +157,7 @@ pub fn run() {
         })
         .manage(Lcu::new())
         .invoke_handler(tauri::generate_handler![
-            lcu_get, lcu_preselect, lcu_set_rune_page, lcu_match_history,
+            lcu_get, lcu_preselect, lcu_accept_queue, lcu_set_rune_page, lcu_match_history,
             lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, lcu_set_item_set, live_game, overlay_open, overlay_close, overlay_interactive, install_path
         ])
         .run(tauri::generate_context!())

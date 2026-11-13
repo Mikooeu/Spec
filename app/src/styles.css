@@ -1923,3 +1923,19 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .mnote-dialog__pick { display: flex; align-items: center; gap: 0.625rem; font-size: 0.8125rem; color: var(--text-3); }
 .mnote-dialog__pick select { flex: 1; height: 2.5rem; padding: 0 0.625rem; border-radius: 10px; font: inherit; font-size: 0.875rem; color: var(--text);
   background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); }
+
+/* pied de la barre latérale : confidentialité à gauche, version à droite */
+.sidebar__foot { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-top: 0.25rem; padding: 0 0.25rem; }
+.sidebar__foot .sidebar__privacy { margin: 0; }
+.sidebar__version { font-size: 0.6875rem; line-height: 1.35; color: var(--text-3); font-variant-numeric: tabular-nums; }
+/* partie trouvée : accepter depuis Spec */
+.readycheck { position: fixed; left: 50%; bottom: 1.5rem; z-index: 60; transform: translateX(-50%); overflow: hidden;
+              display: flex; align-items: center; gap: 1.25rem; min-width: 20rem; padding: 0.875rem 1rem 0.875rem 1.25rem;
+              border-radius: 0.875rem; background: #1c1c1f; border: 1px solid rgba(255, 255, 255, 0.12);
+              box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.5); animation: readycheck-in 0.18s ease-out; }
+.readycheck__text { flex: 1; display: flex; flex-direction: column; gap: 0.125rem; }
+.readycheck__text strong { font-size: 0.9375rem; font-weight: 600; }
+.readycheck__bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--accent); transform-origin: left; transition: transform 0.5s linear; }
+.readycheck--compact { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; transform: none; min-width: 0; }
+@keyframes readycheck-in { from { opacity: 0; translate: 0 0.5rem; } }
+@media (prefers-reduced-motion: reduce) { .readycheck { animation: none; } .readycheck__bar { transition: none; } }
