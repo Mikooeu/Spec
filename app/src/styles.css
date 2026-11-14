@@ -855,6 +855,21 @@ button.game:hover { border-color: var(--separator); }
   width: max-content; padding: 0.75rem 0.875rem; border-radius: 0.75rem;
   background: var(--bg-surface-2); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.6);
   text-align: left; pointer-events: none; animation: note-tip-in 0.14s ease-out; }
+/* survol d'un pseudo de l'historique : elo dans la file de la partie */
+.rank-tip { position: fixed; z-index: 1000; display: flex; align-items: center; gap: 0.625rem; width: max-content; min-width: 9rem;
+  padding: 0.625rem 0.875rem 0.625rem 0.625rem; border-radius: 0.625rem;
+  background: var(--bg-surface-2); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.45);
+  pointer-events: none; animation: rank-tip-in 0.12s ease-out; }
+.rank-tip--above { transform: translateY(-100%); animation: none; }
+@keyframes rank-tip-in { from { opacity: 0; transform: translateY(-0.25rem); } }
+.rank-tip__crest { width: 2rem; height: 2rem; flex: none; object-fit: contain; }
+.rank-tip__crest--empty { border-radius: 50%; background: var(--bg-surface); }
+.rank-tip__text { display: flex; flex-direction: column; gap: 0.125rem; }
+.rank-tip__text small { font-size: 0.6875rem; font-weight: 500; color: var(--text-3); }
+.rank-tip__text strong { font-size: 0.875rem; font-weight: 600; color: var(--text); white-space: nowrap; }
+.rank-tip__bar { display: block; width: 6.5rem; height: 0.5625rem; margin: 0.25rem 0; border-radius: 0.25rem; background: var(--bg-surface); }
+.rank-tip__error { padding-left: 0.25rem; font-size: 0.75rem; color: var(--text-2); }
+@media (prefers-reduced-motion: reduce) { .rank-tip { animation: none; } }
 .note-tip--below { transform: translate(-50%, 0); animation-name: note-tip-in-below; }
 @keyframes note-tip-in { from { opacity: 0; transform: translate(-50%, calc(-100% + 0.25rem)); } }
 @keyframes note-tip-in-below { from { opacity: 0; transform: translate(-50%, -0.25rem); } }
@@ -1131,8 +1146,10 @@ button.dcard:hover { box-shadow: inset 0 0 0 1px var(--separator); }
 .lcard__spells .lcard__divider { width: 1px; height: 0.9em; border-radius: 0; background: rgba(255,255,255,.18); margin: 0 0.15em; }
 .lcard__spells .lcard__keystone { width: 1.5em; height: 1.5em; background: rgba(12,12,16,.9); padding: 0.08em; }
 .lcard__spells .lcard__substyle { width: 1.05em; height: 1.05em; background: rgba(12,12,16,.9); padding: 0.12em; }
-.lcard__name { font-size: 1.75em; font-weight: 600; line-height: 1.15; max-width: 92%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lcard__rank { display: flex; align-items: center; justify-content: center; gap: 0.3em; font-size: 0.82em; flex-wrap: wrap; padding: 0 0.4em; }
+.lcard__name { font-size: calc(1.75em * var(--ns, 1)); font-weight: 600; line-height: 1.15; max-width: 92%; overflow-wrap: anywhere; text-wrap: balance;
+               display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.lcard__rank { display: flex; align-items: center; justify-content: center; gap: 0.3em; font-size: 0.82em; white-space: nowrap; padding: 0 0.4em; max-width: 100%; }
+.lcard__record { font-size: 0.78em; line-height: 1.2; white-space: nowrap; margin-top: -0.15em; }
 .lcard__rank img { width: 1.2em; height: 1.2em; }
 .lcard__rank strong { font-weight: 600; }
 .lcard__wl { color: var(--text-3); }
@@ -1153,7 +1170,7 @@ html.is-overlay, html.is-overlay body, html.is-overlay #root { background: trans
 .lcards--full .lcards__duels { grid-template-columns: repeat(5, 359px); gap: 36px; height: 65px; align-items: center; }
 .lcards--full .lcard { aspect-ratio: auto; height: 634px; border-radius: 4px; }
 .lcards--full .lduel svg { width: 40px; height: 40px; }
-.lcards--full .lcard__name { font-size: 2em; }
+.lcards--full .lcard__name { font-size: calc(2em * var(--ns, 1)); }
 .lcards--full .lcard { box-shadow: 0 6px 24px rgba(0,0,0,.45); }
 .ov-stats { position: fixed; display: flex; background: rgba(10,11,15,.82); border: 1px solid rgba(255,255,255,.08); border-radius: 1vh;
             color: var(--text); font-size: 1.35vh; font-variant-numeric: tabular-nums; }

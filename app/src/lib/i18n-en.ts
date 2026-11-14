@@ -53,6 +53,7 @@ export const EN: Record<string, string> = {
   "Gros désavantage": "Big disadvantage",
   "{w}V-{l}D": "{w}W-{l}L",
   "Non classé": "Unranked",
+  "Rang indisponible pour le moment": "Rank unavailable right now",
   "{n} LP": "{n} LP",
   "KP": "KP",
   "Vision/min": "Vision/min",

@@ -12,7 +12,7 @@ import { ChampionPicker } from "./ChampionPicker";
 import { Segmented } from "./Segmented";
 import { Trend } from "./Trend";
 import { DraftBand } from "./DraftBand";
-import { GAP_LABEL, analyzeTeam, bumpForComposition, fills, type Gap } from "../lib/composition";
+import { GAP_LABEL, analyzeTeam, fills, type Gap } from "../lib/composition";
 import { t, plural } from "../lib/i18n";
 
 export interface Draft {
@@ -340,16 +340,13 @@ export function useRecos(stats: Stats, draft: Draft, pool: number[]) {
     const enemies = draft.enemies.filter((c): c is number => c != null);
     const r = recommend(stats, draft.role, pool, allies, enemies, draft.bans);
     const autofill = r.pool.length === 0;
-    // composition de ton équipe sans toi : un pick qui comble un manque gagne au plus une place
     const team = analyzeTeam(stats, allies);
-    // composition validée par le calibrage : déjà comptée dans le score ; sinon, l'ancien petit bonus d'une place
-    const calibrated = (stats.params.comp ?? []).some(Boolean);
-    const bump = (list: Result[]) => calibrated ? list
-      : bumpForComposition(stats, list.map((res) => ({ champ: res.champ, res })), team).map((x) => x.res);
+    // dans chaque section, l'ordre suit le winrate affiché
+    const byWr = (list: Result[]) => [...list].sort((a, b) => b.score - a.score);
     const rows: RecoItem[] = autofill
-      ? bump(topForRole(stats, draft.role, allies, enemies, draft.bans, 6)).map((res) => ({ res, kind: "discovery" as const }))
-      : [...bump(r.pool).map((res) => ({ res, kind: "pool" as const })),
-         ...bump(r.discoveries).map((res) => ({ res, kind: "discovery" as const }))];
+      ? byWr(topForRole(stats, draft.role, allies, enemies, draft.bans, 6)).map((res) => ({ res, kind: "discovery" as const }))
+      : [...byWr(r.pool).map((res) => ({ res, kind: "pool" as const })),
+         ...byWr(r.discoveries).map((res) => ({ res, kind: "discovery" as const }))];
     return { allies, enemies, autofill, rows, team, blind: r.blind };
   }, [stats, draft, pool]);
 }

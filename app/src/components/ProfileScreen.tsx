@@ -10,11 +10,12 @@ import { RecapView } from "./RecapView";
 import { InButton } from "./Runes";
 import { Rune, useRuneData, type RuneData } from "./Runes";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
+import { useIconSrc } from "../lib/icons";
 import { IMPACT_MIN, IMPACT_RELIABLE, impact, recaps, settle, type Recap } from "../lib/impact";
 import { Trend } from "./Trend";
 import {
   QUEUE_LABELS, duoPartner, loadDuos, type Duo, findPlayer, loadGameDetail, loadHistory, loadPlayer, loadServerHistory, mergeHistory, rankText, rankTier,
-  readRanked, readLpSeries, noteSoloLp, rankedType5c5, lpLabel, type LpPoint, type LpQueue, type Game, type GameDetail, type OtherPlayer, type PlayerLine, type QueueKind,
+  readRanked, readLpSeries, noteSoloLp, loadRank, type QueueRank, rankedType5c5, lpLabel, type LpPoint, type LpQueue, type Game, type GameDetail, type OtherPlayer, type PlayerLine, type QueueKind,
 } from "../lib/history";
 import { noteText, noteTone, rateGame, sortedParts, summaryParts, type Contribution, type Criterion, type Rating } from "../lib/rating";
 import { Segmented } from "./Segmented";
@@ -748,7 +749,8 @@ function GameDetailPanel({ stats, game, assets, me, onOpenPlayer }:
             {team.players.map((p, i) => (
               <PlayerRow key={`${p.puuid ?? p.name}-${i}`} stats={stats} p={p} duration={detail.duration} assets={assets}
                          maxDamage={maxDamage} rating={notes.get(p) ?? null}
-                         isMe={p.puuid != null && p.puuid === me} onOpen={() => onOpenPlayer(p.puuid)} />
+                         isMe={p.puuid != null && p.puuid === me} onOpen={() => onOpenPlayer(p.puuid)}
+                         queue={game.queue === "flex" ? "flex" : "solo"} />
             ))}
           </div>
         );
@@ -788,8 +790,8 @@ function PlayedRunesView({ stats, teams, runes, me }:
   );
 }
 
-function PlayerRow({ stats, p, duration, assets, maxDamage, rating, isMe, onOpen }:
-  { stats: Stats; p: PlayerLine; duration: number; assets: Assets; maxDamage: number; rating: Rating | null; isMe: boolean; onOpen: () => void }) {
+function PlayerRow({ stats, p, duration, assets, maxDamage, rating, isMe, onOpen, queue }:
+  { stats: Stats; p: PlayerLine; duration: number; assets: Assets; maxDamage: number; rating: Rating | null; isMe: boolean; onOpen: () => void; queue: "solo" | "flex" }) {
   const kda = p.deaths ? (p.kills + p.assists) / p.deaths : p.kills + p.assists;
   const one = dec1;
   return (
@@ -803,6 +805,7 @@ function PlayerRow({ stats, p, duration, assets, maxDamage, rating, isMe, onOpen
           <button className="pline__name pline__link" onClick={onOpen} title={t("Ouvrir le profil de {name}", { name: p.name })}
                   aria-label={t("Ouvrir le profil de {name}", { name: p.name })}>
             {p.name}<span aria-hidden> ↗</span>
+            <RankTip puuid={p.puuid} queue={queue} />
           </button>
         )}
         {rating?.badge && <span className={`badge-note badge-note--${rating.badge.toLowerCase()}`}>{rating.badge}</span>}
@@ -847,12 +850,13 @@ function persoText(perso: PersonalState): string {
 /** Icône d'invocateur (Data Dragon), cercle vide si inconnue. */
 function ProfileIcon({ version, icon, size = 3 }: { version: string; icon: number | null; size?: number }) {
   const [failed, setFailed] = useState(false);
+  const src = useIconSrc(version, icon);
+  useEffect(() => setFailed(false), [icon]);
   const box = { width: `${size}rem`, height: `${size}rem` };
-  if (icon == null || failed) return <span className="icon icon--empty" style={box} aria-hidden />;
+  if (icon == null || failed || !src) return <span className="icon icon--empty" style={box} aria-hidden />;
   return (
     <span className="icon icon--image account__icon" style={box}>
-      <img src={`https://ddragon.leagueoflegends.com/cdn/${version}/img/profileicon/${icon}.png`} alt={t("Icône d’invocateur")}
-           draggable={false} onError={() => setFailed(true)} />
+      <img src={src} alt={t("Icône d’invocateur")} decoding="async" draggable={false} onError={() => setFailed(true)} />
     </span>
   );
 }
@@ -1336,6 +1340,56 @@ function RatingBreakdown({ rating }: { rating: Rating }) {
 }
 
 /** Rang Solo/Duo avec l'emblème Riot (Community Dragon) ; le texte seul si l'image ne charge pas. */
+/** Carte au survol d'un pseudo de l'historique : son elo dans la file de la partie (Solo/Duo, ou Flex). */
+function RankTip({ puuid, queue }: { puuid: string; queue: "solo" | "flex" }) {
+  const anchor = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number; below: boolean } | null>(null);
+  const [data, setData] = useState<QueueRank | "loading" | "error">("loading");
+  useEffect(() => {
+    const host = anchor.current?.parentElement;
+    if (!host) return;
+    let timer = 0, alive = true;
+    const show = () => {
+      timer = window.setTimeout(() => {
+        const r = host.getBoundingClientRect();
+        const below = window.innerHeight - r.bottom > 90;
+        setPos({ x: r.left, y: below ? r.bottom + 6 : r.top - 6, below });
+        loadRank(puuid, queue).then((d) => alive && setData(d)).catch(() => alive && setData("error"));
+      }, 250);
+    };
+    const hide = () => { window.clearTimeout(timer); setPos(null); };
+    host.addEventListener("mouseenter", show); host.addEventListener("mouseleave", hide);
+    host.addEventListener("focus", show); host.addEventListener("blur", hide);
+    window.addEventListener("scroll", hide, true);
+    return () => {
+      alive = false; hide();
+      host.removeEventListener("mouseenter", show); host.removeEventListener("mouseleave", hide);
+      host.removeEventListener("focus", show); host.removeEventListener("blur", hide);
+      window.removeEventListener("scroll", hide, true);
+    };
+  }, [puuid, queue]);
+  const label = queue === "flex" ? t("Flex") : t("Solo/Duo");
+  return (
+    <span ref={anchor} hidden>
+      {pos && createPortal(
+        <div className={`rank-tip${pos.below ? "" : " rank-tip--above"}`} role="tooltip" style={{ left: pos.x, top: pos.y }}>
+          {data === "error" ? <span className="rank-tip__error">{t("Rang indisponible pour le moment")}</span> : (
+            <>
+              {data !== "loading" && data.tier
+                ? <img className="rank-tip__crest" alt="" aria-hidden draggable={false}
+                       src={`https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/${data.tier}.svg`} />
+                : <span className="rank-tip__crest rank-tip__crest--empty" />}
+              <span className="rank-tip__text">
+                <small>{label}</small>
+                {data === "loading" ? <span className="rank-tip__bar" /> : <strong>{data.rank ?? t("Non classé")}</strong>}
+              </span>
+            </>
+          )}
+        </div>, document.body)}
+    </span>
+  );
+}
+
 function RankLine({ tier, rank }: { tier: string | null; rank: string }) {
   const [failed, setFailed] = useState(false);
   return (

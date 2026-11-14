@@ -10,8 +10,8 @@ import { PoolScreen, type Pools } from "./components/PoolScreen";
 import { TierListScreen } from "./components/TierListScreen";
 import { ChampionScreen } from "./components/ChampionScreen";
 import { loadHistory, useLpTracking, type Game } from "./lib/history";
+import { useIconSrc } from "./lib/icons";
 import { recommend, topForRole, type Result, type Stats } from "./lib/score";
-import { analyzeTeam, bumpForComposition } from "./lib/composition";
 import { recordPick } from "./lib/impact";
 import { loadStats, register, usePersonal, useRegionStats, type Region } from "./lib/api";
 import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
@@ -205,10 +205,9 @@ export default function App() {
     const allies = live.allies.filter((c, i): c is number => c != null && i !== live.role);
     const enemies = live.enemies.filter((c): c is number => c != null);
     const r = recommend(stats, live.role, pools[live.role], allies, enemies, live.bans);
-    // même ordre que l'écran de draft (bonus de composition compris)
-    const team = analyzeTeam(stats, allies);
-    const bump = (l: Result[]) => bumpForComposition(stats, l, team);
-    const list = r.pool.length ? [...bump(r.pool), ...bump(r.discoveries)] : bump(topForRole(stats, live.role, allies, enemies, live.bans, 6));
+    // même ordre que l'écran de draft : winrate affiché, section par section
+    const byWr = (l: Result[]) => [...l].sort((a, b) => b.score - a.score);
+    const list = r.pool.length ? [...byWr(r.pool), ...byWr(r.discoveries)] : byWr(topForRole(stats, live.role, allies, enemies, live.bans, 6));
     const k = list.findIndex((x) => x.champ === live.myChamp);
     recordPick({ at: Date.now(), champ: live.myChamp, role: live.role, rank: k >= 0 ? k + 1 : null, top: list.slice(0, 3).map((x) => x.champ) });
   }, [live?.myLocked, live?.myChamp]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -219,6 +218,7 @@ export default function App() {
     if (account?.puuid && (account.puuid !== savedAccount?.puuid || account.icon !== savedAccount?.icon)) setSavedAccount(account);
   }, [account?.puuid, account?.icon]); // eslint-disable-line react-hooks/exhaustive-deps
   const me = account?.puuid ? account : savedAccount;
+  const sideIcon = useIconSrc(stats?.ddragon, me?.icon);
   const [perso, refreshPerso] = usePersonal(me?.puuid ?? null);
   const [update, installUpdate, checkUpdate] = useUpdate();
   const [compact, setCompact] = usePersistent<boolean>("spec.compact", false);
@@ -357,8 +357,8 @@ export default function App() {
         <span className="grow" />
         <UpdateCard state={update} onInstall={installUpdate} />
         <div className="sidebar__account" title={account ? t("Compte connecté au client LoL") : undefined}>
-          {account?.icon != null && stats
-            ? <img className="sidebar__avatar" src={`https://ddragon.leagueoflegends.com/cdn/${stats.ddragon}/img/profileicon/${account.icon}.png`} alt="" draggable={false} />
+          {sideIcon
+            ? <img className="sidebar__avatar" src={sideIcon} alt="" draggable={false} />
             : <span className="sidebar__avatar sidebar__avatar--empty" />}
           <span className="sidebar__who">
             <strong>{account?.name ?? savedAccount?.name ?? t("Aucun compte")}</strong>

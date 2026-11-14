@@ -18,6 +18,12 @@ const TAG: Record<Tag, () => string> = {
 const TAG_TONE: Record<Tag, string> = { form: "good", tilt: "bad", otp: "neutral", offrole: "neutral", fresh: "bad" };
 
 /** Les 10 cartes de l'écran de chargement. `full` : version plein écran par-dessus le jeu (sans tags ni titres). */
+/** Taille du pseudo : réduite pour les noms longs, pour qu'ils tiennent en entier (deux lignes au plus, jamais « … »). */
+function nameScale(name: string): number {
+  const n = [...name].length;
+  return n <= 11 ? 1 : Math.max(0.62, 11 / n);
+}
+
 export function LoadingCards({ data, full = false }: { data: LoadingData; full?: boolean }) {
   const spells = useInfo(loadSpells, data.ddragon);
   const runes = useRuneData(data.ddragon);
@@ -88,7 +94,8 @@ function Card({ p, runes, spellIcon, full }: { p: LoadPlayer; runes: RuneData | 
             </>
           )}
         </span>
-        <span className="lcard__name">{p.name || p.champName}</span>
+        <span className="lcard__name" style={{ "--ns": nameScale(p.name || p.champName) } as React.CSSProperties}>{p.name || p.champName}</span>
+        {/* toujours deux lignes : le rang sur la première, le bilan sur la seconde (même hauteur pour les 10 cartes) */}
         <span className="lcard__rank">
           {p.tier ? (
             <>
@@ -96,9 +103,11 @@ function Card({ p, runes, spellIcon, full }: { p: LoadPlayer; runes: RuneData | 
               <strong style={{ color: TIER_COLOR[p.tier] }}>
                 {full ? "" : `${TIER_NAME[p.tier]?.() ?? p.tier}${p.division ? ` ${p.division}` : ""} · `}{t("{n} LP", { n: p.lp ?? 0 })}
               </strong>
-              {total > 0 && <span className="lcard__wl">{full ? " – " : " · "}{pctN(Math.round((p.wins / total) * 100))} ({t("{w}V-{l}D", { w: p.wins, l: p.losses })})</span>}
             </>
           ) : <span className="lcard__wl">{t("Non classé")}</span>}
+        </span>
+        <span className="lcard__wl lcard__record">
+          {p.tier && total > 0 ? `${pctN(Math.round((p.wins / total) * 100))} (${t("{w}V-{l}D", { w: p.wins, l: p.losses })})` : "\u00a0"}
         </span>
       </div>
     </div>

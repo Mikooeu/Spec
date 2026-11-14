@@ -430,6 +430,23 @@ export async function loadPlayer(puuid: string, guess?: Guess): Promise<OtherPla
   };
 }
 
+/** Elo d'un joueur dans une file (carte au survol de l'historique). Gardé 5 min pour ne pas relancer le client à chaque survol. */
+export type QueueRank = { rank: string | null; tier: string | null };
+const rankCache = new Map<string, { at: number; job: Promise<RankedStats | null> }>();
+export function loadRank(puuid: string, queue: "solo" | "flex"): Promise<QueueRank> {
+  const hit = rankCache.get(puuid);
+  let job = hit && Date.now() - hit.at < 5 * 60_000 ? hit.job : null;
+  if (!job) {
+    job = invoke<{ ranked: RankedStats | null }>("lcu_player", { puuid, count: 1 }).then((r) => r.ranked ?? null);
+    job.catch(() => rankCache.delete(puuid));
+    rankCache.set(puuid, { at: Date.now(), job });
+  }
+  return job.then((r) => {
+    const q = r?.queueMap?.[queue === "flex" ? "RANKED_FLEX_SR" : "RANKED_SOLO_5x5"];
+    return { rank: rankText(q), tier: rankTier(q) };
+  });
+}
+
 /**
  * Suivi des LP : on note le rang au début de chaque partie, puis on le relit après la partie
  * (le client met quelques secondes à le mettre à jour) et on associe l'écart à la dernière partie classée.

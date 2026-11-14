@@ -395,7 +395,8 @@ export function recommend(
   const poolResults = pool
     .filter((c) => !taken.has(c))
     .map((c) => scoreChampion(stats, c, role, allies, enemies))
-    .sort(rank);
+    // ton pool : trié par le winrate affiché, pour que l'ordre se lise d'un coup d'œil
+    .sort((a, b) => b.score - a.score);
 
   const poolSet = new Set(pool);
   const others: Result[] = [];
