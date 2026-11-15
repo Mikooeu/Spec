@@ -488,7 +488,7 @@ export const EN: Record<string, string> = {
   "Rôle inconnu": "Unknown role",
   "Rôle principal": "Main role",
   "Score": "Score",
-  "Score : winrate corrigé selon le nombre de parties, plus un petit bonus de pick rate et de ban rate": "Score: win rate adjusted for the number of games, plus a small pick rate and ban rate bonus",
+  "Score : winrate corrigé selon le nombre de parties et la présence du champion (pick rate + ban rate)": "Score: win rate adjusted for the number of games and the champion\u2019s presence (pick rate + ban rate)",
   "Secondaire": "Secondary",
   "Sections du profil": "Profile sections",
   "Serveur Spec injoignable pour l’instant.": "Spec server unreachable right now.",

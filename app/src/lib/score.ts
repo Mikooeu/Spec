@@ -596,8 +596,8 @@ export function explain(stats: Stats, res: Result, role: number, allies: number[
 /**
  * Tier list : champions d'un rôle joués dans plus de `minPick` des parties, classés par score.
  * Score = winrate rapproché de 50 % d'autant plus que le champion a peu de parties (un 56 % sur 300 parties
- * pèse moins qu'un 52 % sur 5 000), plus un petit bonus de pick rate et de ban rate (champion fort et stable
- * dans la méta Master+). La lettre de tier vient de ce score.
+ * pèse moins qu'un 52 % sur 5 000), corrigé par sa présence (pick rate + ban rate) : un champion très joué
+ * et très banni est fort dans la méta Master+, un champion rarement vu l'est moins que son winrate ne le dit. La lettre de tier vient de ce score.
  */
 export interface TierRow {
   champ: number; role: number; winrate: number; pickrate: number; banrate: number | null; games: number; score: number; tier: string;
@@ -608,25 +608,27 @@ export interface TierRow {
 // Pas de seuil de pick rate : le score plafonne déjà les picks rares (niche, hors rôle).
 export const TIER_MIN_GAMES = 50;
 const TIER_K = 1000;          // parties « fictives » à 50 % ajoutées pour lisser le winrate
-// Pick rate : centré sur 5 % (un pick courant), +0,15 point par point de pick rate au-dessus, autant en moins en dessous.
-// Un pick de niche à gros winrate (souvent joué par des spécialistes) ne passe plus devant les champions du méta.
-const PICK_BONUS = 0.15;
-const PICK_CENTER = 0.05;
+// Présence (pick rate + ban rate) : un champion très joué et très banni est fort en ce moment, même à winrate égal.
+// +1,2 point de score à chaque fois que la présence double au-dessus de 8 %, autant en moins en dessous ;
+// au plus +2 points (un champion banni partout reste jugé surtout sur son winrate), au moins −1,5.
+const PRESENCE_PER_DOUBLING = 0.012;
+const PRESENCE_CENTER = 0.08;
+const PRESENCE_MAX = 0.02;
+const PRESENCE_MIN = -0.015;
 // Pick hors rôle : moins de 30 % des parties du champion dans ce rôle (Karthus ADC) → pas au-dessus du tier B.
 export const OFF_ROLE_SHARE = 0.3;
 const OFF_ROLE_MAX = 0.5069;
 // Pick de niche : moins de 3 % de pick rate → pas au-dessus du tier A (un gros winrate sur peu de joueurs spécialistes).
 export const NICHE_PICKRATE = 0.03;
 const NICHE_MAX = 0.5149;
-const BAN_BONUS = 0.02;       // +0,2 point pour 10 % de ban rate
-const BONUS_CAP = 0.15;       // au-delà de 15 % de pick (ou de ban) rate, plus de bonus : le winrate reste décisif
 
 export function tierScore(stats: Stats, champ: number, role: number): number {
   const [g, w] = stats.base.get(k2(champ, role)) ?? [0, 0];
   const pickrate = stats.matchesWeighted ? g / stats.matchesWeighted : 0;
   const banrate = stats.banMatches > 0 ? (stats.bans.get(champ) ?? 0) / stats.banMatches : 0;
-  const score = smoothed(g, w, 0.5, TIER_K) + PICK_BONUS * (Math.min(pickrate, BONUS_CAP) - PICK_CENTER)
-    + BAN_BONUS * Math.min(banrate, BONUS_CAP);
+  const presence = Math.max(pickrate + banrate, 0.005);
+  const bonus = Math.min(PRESENCE_MAX, Math.max(PRESENCE_MIN, PRESENCE_PER_DOUBLING * Math.log2(presence / PRESENCE_CENTER)));
+  const score = smoothed(g, w, 0.5, TIER_K) + bonus;
   if (roleShare(stats, champ, role) < OFF_ROLE_SHARE) return Math.min(score, OFF_ROLE_MAX);
   return pickrate < NICHE_PICKRATE ? Math.min(score, NICHE_MAX) : score;
 }
