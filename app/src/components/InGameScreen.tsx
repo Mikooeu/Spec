@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { adaptationsFor, enemySituations, situationChamps } from "../lib/adapt";
 import type { Situation } from "../lib/composition";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
@@ -57,11 +57,12 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
   const owned = game ? game.items.filter((id) => !TRINKETS.has(id)) : [];
 
   const boots = bootChoice(stats, page, champ, role, foes, items);
-  const ownsBoots = owned.some((id) => items?.get(id)?.boots);
+  const ownsBoots = owned.some((id) => id !== BOOTS_T1 && items?.get(id)?.boots);   // les bottes de base ne comptent pas
   const steps = buildSteps(page, role, owned, boots?.main ?? null, ownsBoots);
   const next = steps.find((s) => s.state === "next") ?? null;
   const name = (id: number) => items?.get(id)?.name ?? t("Objet {id}", { id });
   const adapts = adaptItems(stats, champ, role, foes, items, steps, owned);
+  const evolutions = supportEvolutions(page);
 
   return (
     <div className={`content ingame${compact ? " ingame--compact" : ""}`}>
@@ -95,6 +96,21 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
                 {boots.alt && <Named icon={<ItemIcon id={boots.alt.id} data={items} />} title={name(boots.alt.id)} sub={boots.alt.why} />}
               </div>
             ) : <Collecting />}
+          </Card>
+        )}
+
+        {role === 4 && evolutions.length > 0 && (
+          <Card title={t("Évolution de l’objet de support")} wide>
+            <div className="ingame__pair">
+              {evolutions.map((e, i) => (
+                <Fragment key={e.id}>
+                  {i > 0 && <span className="ingame__sep" aria-hidden />}
+                  <Named icon={<ItemIcon id={e.id} data={items} />} title={name(e.id)} accent={e.best}
+                         sub={e.best ? t("Recommandée · {wr} de victoires", { wr: pct(e.wr) })
+                                     : t("{wr} de victoires · {share} des parties", { wr: pct(e.wr), share: pct(e.share) })} />
+                </Fragment>
+              ))}
+            </div>
           </Card>
         )}
 
@@ -198,6 +214,21 @@ function Start({ page, items, spells, opponent, compact }: { page: ChampPage | n
 
 /** Chemin d'objets du meilleur build complet, avec ce que tu as déjà acheté. */
 /** Objets finis du build : 5 pour tous les postes, 6 en ADC (les bottes en plus). */
+/** Bottes de vitesse (premier palier) : pas encore les bottes du build. */
+const BOOTS_T1 = 1001;
+
+/** Supports : évolutions de l'objet de quête, la recommandée d'abord (meilleur winrate parmi celles assez jouées). */
+export function supportEvolutions(page: ChampPage | null): { id: number; wr: number; share: number; best: boolean }[] {
+  const list = page?.support ?? [];
+  const total = list.reduce((a, [, g]) => a + g, 0);
+  if (!total) return [];
+  const rows = list.map(([id, g, w]) => ({ id, wr: w / g, share: g / total, best: false }))
+    .filter((r) => r.share >= 0.05);
+  rows.sort((a, b) => b.wr - a.wr);
+  if (rows[0]) rows[0].best = true;
+  return rows.slice(0, 3);
+}
+
 export const buildSize = (role: number) => (role === 3 ? 6 : 5);
 /** Sans donnée sur le moment des bottes : après le premier objet, le cas le plus courant. */
 const DEFAULT_BOOTS_AT = 1;

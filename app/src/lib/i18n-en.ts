@@ -99,6 +99,8 @@ export const EN: Record<string, string> = {
   "Champion peu joué : son winrate vient souvent de joueurs spécialistes. Limité au tier A.": "Rarely played champion: its win rate often comes from specialists. Capped at tier A.",
   "Champion surtout joué dans un autre rôle : son winrate vient souvent de joueurs spécialistes. Limité au tier B.": "Champion mostly played in another role: its win rate often comes from specialists. Capped at tier B.",
   "Évolution de l’objet de support": "Support item evolution",
+  "Recommandée · {wr} de victoires": "Recommended · {wr} win rate",
+  "{wr} de victoires · {share} des parties": "{wr} win rate · {share} of games",
   "Le choix à faire à la fin de ta quête de support · part des parties où il est choisi": "The choice to make when your support quest completes · share of games where it’s picked",
   "Pas encore assez de parties : les évolutions s’affichent avec les prochaines stats (calcul toutes les 6 h).": "Not enough games yet: evolutions show up with the next stats update (every 6 h).",
   " (survol)": " (hover)",

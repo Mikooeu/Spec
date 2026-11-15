@@ -192,6 +192,28 @@ pub const LIVE_URL: &str = "https://127.0.0.1:2999/liveclientdata/allgamedata";
 
 /// Partie en cours, réduite à ce que Spec affiche : ton champion, ton niveau, ton or, tes objets et les
 /// champions adverses (avec leur poste). Aucun nom de joueur ne sort d'ici.
+/** Objets d'un joueur : l'inventaire (« items »), plus tout `itemID` rangé ailleurs (case de quête de rôle…). */
+fn collect_item_ids(me: &Value, out: &mut Vec<u64>) {
+    if let Some(a) = me.get("items").and_then(Value::as_array) {
+        out.extend(a.iter().filter_map(|i| i.get("itemID").and_then(Value::as_u64)).filter(|&id| id > 0));
+    }
+    fn scan(v: &Value, out: &mut Vec<u64>) {
+        match v {
+            Value::Object(m) => {
+                if let Some(id) = m.get("itemID").and_then(Value::as_u64) {
+                    if id > 0 && !out.contains(&id) { out.push(id); }
+                }
+                for x in m.values() { scan(x, out); }
+            }
+            Value::Array(a) => for x in a { scan(x, out); },
+            _ => {}
+        }
+    }
+    if let Value::Object(m) = me {
+        for (k, x) in m { if k != "items" { scan(x, out); } }
+    }
+}
+
 pub fn trim_live(v: &Value) -> Option<Value> {
     let active = v.get("activePlayer")?;
     let ids = |p: &Value| [p.get("riotId"), p.get("summonerName")].into_iter().flatten().filter_map(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned).collect::<Vec<_>>();
@@ -203,9 +225,10 @@ pub fn trim_live(v: &Value) -> Option<Value> {
     let me = players.iter().find(|p| ids(p).iter().any(|i| mine.contains(i)))?;
     let team = me.get("team")?.as_str()?;
     let key = |p: &Value| p.get("rawChampionName").and_then(Value::as_str).map(|s| s.trim_start_matches("game_character_displayname_").to_owned());
-    let items: Vec<u64> = me.get("items").and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(|i| i.get("itemID").and_then(Value::as_u64)).collect())
-        .unwrap_or_default();
+    // tous les objets du joueur, où qu'ils soient : depuis 2026 les bottes des ADC passent dans la case de quête de rôle,
+    // qui n'est pas forcément dans « items »
+    let mut items: Vec<u64> = Vec::new();
+    collect_item_ids(me, &mut items);
     let enemies: Vec<Value> = players.iter()
         .filter(|p| p.get("team").and_then(Value::as_str) != Some(team))
         .map(|p| json!({ "champion": key(p), "position": p.get("position").and_then(Value::as_str).unwrap_or("") }))
@@ -751,5 +774,10 @@ mod tests {
         assert_eq!(out["enemies"], json!([{ "champion": "Zed", "position": "MIDDLE" }]));
         assert!(!out.to_string().contains('#'), "aucun Riot ID ne doit sortir");
         assert!(trim_live(&json!({ "activePlayer": {}, "allPlayers": [] })).is_none());
+        // bottes rangées hors de « items » (case de quête de rôle) : comptées quand même
+        let mut ids = Vec::new();
+        collect_item_ids(&json!({ "items": [{ "itemID": 3031 }, { "itemID": 1055 }, { "itemID": 1055 }],
+                                  "roleQuestItem": { "itemID": 3006, "slot": 7 } }), &mut ids);
+        assert_eq!(ids, vec![3031, 1055, 1055, 3006]);
     }
 }

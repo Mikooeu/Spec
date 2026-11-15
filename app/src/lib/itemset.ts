@@ -3,7 +3,7 @@
 // objets face à leur équipe et bottes selon leur équipe. Seul le set de Spec est remplacé (voir lcu.rs).
 
 import { invoke } from "@tauri-apps/api/core";
-import { adaptItems, bootChoice, buildSteps } from "../components/InGameScreen";
+import { adaptItems, bootChoice, buildSteps, supportEvolutions } from "../components/InGameScreen";
 import type { InfoMap } from "./ddragon";
 import { t } from "./i18n";
 import { ROLE_LABELS, type Stats } from "./score";
@@ -30,6 +30,9 @@ export function itemSetBlocks(stats: Stats, champ: number, role: number, enemies
   if (steps.length) blocks.push({ title: t("Build"), items: steps.map((s) => s.id) });
   const adapts = adaptItems(stats, champ, role, enemies, items, steps, []).slice(0, 6).map((a) => a.id);
   if (adapts.length) blocks.push({ title: t("Face à leur équipe"), items: adapts });
+  // supports : l'évolution de l'objet de quête, la recommandée en premier
+  const evos = role === 4 ? supportEvolutions(page).map((e) => e.id) : [];
+  if (evos.length) blocks.push({ title: t("Évolution de l’objet de support"), items: evos });
   const bootList = [boots?.main, boots?.alt?.id].filter((x): x is number => x != null);
   if (bootList.length > 1) blocks.push({ title: t("Bottes selon leur équipe"), items: bootList });
   return blocks;
