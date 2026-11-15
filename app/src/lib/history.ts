@@ -191,13 +191,34 @@ const SMITE = 11;
  * souvent JUNGLE pour tout le monde), donc : le poste officiel s'il est présent, sinon Châtiment = jungle,
  * sinon le poste le plus joué de ce champion en Master+ (hors jungle, puisqu'il n'avait pas Châtiment).
  */
-export function roleOf(p: { teamPosition?: string; individualPosition?: string; spell1Id?: number; spell2Id?: number; championId: number },
+export function roleOf(p: { teamPosition?: string; individualPosition?: string; spell1Id?: number; spell2Id?: number; championId: number;
+                          stats?: Partial<RawStats> },
                 guess?: Guess): number | null {
   const pos = p.teamPosition || p.individualPosition;
   if (pos && pos in POSITIONS) return POSITIONS[pos];
   const smite = p.spell1Id === SMITE || p.spell2Id === SMITE;
   if (smite) return 1;
+  const quest = p.stats ? questRole(p.stats) : null;
+  if (quest != null) return quest;
   return guess ? guess(p.championId, true) : null;
+}
+
+/**
+ * Rôle trahi par la quête de rôle (saison 2026) : l'objet de support (Atlas et ses évolutions) pour le support,
+ * des bottes dans la case de quête pour l'ADC. Top et mid n'ont pas d'objet de quête : on les devine ensuite.
+ */
+export function questRole(s: Partial<RawStats>): number | null {
+  if (hasSupportItem(s)) return 4;
+  return s.roleBoundItem && BOOTS.has(s.roleBoundItem) ? 3 : null;
+}
+/** Bottes (tous paliers) : seul objet que l'ADC range dans la case de quête. */
+const BOOTS = new Set([1001, 2422, 3005, 3006, 3009, 3010, 3013, 3020, 3047, 3111, 3117, 3158,
+                       3170, 3171, 3172, 3173, 3174, 3175, 3176]);
+
+/** Atlas, Boussole runique, Trésor des mondes et leurs évolutions finales. */
+const SUPPORT_ITEMS = new Set([3865, 3866, 3867, 3869, 3870, 3871, 3876, 3877]);
+function hasSupportItem(s: Partial<RawStats>): boolean {
+  return [s.item0, s.item1, s.item2, s.item3, s.item4, s.item5, s.item6, s.roleBoundItem].some((i) => i != null && SUPPORT_ITEMS.has(i));
 }
 
 function readLp(): Record<string, number> {
@@ -344,6 +365,24 @@ export function mergeHistory(client: Game[], server: Game[]): Game[] {
   return [...byId.values()].sort((a, b) => b.created - a.created);
 }
 
+/**
+ * Rôles des 5 joueurs d'une équipe, un par rôle : postes donnés par le client, Châtiment, quêtes de rôle,
+ * puis la répartition la plus probable pour les autres (top et mid surtout).
+ */
+export function teamRoles(team: RawParticipant[], guess?: Guess): Map<number | undefined, number | null> {
+  const known = team.map((p) => {
+    const pos = p.teamPosition || p.individualPosition;
+    if (pos && pos in POSITIONS) return POSITIONS[pos];
+    if (p.spell1Id === SMITE || p.spell2Id === SMITE) return 1;
+    return questRole(p.stats);
+  });
+  const dupes = known.some((r, i) => r != null && known.indexOf(r) !== i);
+  const roles = guess?.dist && team.length === 5 && !dupes && known.some((r) => r == null)
+    ? assignTeamRoles(team.map((p) => p.championId), known, guess.dist).map((r) => (r < 5 ? r : null))
+    : team.map((p, i) => known[i] ?? roleOf(p, guess));
+  return new Map(team.map((p, i) => [p.participantId, roles[i]]));
+}
+
 /** Rôles devinés pour toute l'équipe (un par rôle) quand le client n'en donne pas assez ou en double. */
 function withTeamRoles(players: (PlayerLine & { known?: number | null })[], guess?: Guess): PlayerLine[] {
   const strip = (x: PlayerLine & { known?: number | null }): PlayerLine => { const { known: _k, ...rest } = x; return rest; };
@@ -374,7 +413,7 @@ async function fetchGameDetail(gameId: number, guess?: Guess): Promise<GameDetai
     const name = who?.gameName ? `${who.gameName}#${who.tagLine ?? ""}` : who?.summonerName ?? t("Joueur");
     const s = p.stats;
     const pos = p.teamPosition || p.individualPosition;
-    const known = pos && pos in POSITIONS ? POSITIONS[pos] : p.spell1Id === SMITE || p.spell2Id === SMITE ? 1 : null;
+    const known = pos && pos in POSITIONS ? POSITIONS[pos] : p.spell1Id === SMITE || p.spell2Id === SMITE ? 1 : questRole(s);
     const line: PlayerLine & { known?: number | null } = {
       puuid: who?.puuid || null, name, icon: who?.profileIcon ?? null, champ: p.championId, role: roleOf(p, guess), known,
       spells: [n(p.spell1Id), n(p.spell2Id)], keystone: n(s.perk0), subStyle: n(s.perkSubStyle), items: itemsOf(s),
@@ -531,7 +570,7 @@ export async function duoPartner(d: Duo, me: string | null): Promise<{ name: str
 export type LaneDiff = [number, number, number | null, number | null];
 type Frame = { participantFrames?: Record<string, { participantId?: number; totalGold?: number; minionsKilled?: number; jungleMinionsKilled?: number }> };
 
-const LANE_KEY = "spec.laneDiff";
+const LANE_KEY = "spec.laneDiff.v2";   // v2 : rôle support reconnu à l’objet de quête
 function readLane(): Record<string, LaneDiff | 0> {
   try { return JSON.parse(localStorage.getItem(LANE_KEY) ?? "{}"); } catch { return {}; }
 }
@@ -545,9 +584,10 @@ export async function laneDiff(gameId: number, me: string, guess?: Guess): Promi
   const [g, tl] = await Promise.all([invoke<RawGame>("lcu_game", { gameId }), invoke<{ frames?: Frame[] }>("lcu_timeline", { gameId })]);
   const ids = new Map((g.participantIdentities ?? []).map((x) => [x.player?.puuid, x.participantId]));
   const mine = g.participants.find((p) => p.participantId === ids.get(me));
-  const role = mine ? roleOf(mine, guess) : null;
-  const opp = mine && role != null
-    ? g.participants.find((p) => p.teamId !== mine.teamId && roleOf(p, guess) === role) : undefined;
+  const role = mine ? teamRoles(g.participants.filter((p) => p.teamId === mine.teamId), guess).get(mine.participantId) ?? null : null;
+  const foes = mine ? g.participants.filter((p) => p.teamId !== mine.teamId) : [];
+  const foeRoles = teamRoles(foes, guess);
+  const opp = mine && role != null ? foes.find((p) => foeRoles.get(p.participantId) === role) : undefined;
   let out: LaneDiff | null = null;
   const frames = tl.frames ?? [];
   if (mine && opp && frames.length > 15) {

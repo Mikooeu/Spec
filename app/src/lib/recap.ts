@@ -4,7 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useMemo } from "react";
 import type { Stats } from "./score";
-import { roleOf, type Guess, type RawGame, type RawParticipant } from "./history";
+import { teamRoles, type Guess, type RawGame, type RawParticipant } from "./history";
 import { plural, t } from "./i18n";
 import { int, pctN } from "./ui";
 
@@ -107,7 +107,9 @@ export function makeRecap(g: RawGame, tl: Timeline, me: string, guess?: Guess): 
   const remake = duration < 300 || !!s.gameEndedInEarlySurrender;
   const allies = g.participants.filter((p) => (p.teamId ?? 100) === myTeam);
   const enemies = g.participants.filter((p) => (p.teamId ?? 100) !== myTeam);
-  const role = roleOf(mine, guess);
+  // rôles déduits équipe par équipe (quêtes de rôle, Châtiment, un joueur par rôle) : Ashe support reste support
+  const allyRoles = teamRoles(allies, guess), enemyRoles = teamRoles(enemies, guess);
+  const role = allyRoles.get(mine.participantId) ?? null;
   const allyIds = new Set(allies.map((p) => p.participantId));
   const frames0 = tl.frames ?? [];
   // vis-à-vis : l'adversaire au même poste ; sinon celui qui a passé la phase de lane le plus près de toi (minutes 2 à 12)
@@ -123,7 +125,7 @@ export function makeRecap(g: RawGame, tl: Timeline, me: string, guess?: Guess): 
     }
     return bestD < 4500 ? best : undefined;
   };
-  const opp = (role != null ? enemies.find((p) => roleOf(p, guess) === role) : undefined) ?? near();
+  const opp = (role != null ? enemies.find((p) => enemyRoles.get(p.participantId) === role) : undefined) ?? near();
 
   const cs = (p: RawParticipant) => (p.stats.totalMinionsKilled ?? 0) + (p.stats.neutralMinionsKilled ?? 0);
   const sum = (ps: RawParticipant[], f: (p: RawParticipant) => number) => ps.reduce((a, p) => a + f(p), 0);
