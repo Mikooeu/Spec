@@ -802,7 +802,7 @@ function PlayerRow({ stats, p, duration, assets, maxDamage, rating, isMe, onOpen
         {isMe || !p.puuid ? (
           <span className="pline__name" title={champName(stats, p.champ)}>{p.name}</span>
         ) : (
-          <button className="pline__name pline__link" onClick={onOpen} title={t("Ouvrir le profil de {name}", { name: p.name })}
+          <button className="pline__name pline__link" onClick={onOpen}
                   aria-label={t("Ouvrir le profil de {name}", { name: p.name })}>
             {p.name}<span aria-hidden> ↗</span>
             <RankTip puuid={p.puuid} queue={queue} />
