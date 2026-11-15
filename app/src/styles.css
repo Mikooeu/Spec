@@ -1956,3 +1956,14 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .readycheck--compact { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; transform: none; min-width: 0; }
 @keyframes readycheck-in { from { opacity: 0; translate: 0 0.5rem; } }
 @media (prefers-reduced-motion: reduce) { .readycheck { animation: none; } .readycheck__bar { transition: none; } }
+
+/* winrate selon la durée de la partie (page champion, menu build en partie) */
+:root { --chart-line: #f2d27a; }
+.lchart-box { width: 100%; min-width: 0; }
+.lchart { display: block; overflow: visible; }
+.lchart__grid { stroke: var(--border); stroke-dasharray: 2 4; }
+.lchart__mid { stroke: var(--text-3); stroke-opacity: 0.6; stroke-dasharray: 2 4; }
+.lchart__axis { fill: var(--text-3); font-size: 11px; }
+.lchart__line { fill: none; stroke: var(--chart-line); stroke-width: 2.5; stroke-linecap: round; }
+.lchart__now line { stroke: var(--accent); stroke-width: 1.5; }
+.lchart__now text { fill: var(--accent); font-size: 11px; font-weight: 500; }

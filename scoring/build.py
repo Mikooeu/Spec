@@ -16,7 +16,7 @@ import duckdb
 
 from collector.db import connect_with_retry
 
-from .builds import compute_builds
+from .builds import add_length, compute_builds
 from .items import Items
 from .runes import compute_runes
 from .situational import compute_situational
@@ -170,6 +170,11 @@ def build_stats(db_path: Path | list[Path], out_path: Path, patch: str | None = 
                   ON b.match_id = a.match_id AND b.team_id = a.team_id AND b.champion_id = a.champ
                 LEFT JOIN p o ON o.match_id = a.match_id AND o.team_id <> a.team_id AND o.role = a.role""")
             champ_pages = compute_builds(_stream(cur), items or Items(None))
+            # winrate selon la durée de la partie (graphique de la page champion et du menu build)
+            cur = con.execute("""
+                SELECT a.champ, a.role, m.game_duration, a.win, a.w
+                FROM p a JOIN src.matches m USING (match_id)""")
+            champ_pages = add_length(champ_pages, _stream(cur))
         # dégâts par type (collectés depuis la 0.6) : part physique, magique et brute de chaque champion dans son rôle
         damage_rows = []
         if _has(con, "damage"):

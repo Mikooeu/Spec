@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from "react";
+import { LengthChart } from "./LengthChart";
 import { adaptationsFor, enemySituations, situationChamps } from "../lib/adapt";
 import type { Situation } from "../lib/composition";
 import { loadItems, loadSpells, useInfo, type InfoMap } from "../lib/ddragon";
@@ -111,6 +112,12 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
                 </Fragment>
               ))}
             </div>
+          </Card>
+        )}
+
+        {(page?.length?.length ?? 0) >= 2 && (
+          <Card title={t("Winrate selon la durée de la partie")} sub={t("Winrate Master+ par tranche de 5 minutes")} wide>
+            <LengthChart points={page!.length!} now={game ? game.time / 60 : null} height={170} />
           </Card>
         )}
 

@@ -170,3 +170,32 @@ def compute_builds(rows, items: Items) -> list:
             entry["spellsVs"] = vs
         out.append([champ, role, entry])
     return out
+
+
+# Winrate selon la durée de la partie : tranches de 5 minutes, de « moins de 20 min » à « 40 min et plus ».
+LENGTH_BUCKETS = (15, 20, 25, 30, 35, 40)   # début de la tranche (15 = moins de 20 min, 40 = 40 min et plus)
+LENGTH_MIN_GAMES = 30                        # parties (pondérées) minimum dans une tranche pour l'afficher
+
+
+def length_bucket(seconds: int) -> int:
+    return max(15, min(40, int(seconds // 300) * 5))
+
+
+def add_length(pages: list, rows) -> list:
+    """rows : (champ, role, durée en secondes, win, w). Ajoute « length » = [[tranche, parties, victoires], ...]
+    aux pages des champions (les tranches trop peu jouées sont omises)."""
+    acc: dict = defaultdict(lambda: defaultdict(lambda: [0.0, 0.0]))
+    for champ, role, seconds, win, w in rows:
+        if seconds is None:
+            continue
+        gw = acc[(champ, role)][length_bucket(int(seconds))]
+        gw[0] += w
+        gw[1] += w * win
+    for champ, role, entry in pages:
+        buckets = acc.get((champ, role))
+        if not buckets:
+            continue
+        pts = [[b, _r(g), _r(wn)] for b, (g, wn) in sorted(buckets.items()) if g >= LENGTH_MIN_GAMES]
+        if len(pts) >= 2:
+            entry["length"] = pts
+    return pages

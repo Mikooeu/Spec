@@ -435,3 +435,14 @@ def test_situational_items_follow_the_enemy_draft():
     assert ap_row[0] == 7 and ap_row[3] == 100
     assert ap_row[4][0] == [3111, 0.8, 0.2]
     assert all(x[0] != 3031 for x in ap_row[4])              # objet pris partout : pas une adaptation
+
+
+def test_add_length_buckets_and_floor():
+    from scoring.builds import add_length, length_bucket
+    assert [length_bucket(s) for s in (600, 1199, 1200, 1799, 2700, 4000)] == [15, 15, 20, 25, 40, 40]
+    pages = [[1, "MIDDLE", {}], [2, "TOP", {}]]
+    rows = [(1, "MIDDLE", 1000, 1, 1.0)] * 40 + [(1, "MIDDLE", 1900, 0, 1.0)] * 40 + [(1, "MIDDLE", 2500, 1, 1.0)] * 5 \
+        + [(2, "TOP", 1000, 1, 1.0)] * 40
+    add_length(pages, rows)
+    assert pages[0][2]["length"] == [[15, 40, 40], [30, 40, 0]]   # tranche 40 trop peu jouée : omise
+    assert "length" not in pages[1][2]                              # une seule tranche : pas de courbe

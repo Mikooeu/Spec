@@ -1,3 +1,4 @@
+import { LengthChart } from "./LengthChart";
 import { useContext, useState, type ReactNode } from "react";
 import {
   ROLE_LABELS, gamesIn, tierLetter, tierScore, type ChampPage, type Stats,
@@ -114,6 +115,18 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
               {page?.g ? t(" {n} parties analysées pour l’instant.", { n: int(page.g) }) : ""}</p>
           </section>
         );
+        const spellsCard = has.spells && (
+          <Card title={t("Sorts d’invocateur")} sub={t("Les 2 combinaisons les plus jouées")}>
+            <div className="combos combos--stack">
+              {page!.spells.map(([a, b, cg, cw]) => (
+                <Combo key={`${a}-${b}`} icons={[[a, 1], [b, 1]]} data={spells} wr={cw / cg} pr={cg / page!.g} />
+              ))}
+            </div>
+          </Card>
+        );
+        // courbe de winrate selon la durée, à côté des sorts ; les sorts quittent alors la rangée départ/bottes
+        const lengthRow = (page?.length?.length ?? 0) >= 2;
+        const row2 = row - (lengthRow && has.spells ? 1 : 0);
         return (<>
           {has.skills && (
             <Card title={t("Ordre des sorts")}
@@ -121,13 +134,21 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
               <SkillGrid order={page!.skills![0]} />
             </Card>
           )}
+          {lengthRow && (
+            <div className="champ__row" style={{ gridTemplateColumns: has.spells ? "minmax(0, 2fr) minmax(0, 1fr)" : "minmax(0, 1fr)" }}>
+              <Card title={t("Winrate selon la durée de la partie")} sub={t("Winrate Master+ par tranche de 5 minutes")}>
+                <LengthChart points={page!.length!} />
+              </Card>
+              {spellsCard}
+            </div>
+          )}
           {has.runes && (
             <Card title={t("Runes")} sub={runeSub(stats, champ, role)}>
               <RuneTree stats={stats} champ={champ} role={role} />
             </Card>
           )}
-          {row > 0 && (
-            <div className="champ__row" style={{ gridTemplateColumns: `repeat(${row}, minmax(0, 1fr))` }}>
+          {row2 > 0 && (
+            <div className="champ__row" style={{ gridTemplateColumns: `repeat(${row2}, minmax(0, 1fr))` }}>
               {has.start && (
                 <Card title={t("Objets de départ")} sub={t("Les 3 combinaisons les plus jouées")}>
                   <div className="combos combos--stack">
@@ -137,15 +158,7 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
                   </div>
                 </Card>
               )}
-              {has.spells && (
-                <Card title={t("Sorts d’invocateur")} sub={t("Les 2 combinaisons les plus jouées")}>
-                  <div className="combos combos--stack">
-                    {page!.spells.map(([a, b, cg, cw]) => (
-                      <Combo key={`${a}-${b}`} icons={[[a, 1], [b, 1]]} data={spells} wr={cw / cg} pr={cg / page!.g} />
-                    ))}
-                  </div>
-                </Card>
-              )}
+              {!lengthRow && spellsCard}
               {has.boots && (
                 <Card title={t("Bottes")} sub={t("Les 3 plus jouées")}>
                   <div className="cells">
