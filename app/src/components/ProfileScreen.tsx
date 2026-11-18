@@ -244,8 +244,6 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
     setBusy(false);
   };
 
-  const weekGames = (games ?? []).filter((g) => g.lp != null && Date.now() - g.created < 7 * 86400_000);
-  const weekLp = weekGames.reduce((a, g) => a + (g.lp ?? 0), 0);
   return (
     <>
       <div className="pf">
@@ -262,9 +260,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
             </div>
           </div>
           {rank && (
-            <RankBlock tier={tier} rank={rank}>
-              {weekGames.length > 0 && <strong className={weekLp > 0 ? "tone-good" : weekLp < 0 ? "tone-bad" : ""} title={t("LP cette semaine")}>{lpText(weekLp)}</strong>}
-            </RankBlock>
+            <RankBlock tier={tier} rank={rank} />
           )}
           <p className="muted small account__status"><span className={clientOn ? "dot" : "dot dot--off"} />
             {clientOn ? t("Client connecté") : t("Client LoL fermé")} · {persoText(perso).split(" · ")[0]}</p>

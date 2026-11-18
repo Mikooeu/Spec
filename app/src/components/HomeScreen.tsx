@@ -95,6 +95,22 @@ export function HomeScreen({ stats, clientOn, clientText, region, me, pools, mai
       {ready}
       <div className="home3">
         <section className="pf-card home3__card">
+          <div className="pf-card__head"><h2>{t("Objectifs de la semaine")}</h2></div>
+          {!clientOn || games == null ? <p className="home-empty">{t("Disponible avec le client LoL ouvert.")}</p> : (
+            <>
+              {week.length > 0 && (
+                <div className="pf-summary home3-stats">
+                  <div><strong className={tracked.length ? `tone-${weekLp >= 0 ? "good" : "bad"}` : ""}>{tracked.length ? signed(weekLp) : "—"}</strong><span>{t("LP")}</span></div>
+                  <div><strong>{pct(weekWins / week.length)}</strong><span>{t("Winrate")}</span></div>
+                  <div><strong>{week.length}</strong><span>{t("Parties")}</span></div>
+                </div>
+              )}
+              <WeekGoals stats={stats} games={games} defaultChamp={pool[0] ?? null} />
+            </>
+          )}
+        </section>
+
+        <section className="pf-card home3__card">
           <div className="pf-card__head"><h2>{t("Ta dernière partie")}</h2>{last && <small className="muted">{ago(last.created)}</small>}</div>
           {!clientOn ? (
             <div className="home-empty">
@@ -119,7 +135,6 @@ export function HomeScreen({ stats, clientOn, clientText, region, me, pools, mai
                 <div><strong>{dec1(last.cs / Math.max(1, last.duration / 60))}</strong><span>{t("CS/min")}</span></div>
                 <div><strong className={last.lp == null ? "" : last.lp >= 0 ? "tone-good" : "tone-bad"}>{last.lp == null ? "—" : signed(last.lp)}</strong><span>{t("LP")}</span></div>
               </div>
-              <span className="grow" />
               <div className="home3__actions">
                 {me && <button className="btn btn--secondary home3__btn" onClick={() => onRecap(last)}>{t("Voir le récap")}</button>}
                 <button className="link-btn" onClick={onHistory}>{t("Historique")}</button>
@@ -140,22 +155,6 @@ export function HomeScreen({ stats, clientOn, clientText, region, me, pools, mai
             </div>
           ))}
           {pool.length === 0 && <button className="link-btn home3__add" onClick={onPool}>{t("Ajouter des champions à ton pool")}</button>}
-        </section>
-
-        <section className="pf-card home3__card">
-          <div className="pf-card__head"><h2>{t("Objectifs de la semaine")}</h2></div>
-          {!clientOn || games == null ? <p className="home-empty">{t("Disponible avec le client LoL ouvert.")}</p> : (
-            <>
-              {week.length > 0 && (
-                <div className="pf-summary home3-stats">
-                  <div><strong className={tracked.length ? `tone-${weekLp >= 0 ? "good" : "bad"}` : ""}>{tracked.length ? signed(weekLp) : "—"}</strong><span>{t("LP")}</span></div>
-                  <div><strong>{pct(weekWins / week.length)}</strong><span>{t("Winrate")}</span></div>
-                  <div><strong>{week.length}</strong><span>{t("Parties")}</span></div>
-                </div>
-              )}
-              <WeekGoals stats={stats} games={games} defaultChamp={pool[0] ?? null} />
-            </>
-          )}
         </section>
       </div>
     </div>

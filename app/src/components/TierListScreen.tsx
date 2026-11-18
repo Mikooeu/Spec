@@ -54,13 +54,14 @@ export function TierListScreen({ stats, role, onRole, onOpen, region, perso = nu
     <div className="content">
       <TopBar title={t("Tier list")}>
         <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
-          <button role="tab" aria-selected={all} className={all ? "is-active" : ""} onClick={() => setAll(true)}>
-            {t("Tous")} <span className="count">{total}</span>
+          <button role="tab" aria-selected={all} className={all ? "is-active" : ""} onClick={() => setAll(true)}
+                  title={plural(total, "{n} champion", "{n} champions")}>
+            {t("Tous")}
           </button>
           {ROLE_LABELS.map((label, i) => (
             <button key={label} role="tab" aria-selected={!all && role === i} className={!all && role === i ? "is-active" : ""}
-                    onClick={() => { setAll(false); onRole(i); }}>
-              {label} <span className="count">{lists[i].length}</span>
+                    onClick={() => { setAll(false); onRole(i); }} title={plural(lists[i].length, "{n} champion", "{n} champions")}>
+              {label}
             </button>
           ))}
         </Segmented>
