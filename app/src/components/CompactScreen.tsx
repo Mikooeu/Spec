@@ -1,14 +1,17 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { ROLE_LABELS, ROLE_SHORT, type Stats, enemyDisplay } from "../lib/score";
-import { champName } from "../lib/ui";
+import { champName, pct, pctN, pts, wrTone } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { Logo } from "./Logo";
-import { BanPanel, Divider, MyPick, RecoRow, makeBanSelect, makePreselect, persoCell, useRecos, type Draft } from "./DraftScreen";
+import { BanPanel, MyPick, makeBanSelect, makePreselect, persoCell, useRecos, type Draft } from "./DraftScreen";
+import { RunePage } from "./Runes";
+import { Chip } from "./TopBar";
+import { winProbability } from "../lib/winprob";
 import { explain } from "../lib/score";
 import type { PersonalState } from "../lib/api";
 import { Segmented } from "./Segmented";
-import { t } from "../lib/i18n";
+import { plural, t } from "../lib/i18n";
 
 interface Props {
   stats: Stats;
@@ -81,6 +84,12 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
   useEffect(() => { if (draft.myChamp != null) setOpen(draft.myChamp); }, [draft.myChamp]);
   const preselect = makePreselect(stats, onPreselect, setNotice,
     live ? undefined : (champ) => onDemoPick?.(champ));
+  // un seul pick affiché en grand : celui cliqué en bas, sinon le premier de la liste
+  const shownAt = Math.max(0, rows.findIndex((r) => r.res.champ === open));
+  const shown = rows[shownAt] ?? null;
+  const shownPerso = shown ? persoCell(perso, shown.res.champ, draft.role) : { value: "—", label: "", tone: "neutral" as const };
+  const nPool = rows.filter((r) => r.kind === "pool").length, nNew = rows.length - nPool;
+  const sign = (v: number) => (v > 0.0005 ? "good" : v < -0.0005 ? "bad" : "neutral");
 
   return (
     <div className="compact__body">
@@ -92,11 +101,7 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
         ))}
       </Segmented>
 
-      <div className="mini-teams">
-        <MiniTeam stats={stats} label={t("Alliés")} champs={draft.allies} me={draft.role} locked={draft.allyLocked}
-                  mine={draft.myChamp ?? null} />
-        <MiniTeam stats={stats} label={t("Adversaires")} champs={enemyDisplay(stats, draft.enemies).map((r) => draft.enemies[r.index])} />
-      </div>
+      <TeamsBar stats={stats} draft={draft} />
 
       {draft.banPhase && <BanPanel stats={stats} draft={draft} compact onSelect={makeBanSelect(stats, live ? onBan : undefined, setNotice)} />}
       {draft.myChamp != null && (draft.myLocked || !myInList) && <MyPick stats={stats} draft={draft} compact />}
@@ -105,27 +110,48 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
         <p className="hint">{t("Champion verrouillé : importe tes runes et tes sorts ci-dessus.")}</p>
       ) : (
       <div className="compact__recos">
-        <p className="compact__section">
-          <span>{autofill ? t("Autofill en {v}", { v: ROLE_LABELS[draft.role] }) : t("Tes meilleurs picks")}</span>
-          <span className="compact__section-note">{t("Dans cette draft")}</span>
-        </p>
         {autofill && rows.length > 0 && (
           <p className="compact__autofill">
             <span>{t("Aucun {v} dans ton pool : les meilleurs du rôle dans cette draft.", { v: ROLE_LABELS[draft.role] })}</span>
             {onPool && <button className="link" onClick={() => onPool(draft.role)}>{t("Ajouter")}</button>}
           </p>
         )}
-        {rows.length > 0 && <div className="reco-list">{rows.map(({ res, kind }, i) => (
-          <div key={res.champ}>
-            {kind === "discovery" && !autofill && rows[i - 1]?.kind !== "discovery" && <Divider compact />}
-            <RecoRow stats={stats} res={res} rank={String(i + 1)} compact
-                     discovery={kind === "discovery" && !autofill} inPool={kind === "pool"} open={open === res.champ}
-                     onToggle={() => setOpen(open === res.champ ? null : res.champ)}
-                     onPreselect={() => preselect(res.champ)} perso={persoCell(perso, res.champ, draft.role)}
-                     role={draft.role} mine={res.champ === draft.myChamp}
-                     why={res.champ === draft.myChamp ? explain(stats, res, draft.role, allies) : undefined} />
+        {shown && (
+          <section className="focus" aria-label={champName(stats, shown.res.champ)}>
+            <Chip tone="accent">{t("N°{k} sur {n}", { k: shownAt + 1, n: rows.length })}{autofill ? "" : ` · ${shown.kind === "pool" ? t("dans ton pool") : t("à découvrir")}`}</Chip>
+            <ChampionIcon stats={stats} champ={shown.res.champ} size={4.75} />
+            <h2 className="focus__name">{champName(stats, shown.res.champ)}</h2>
+            <p className="focus__wr">
+              <strong className={`tone-${wrTone(shown.res.score)}`}>{pct(shown.res.score)}</strong>
+              <small>{t("winrate estimé dans cette draft")}</small>
+            </p>
+            <div className="focus__tiles">
+              <FocusTile label={t("Toi sur {c}", { c: champName(stats, shown.res.champ) })} value={shownPerso.value === "—" ? "—" : shownPerso.short?.replace(/^\S+\s/, "").replace(/\s\D+$/, "") ?? shownPerso.value}
+                         tone={shownPerso.tone} title={shownPerso.label} />
+              <FocusTile label={t("Contre leur équipe")} value={pts(shown.res.lane + shown.res.counters)} tone={sign(shown.res.lane + shown.res.counters)} />
+              <FocusTile label={t("Avec tes alliés")} value={pts(shown.res.synergies)} tone={sign(shown.res.synergies)} />
+            </div>
+            {shown.res.champ === draft.myChamp && <p className="focus__why">{explain(stats, shown.res, draft.role, allies)}</p>}
+            <RunePage stats={stats} champ={shown.res.champ} role={draft.role} laner={shown.res.details[0]?.p >= 0.5 ? shown.res.details[0].enemy : null} />
+            {shown.res.champ === draft.myChamp
+              ? <p className="reco__inclient reco__inclient--block">{t("✓ Présélectionné dans le client")}</p>
+              : <button className="btn btn--secondary focus__pre" onClick={() => preselect(shown.res.champ)}>{t("Présélectionner dans le client")}</button>}
+          </section>
+        )}
+        {rows.length > 1 && (
+          <div className="focus-others" role="tablist" aria-label={t("Tes meilleurs picks")}>
+            {rows.map(({ res }) => (
+              <button key={res.champ} role="tab" aria-selected={res.champ === shown?.res.champ} title={champName(stats, res.champ)}
+                      className={`focus-other${res.champ === shown?.res.champ ? " is-active" : ""}`} onClick={() => setOpen(res.champ)}>
+                <ChampionIcon stats={stats} champ={res.champ} size={2.25} />
+                <span className={`tone-${wrTone(res.score)}`}>{pct(res.score)}</span>
+              </button>
+            ))}
           </div>
-        ))}</div>}
+        )}
+        {rows.length > 0 && !autofill && (
+          <p className="focus-count">{[nPool ? plural(nPool, "{n} de ton pool", "{n} de ton pool") : "", nNew ? plural(nNew, "{n} à découvrir", "{n} à découvrir") : ""].filter(Boolean).join(" · ")}</p>
+        )}
         {rows.length === 0 && <p className="hint">{t("Pas encore assez de parties pour ce rôle.")}</p>}
       </div>
       )}
@@ -136,26 +162,36 @@ function CompactDraft({ stats, draft, pool, live, onRole, onEndDemo, onPreselect
   );
 }
 
-function MiniTeam({ stats, label, champs, me, locked, mine = null }: {
-  stats: Stats; label: string; champs: (number | null)[]; me?: number; locked?: boolean[]; mine?: number | null;
-}) {
+/** Les deux équipes sur une ligne, avec la victoire estimée entre les deux. */
+function TeamsBar({ stats, draft }: { stats: Stats; draft: Draft }) {
+  const allies = draft.allies.map((c, i) => (i === draft.role ? draft.myChamp ?? null : c));
+  const picked = allies.flatMap((c, role) => (c != null ? [{ champ: c, role }] : []));
+  const foes = enemyDisplay(stats, draft.enemies).map((r) => draft.enemies[r.index]);
+  const known = foes.filter((c): c is number => c != null);
+  const p = winProbability(stats, picked, known);
+  const ok = p != null && picked.length + known.length > 0;
+  const ally = p == null ? 50 : Math.round(p * 100);
+  const slot = (c: number | null, i: number, me: boolean, hover: boolean) => (
+    <span key={i} className={`teams-bar__slot${me ? " is-me" : ""}${hover ? " is-hover" : ""}`}
+          title={c == null ? (me ? t("Toi") : t("Pas encore choisi")) : `${me ? t("Toi · {champName}", { champName: champName(stats, c) }) : champName(stats, c)}${hover ? t(" (survol)") : ""}`}>
+      <ChampionIcon stats={stats} champ={c} size={1.125} tone={me ? "accent" : "default"} />
+    </span>
+  );
   return (
-    <div className="mini-team">
-      <span className="mini-team__label">{label}</span>
-      <div className="mini-team__icons">
-        {champs.map((c, i) => {
-          const isMe = i === me;
-          const hover = locked != null && c != null && !locked[i];
-          const title = isMe ? (mine != null ? t("Toi · {champName}", { champName: champName(stats, mine) }) : t("Toi")) : c == null ? t("Pas encore choisi") : `${champName(stats, c)}${hover ? t(" (survol)") : ""}`;
-          return (
-            <span key={i} className={`mini-slot${isMe ? " is-me" : ""}${hover ? " is-hover" : ""}`} title={title}>
-              <ChampionIcon stats={stats} champ={isMe ? mine : c} size={1.875} tone={isMe ? "accent" : "default"} />
-            </span>
-          );
-        })}
-      </div>
+    <div className="teams-bar">
+      <span className="teams-bar__team">{allies.map((c, i) => slot(c, i, i === draft.role, draft.allyLocked != null && c != null && !draft.allyLocked[i] && i !== draft.role))}</span>
+      <span className="teams-bar__win" title={ok ? t("Victoire estimée") : t("Le calcul s’affiche dès que le serveur l’a validé sur les parties Master+.")}>
+        <strong className={ok ? "is-ally" : ""}>{ok ? pctN(ally) : "—"}</strong>
+        <span className="teams-bar__bar" aria-hidden><i style={{ flexGrow: ok ? ally : 50 }} /><i style={{ flexGrow: ok ? 100 - ally : 50 }} /></span>
+        <strong className={ok ? "is-enemy" : ""}>{ok ? pctN(100 - ally) : "—"}</strong>
+      </span>
+      <span className="teams-bar__team">{foes.map((c, i) => slot(c, i, false, false))}</span>
     </div>
   );
+}
+
+function FocusTile({ label, value, tone, title }: { label: string; value: string; tone: string; title?: string }) {
+  return <div className="focus__tile" title={title}><span>{label}</span><strong className={`tone-${tone}`}>{value}</strong></div>;
 }
 
 const PinIcon = () => (

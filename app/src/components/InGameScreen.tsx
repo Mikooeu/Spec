@@ -66,19 +66,8 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
   const adapts = adaptItems(stats, champ, role, foes, items, steps, owned);
   const evolutions = supportEvolutions(page);
 
-  return (
+  if (compact) return (
     <div className={`content ingame${compact ? " ingame--compact" : ""}`}>
-      {!compact && (
-        <TopBar title={t("En partie")}>
-          <span className="topbar__ctx">
-            <ChampionIcon stats={stats} champ={champ} size={1.5} />
-            <strong>{champName(stats, champ)} · {ROLE_LABELS[role]}</strong>
-            {opponent != null && <><span className="topbar__dim">{t("contre")}</span><ChampionIcon stats={stats} champ={opponent} size={1.5} /><strong>{champName(stats, opponent)}</strong></>}
-          </span>
-          <span className="grow" />
-          <Chip tone="good" dot><GameClock game={game} /></Chip>
-        </TopBar>
-      )}
       <header className="ingame__head">
         <ChampionIcon stats={stats} champ={champ} size={compact ? 2.75 : 3.5} round />
         <div className="ingame__title">
@@ -164,6 +153,167 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
         <FoeCard stats={stats} foes={foes} adapts={adapts} items={items} name={name} compact={compact} />
       </div>
     </div>
+  );
+  const left = next && game ? goldLeft(next.id, items, owned, game.gold) : null;
+  const order = page?.skills?.[0] ?? null;
+  const nextSkill = order && game?.level != null ? (game.spent == null ? game.level - 1 : game.spent < game.level ? game.spent : -1) : -1;
+  const done = steps.length > 0 && !next;
+  return (
+    <div className="content ingame ig2">
+      <TopBar title={t("En partie")}>
+        <span className="topbar__ctx">
+          <ChampionIcon stats={stats} champ={champ} size={1.5} />
+          <strong>{champName(stats, champ)} · {ROLE_LABELS[role]}</strong>
+          {opponent != null && <><span className="topbar__dim">{t("contre")}</span><ChampionIcon stats={stats} champ={opponent} size={1.5} /><strong>{champName(stats, opponent)}</strong></>}
+        </span>
+        <span className="grow" />
+        <Chip tone="good" dot><GameClock game={game} /></Chip>
+      </TopBar>
+
+      <div className="ig2__cols">
+        <div className="ig2__col">
+          <section className="ig2-card ig2-next">
+            {steps.length ? (
+              <>
+                <div className="ig2-next__top">
+                  {next && <ItemIcon id={next.id} data={items} />}
+                  <div className="ig2-next__name">
+                    <Chip tone="accent">{done ? t("Build terminé") : t("Prochain achat")}</Chip>
+                    <strong>{next ? name(next.id) : t("Tous tes objets sont achetés")}</strong>
+                  </div>
+                  <span className="grow" />
+                  {left != null && (left === 0
+                    ? <div className="ig2-next__gold is-ready"><strong>{t("Tu peux l’acheter")}</strong></div>
+                    : <div className="ig2-next__gold"><strong>{t("{v} PO", { v: int(left) })}</strong><small>{t("il te manque")}</small></div>)}
+                </div>
+                <div className="ig2-path">
+                  {steps.map((s, i) => (
+                    <Fragment key={`${s.id}-${i}`}>
+                      {i > 0 && <span className="ig2-path__arrow" aria-hidden>›</span>}
+                      <span className={`ig2-path__item is-${s.state}`} title={name(s.id)}>
+                        <ItemIcon id={s.id} data={items} />
+                        <small>{s.state === "done" ? t("Fait") : s.state === "next" ? t("Ensuite") : ordinal(i + 1)}</small>
+                      </span>
+                    </Fragment>
+                  ))}
+                </div>
+              </>
+            ) : <><h2>{t("Build")}</h2><Collecting /></>}
+          </section>
+
+          <section className="ig2-card">
+            <div className="ig2-card__head">
+              <h2>{t("Ordre des sorts")}</h2>
+              {page?.skills && <span className="ig2-card__sub">{t("Priorité {v}", { v: page.skills[1].replace(/ > /g, " › ") })}</span>}
+              <span className="grow" />
+              {order && nextSkill >= 0 && nextSkill < order.length && (
+                <Chip tone="accent">{t("Niveau {n} : monte {s}", { n: nextSkill + 1, s: order[nextSkill] })}</Chip>
+              )}
+            </div>
+            {order ? (
+              <div className="ig2-skills" role="list" aria-label={t("Ordre des sorts")}>
+                {order.split("").map((k, i) => (
+                  <span key={i} role="listitem"
+                        className={`ig2-skill${k === "R" ? " is-ult" : ""}${i === nextSkill ? " is-now" : ""}${game?.level != null && i < (nextSkill >= 0 ? nextSkill : game.level) ? " is-past" : ""}`}>
+                    <strong>{k}</strong><small>{i + 1}</small>
+                  </span>
+                ))}
+              </div>
+            ) : <Collecting />}
+          </section>
+
+          {(page?.length?.length ?? 0) >= 2 && (
+            <section className="ig2-card">
+              <h2>{t("Winrate selon la durée de la partie")}</h2>
+              <LengthChart points={page!.length!} now={game ? game.time / 60 : null} height={170} />
+            </section>
+          )}
+        </div>
+
+        <div className="ig2__col">
+          <section className="ig2-card">
+            <h2>{t("Départ et sorts")}</h2>
+            <StartRow page={page} items={items} spells={spells} opponent={opponent} />
+          </section>
+
+          <section className="ig2-card">
+            <h2>{t("Bottes")}</h2>
+            {boots ? (
+              <>
+                <Named icon={<ItemIcon id={boots.main} data={items} />} title={name(boots.main)} accent
+                       sub={ownsBoots ? t("Recommandées · déjà achetées") : t("Recommandées")} />
+                {boots.alt && <Named icon={<ItemIcon id={boots.alt.id} data={items} />} title={name(boots.alt.id)} sub={boots.alt.why} />}
+              </>
+            ) : <Collecting />}
+          </section>
+
+          {role === 4 && evolutions.length > 0 && (
+            <section className="ig2-card">
+              <h2>{t("Évolution de l’objet de support")}</h2>
+              {evolutions.map((e) => (
+                <Named key={e.id} icon={<ItemIcon id={e.id} data={items} />} title={name(e.id)} accent={e.best}
+                       sub={e.best ? t("Recommandée · {wr} de victoires", { wr: pct(e.wr) })
+                                   : t("{wr} de victoires · {share} des parties", { wr: pct(e.wr), share: pct(e.share) })} />
+              ))}
+            </section>
+          )}
+
+          <FoeColumn stats={stats} foes={foes} adapts={adapts} items={items} name={name} />
+          {opponent != null && <MatchupNote stats={stats} champ={champ} role={role} enemy={opponent} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Objets de départ et sorts d'invocateur sur une ligne (colonne de droite du menu de build). */
+function StartRow({ page, items, spells, opponent }: { page: ChampPage | null; items: InfoMap | null; spells: InfoMap | null; opponent: number | null }) {
+  const start = page ? mergeStarts(page.start)[0] : undefined;
+  const vs = opponent != null ? page?.spellsVs?.filter((s) => s[0] === opponent && s[3] >= VS_MIN_GAMES).sort((a, b) => b[3] - a[3])[0] : undefined;
+  const pair = vs ? [vs[1], vs[2]] : page?.spells[0] ? [page.spells[0][0], page.spells[0][1]] : null;
+  if (!start && !pair) return <Collecting />;
+  return (
+    <div className="ig2-start">
+      {start && groupIcons(start[0]).map(([id, n]) => (
+        <span key={id} className="combo__icon" title={items?.get(id)?.name}><ItemIcon id={id} data={items} />{n > 1 && <span className="combo__count">×{n}</span>}</span>
+      ))}
+      {start && pair && <span className="ig2-start__sep" aria-hidden />}
+      {pair && pair.map((id) => <span key={id} title={spells?.get(id)?.name}><ItemIcon id={id} data={spells} /></span>)}
+    </div>
+  );
+}
+
+/** « Face à leur équipe » en colonne : leur équipe, ce qui la caractérise, les objets à adapter. */
+function FoeColumn({ stats, foes, adapts, items, name }:
+  { stats: Stats; foes: number[]; adapts: Adapt[]; items: InfoMap | null; name: (id: number) => string }) {
+  const sits = foes.length >= 3 ? enemySituations(stats, foes) : [];
+  const pc = (v: number) => pctN(Math.round(v * 100));
+  return (
+    <section className="ig2-card">
+      <h2>{t("Face à leur équipe")}</h2>
+      {foes.length > 0 && <div className="ig2-foes__team">{foes.map((c) => <ChampionIcon key={c} stats={stats} champ={c} size={1.625} />)}</div>}
+      {foes.length < 3 ? <p className="muted small">{t("S’affiche quand l’équipe adverse est connue.")}</p> : (
+        <>
+          <div className="ig2-foes__tags">
+            {sits.length ? sits.map((s) => <Chip key={s} tone="bad">{situationTag(stats, s, foes)}</Chip>) : <Chip>{t("Équipe équilibrée")}</Chip>}
+          </div>
+          {adapts.length ? adapts.map((a) => (
+            <div key={a.id} className="ig2-adapt" title={t("Pris dans {a} des parties Master+ face à ce type d’équipe, {b} sinon", { a: pc(a.rin), b: pc(a.rout) })}>
+              <ItemIcon id={a.id} data={items} />
+              <span className="ig2-adapt__text">
+                <strong>{name(a.id)}</strong>
+                <small className={a.at != null ? "is-plan" : ""}>
+                  {a.at != null ? t("Déjà dans ton build · à prendre en {v}", { v: ordinal(a.at) }) : t("Hors de ton build")}
+                  {a.champs.length > 0 && <span className="ig2-adapt__vs">{a.champs.map((c) => <ChampionIcon key={c} stats={stats} champ={c} size={0.875} round />)}</span>}
+                </small>
+              </span>
+              <strong className="ig2-adapt__pct">{pc(a.rin)}</strong>
+            </div>
+          )) : <p className="muted small">{t("Rien à adapter de net : garde ton build.")}</p>}
+          {adapts.length > 0 && <p className="ig2-foes__note">{t("Part des parties Master+ où l’objet est pris face à ce type d’équipe.")}</p>}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -366,8 +516,8 @@ function situationWhy(s: Situation): string {
   return t("Si {v}", { v: lower(SITUATION_LABEL[s]()) });
 }
 
-/** Or qu'il te manque pour le prochain objet, en comptant ses composants déjà achetés. */
-function GoldLeft({ id, items, owned, gold }: { id: number; items: InfoMap | null; owned: number[]; gold: number }) {
+/** Or qu'il te manque pour un objet, en comptant ses composants déjà achetés (null si son prix est inconnu). */
+function goldLeft(id: number, items: InfoMap | null, owned: number[], gold: number): number | null {
   const info = items?.get(id);
   if (!info?.gold) return null;
   const pool = [...owned];
@@ -376,7 +526,12 @@ function GoldLeft({ id, items, owned, gold }: { id: number; items: InfoMap | nul
     const k = pool.indexOf(c);
     if (k >= 0) { have += items?.get(c)?.gold ?? 0; pool.splice(k, 1); }
   }
-  const left = Math.max(0, info.gold - have - Math.floor(gold));
+  return Math.max(0, info.gold - have - Math.floor(gold));
+}
+
+function GoldLeft({ id, items, owned, gold }: { id: number; items: InfoMap | null; owned: number[]; gold: number }) {
+  const left = goldLeft(id, items, owned, gold);
+  if (left == null) return null;
   return left === 0
     ? <span className="tone-good small">{t("Tu peux l’acheter")}</span>
     : <span className="tone-warn small">{t("{v} PO restants", { v: int(left) })}</span>;

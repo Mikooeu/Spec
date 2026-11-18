@@ -2023,3 +2023,99 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .update--float { position: absolute; left: 1rem; bottom: 1rem; z-index: 15; width: 15rem; margin: 0;
                  background: #1b2a3d; border: 1px solid var(--accent-tint); box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.45); }
 .settings__legal { font-size: 0.6875rem; color: var(--text-3); }
+
+/* ---- 0.15.1 : refonte, étape 2 ---- menu de build en partie (grande fenêtre) */
+.ig2__cols { display: grid; grid-template-columns: minmax(0, 1fr) 21.25rem; gap: 1rem; align-items: start; }
+.ig2__col { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.ig2-card { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; border-radius: 0.875rem;
+            background: var(--bg-surface); border: 1px solid var(--border); min-width: 0; }
+.ig2-card h2 { font-size: 0.8125rem; font-weight: 600; color: var(--text-2); }
+.ig2-card__head { display: flex; align-items: center; gap: 0.5rem; }
+.ig2-card__sub { font-size: 0.75rem; color: var(--text-3); }
+.ig2-next { gap: 1.125rem; padding: 1.25rem; border-color: var(--accent); }
+.ig2-next__top { display: flex; align-items: center; gap: 1rem; }
+.ig2-next__top > .item-ic { width: 4rem; height: 4rem; border-radius: 0.75rem; flex: none; }
+.ig2-next__name { display: flex; flex-direction: column; align-items: flex-start; gap: 0.375rem; min-width: 0; }
+.ig2-next__name strong { font-size: 1.375rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; }
+.ig2-next__gold { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 0.125rem; }
+.ig2-next__gold strong { font-size: 1.625rem; font-weight: 600; line-height: 1.2; color: var(--warn); font-variant-numeric: tabular-nums; }
+.ig2-next__gold small { font-size: 0.6875rem; color: var(--text-3); }
+.ig2-next__gold.is-ready strong { font-size: 1rem; color: var(--good); }
+.ig2-path { display: flex; align-items: flex-start; gap: 0.625rem; flex-wrap: wrap; padding-top: 1rem; border-top: 1px solid var(--border); }
+.ig2-path__arrow { height: 2.875rem; display: grid; place-items: center; font-size: 1rem; color: var(--text-3); }
+.ig2-path__item { display: inline-flex; flex-direction: column; align-items: center; gap: 0.375rem; }
+.ig2-path__item .item-ic { width: 2.875rem; height: 2.875rem; }
+.ig2-path__item small { font-size: 0.6875rem; color: var(--text-3); }
+.ig2-path__item.is-done .item-ic { opacity: 0.45; }
+.ig2-path__item.is-next .item-ic { box-shadow: 0 0 0 2px var(--accent); }
+.ig2-path__item.is-next small { color: var(--accent); font-weight: 600; }
+.ig2-skills { display: grid; grid-template-columns: repeat(18, minmax(0, 1fr)); gap: 0.25rem; }
+.ig2-skill { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.ig2-skill strong { width: 100%; height: 1.875rem; display: grid; place-items: center; border-radius: 0.375rem;
+                    font-size: 0.8125rem; font-weight: 600; background: var(--bg-surface-2); color: var(--text); }
+.ig2-skill small { font-size: 0.625rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.ig2-skill.is-past strong { color: var(--text-3); }
+.ig2-skill.is-ult strong { background: var(--accent-tint); color: var(--accent); }
+.ig2-skill.is-now strong { background: var(--accent); color: #fff; }
+.ig2-skill.is-now small { color: var(--accent); }
+.ig2-start { display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
+.ig2-start .item-ic { width: 2rem; height: 2rem; }
+.ig2-start__sep { width: 1px; height: 1.5rem; margin: 0 0.25rem; background: var(--separator); }
+.ig2-card .ingame__named .item-ic { width: 2.25rem; height: 2.25rem; flex: none; }
+.ig2-card .ingame__named-text small { white-space: normal; font-size: 0.6875rem; }
+.ig2-foes__team { display: flex; gap: 0.375rem; }
+.ig2-foes__tags { display: flex; gap: 0.375rem; flex-wrap: wrap; }
+.ig2-foes__note { font-size: 0.6875rem; color: var(--text-3); line-height: 1.35; }
+.ig2-adapt { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem; border-radius: 0.625rem; background: var(--bg-surface-2); }
+.ig2-adapt .item-ic { width: 2.25rem; height: 2.25rem; flex: none; }
+.ig2-adapt__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.125rem; }
+.ig2-adapt__text strong { font-size: 0.8125rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ig2-adapt__text small { display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; font-size: 0.6875rem; color: var(--text-2); }
+.ig2-adapt__text small.is-plan { color: var(--accent); }
+.ig2-adapt__vs { display: inline-flex; gap: 0.125rem; }
+.ig2-adapt__pct { flex: none; font-size: 0.9375rem; font-weight: 600; color: var(--good); font-variant-numeric: tabular-nums; }
+
+/* ---- 0.15.1 : mode compact « Focus » ---- un seul pick en grand, les autres en bas */
+.teams-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0.625rem; border-radius: 0.625rem;
+             background: var(--bg-surface); border: 1px solid var(--border); }
+.teams-bar__team { display: flex; gap: 0.1875rem; }
+.teams-bar__slot { display: inline-flex; border-radius: 0.3125rem; }
+.teams-bar__slot.is-me { box-shadow: 0 0 0 1.5px var(--accent); }
+.teams-bar__slot.is-hover .icon { opacity: 0.5; }
+.teams-bar__win { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.6875rem; font-variant-numeric: tabular-nums; color: var(--text-3); }
+.teams-bar__win strong { font-weight: 600; }
+.teams-bar__win .is-ally { color: var(--accent); }
+.teams-bar__win .is-enemy { color: var(--bad); }
+.teams-bar__bar { display: flex; gap: 2px; width: 4.5rem; height: 4px; }
+.teams-bar__bar i { display: block; border-radius: 2px; background: var(--accent); min-width: 2px; }
+.teams-bar__bar i + i { background: var(--bad); }
+.focus { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 1rem; border-radius: 0.75rem;
+         background: var(--bg-surface); border: 1px solid var(--accent); text-align: center; }
+.focus__name { font-size: 1.375rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; }
+.focus__wr { display: flex; flex-direction: column; align-items: center; }
+.focus__wr strong { font-size: 2.25rem; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.focus__wr small { font-size: 0.6875rem; color: var(--text-3); }
+.focus__tiles { align-self: stretch; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.375rem; }
+.focus__tile { display: flex; flex-direction: column; gap: 0.125rem; padding: 0.4375rem 0.5rem; border-radius: 0.5rem; background: var(--bg-surface-2); text-align: left; min-width: 0; }
+.focus__tile span { font-size: 0.625rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.focus__tile strong { font-size: 0.75rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.focus__why { align-self: stretch; font-size: 0.75rem; line-height: 1.4; color: var(--text-2); text-align: left; }
+.focus .runes { align-self: stretch; text-align: left; }
+.focus .runes__import { flex-basis: 100%; margin: 0.375rem 0 0; padding: 0.5625rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;
+                        text-align: center; background: var(--accent); color: #fff; }
+.focus .runes__import:hover:not(:disabled) { filter: brightness(1.1); }
+.focus__pre { align-self: stretch; padding: 0.5625rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem; text-align: center; }
+.focus .reco__inclient--block { align-self: stretch; }
+.focus-others { display: flex; gap: 0.375rem; }
+.focus-other { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 0.5rem 0;
+               border-radius: 0.625rem; background: var(--bg-surface); border: 1px solid var(--border);
+               font-size: 0.6875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.focus-other:hover:not(.is-active) { border-color: var(--separator); }
+.focus-other.is-active { border-color: var(--accent); }
+.focus-count { font-size: 0.625rem; color: var(--text-3); text-align: center; }
+.teams-bar__win strong { white-space: nowrap; }
+.teams-bar { gap: 0.375rem; padding: 0.5rem; }
+.teams-bar__bar { width: 3.25rem; }
+.focus { gap: 0.625rem; padding: 0.875rem; }
+.focus__wr strong { font-size: 2rem; }
+.focus .spells > .muted { display: none; }
