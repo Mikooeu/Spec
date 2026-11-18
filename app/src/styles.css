@@ -2212,3 +2212,4 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .mups__bar { display: block; width: 6.25rem; height: 4px; border-radius: 2px; background: var(--bg-surface-2); overflow: hidden; }
 .mups__bar i { display: block; height: 100%; border-radius: 2px; background: currentColor; }
 .cp-head .segmented { align-self: center; }
+.tl2-prev { min-height: 0; }

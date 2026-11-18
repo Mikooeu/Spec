@@ -207,7 +207,6 @@ function Preview({ stats, row, perso, onOpen }: { stats: Stats; row: TierRow; pe
         </>
       )}
       {lanes.length > 0 && <div className="tl2-prev__sides">{side(t("Fort contre"), strong, "good")}{side(t("Faible contre"), weak, "bad")}</div>}
-      <span className="grow" />
       <button className="btn btn--primary tl2-prev__open" onClick={onOpen}>{t("Ouvrir la page de {champName}", { champName: name })}</button>
     </aside>
   );
