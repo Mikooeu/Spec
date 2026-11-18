@@ -426,7 +426,8 @@ export default function App() {
           <HomeScreen stats={stats} clientOn={clientOn} clientText={clientText} region={account?.region ?? null} me={me?.puuid ?? null} pools={pools}
                       mainRole={roles.main} version={lpVersion} onRecap={setRecap} onHistory={() => setScreen("profile")}
                       onPool={() => setScreen("pool")} onTierList={(r) => { setTierRole(r); setScreen("tier"); }}
-                      onDemo={() => setDraft(demoDraft(stats))} />
+                      onDemo={() => setDraft(demoDraft(stats))} perso={perso}
+                      ready={<ReadyCheckToast check={readyCheck} banner />} />
         )}
         {stats && screen === "draft" && !live && !inGame && draft && (
           <DraftScreen stats={stats} draft={draft} pool={pools[draft.role]} wide={wide}
@@ -435,7 +436,7 @@ export default function App() {
       </main>
       <UpdateCard state={update} onInstall={installUpdate} />
       </div>
-      <ReadyCheckToast check={readyCheck} />
+      {!(screen === "draft" && stats && isHome) && <ReadyCheckToast check={readyCheck} />}
       {privacy && <PrivacyDialog onClose={() => setPrivacy(false)} />}
       {tour && stats && (
         <Tour steps={specTour()} onClose={() => { setTour(false); setTourDone(true); }}

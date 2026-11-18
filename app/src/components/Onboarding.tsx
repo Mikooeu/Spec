@@ -45,19 +45,10 @@ export function Onboarding({ stats, roles, onRoles, pools, onPools, clientOn, ac
   return (
     <div className="onboarding">
       <div className="onboarding__inner">
-        <div className="onboarding__top">
-          <span className="onboarding__brand"><Logo className="brand__mark" />{t("Bienvenue sur Spec")}</span>
-          <span className="grow" />
-          {step < 2 && <button className="link-btn" onClick={onDone}>{t("Passer l’accueil")}</button>}
-        </div>
-        <ol className="steps" aria-label={t("Étapes")}>
-          {STEPS.map((s, i) => (
-            <li key={s} className={i < step ? "is-done" : i === step ? "is-current" : ""} aria-current={i === step ? "step" : undefined}>
-              {i > 0 && <span className="steps__line" aria-hidden />}
-              <span className="steps__dot">{i < step ? "✓" : i + 1}</span>{s}
-            </li>
-          ))}
-        </ol>
+        <p className="onboarding__progress" aria-label={t("Étapes")}>
+          {STEPS.map((label, i) => <i key={label} className={i === step ? "is-current" : i < step ? "is-done" : ""} title={label} />)}
+          <span>{t("Réglage {n} sur 3", { n: step + 1 })}</span>
+        </p>
 
         <div key={step} className="onboarding__body fade-in">
           {step === 0 && <RolesStep roles={roles} onRoles={onRoles} />}
@@ -67,11 +58,11 @@ export function Onboarding({ stats, roles, onRoles, pools, onPools, clientOn, ac
 
         <div className="onboarding__foot">
           {step > 0 && <button className="btn btn--secondary" onClick={() => setStep(step - 1)}>{t("Retour")}</button>}
+          {step < 2 && <button className="link-btn" onClick={onDone}>{t("Passer l’accueil")}</button>}
           <span className="grow" />
-          <span className="muted small">{t("Étape {n} sur 3", { n: step + 1 })}</span>
           {step === 2 && perso.kind !== "ready" && <button className="btn btn--secondary" onClick={onDone}>{t("Plus tard")}</button>}
           <button className="btn btn--primary" onClick={next}>
-            {nextRole != null ? t("Suivant : {role}", { role: ROLE_LABELS[nextRole] }) : step < 2 ? t("Suivant") : t("Terminer")}
+            {nextRole != null ? t("Suivant : {role}", { role: ROLE_LABELS[nextRole] }) : step < 2 ? t("Continuer") : t("Terminer")}
           </button>
         </div>
       </div>
@@ -176,7 +167,7 @@ function PoolStep({ stats, roles, role, onRole, pools, onPools, clientOn }:
   return (
     <>
       <div className="onboarding__head">
-        <h1>{t("Ton champion pool")}</h1>
+        <h1>{t("Quels champions joues-tu en {v} ?", { v: ROLE_LABELS[role] })}</h1>
         <p className="muted">{t("Les champions que tu sais jouer. Spec les met en avant dans ses recommandations, et te propose aussi quelques découvertes hors de ton pool. Tu pourras le modifier à tout moment.")}</p>
       </div>
       {roles.length > 1 && (

@@ -1,12 +1,13 @@
 // Accueil de l'onglet Draft hors draft : ta dernière partie, ton pool, les meilleurs picks du patch et ta semaine.
 // Remplace l'ancien écran « En attente de la draft » (un chargement qui tournait sans fin).
 import { Chip, TopBar } from "./TopBar";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { PersonalState } from "../lib/api";
 import { loadHistory, type Game } from "../lib/history";
 import { t } from "../lib/i18n";
 import { loadRecap } from "../lib/recap";
 import { ROLE_LABELS, tierList, type Stats } from "../lib/score";
-import { champName, pct } from "../lib/ui";
+import { champName, dec1, pct } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { WeekGoals } from "./Goals";
 
@@ -26,6 +27,10 @@ interface Props {
   onPool: () => void;
   onTierList: (role: number) => void;
   onDemo: () => void;
+  /** Stats perso : ton winrate sur les champions de ton pool. */
+  perso?: PersonalState;
+  /** Bandeau « Partie trouvée », affiché en haut de l'écran d'attente. */
+  ready?: ReactNode;
 }
 
 const ago = (ms: number) => {
@@ -39,7 +44,7 @@ const ago = (ms: number) => {
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 const signed = (x: number) => (x > 0 ? `+${x}` : x < 0 ? `−${-x}` : "0");
 
-export function HomeScreen({ stats, clientOn, clientText, region, me, pools, mainRole, version, onRecap, onHistory, onPool, onTierList, onDemo }: Props) {
+export function HomeScreen({ stats, clientOn, clientText, region, me, pools, mainRole, version, onRecap, onHistory, onPool, onTierList, onDemo, perso, ready }: Props) {
   const [games, setGames] = useState<Game[] | null>(null);
   useEffect(() => {
     if (!clientOn) { setGames(null); return; }
@@ -49,15 +54,14 @@ export function HomeScreen({ stats, clientOn, clientText, region, me, pools, mai
   }, [clientOn, version]);
 
   const last = games?.find((g) => !g.remake) ?? null;
-  const [brief, setBrief] = useState<string | null>(null);
+  const [opp, setOpp] = useState<string | null>(null);
   useEffect(() => {
-    setBrief(null);
+    setOpp(null);
     if (!last || !me) return;
     let alive = true;
     loadRecap(last.id, me).then((r) => {
       if (!alive || !r) return;
-      const opp = r.oppChamp != null ? champName(stats, r.oppChamp) : t("ton vis-à-vis");
-      setBrief(r.brief.replace("{opp}", opp));
+      setOpp(r.oppChamp != null ? champName(stats, r.oppChamp) : null);
     }).catch(() => {});
     return () => { alive = false; };
   }, [last?.id, me, stats]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -74,16 +78,24 @@ export function HomeScreen({ stats, clientOn, clientText, region, me, pools, mai
   const tracked = week.filter((g) => g.lp != null);
   const weekLp = tracked.reduce((a, g) => a + (g.lp ?? 0), 0);
 
+  // ton pool classé par ton winrate perso (sinon celui du Master+) ; sans pool, les meilleurs du rôle
+  const mine = perso?.kind === "ready" ? perso.data : null;
+  const picks = (pool.length ? pool : best.map((r) => r.champ)).map((champ) => {
+    const r = tierOf.get(champ), me2 = mine?.byRole.get(`${champ}:${role}`);
+    const wr = me2 && me2[0] > 0 ? me2[1] / me2[0] : null;
+    return { champ, tier: r?.tier ?? null, order: wr ?? (r ? r.winrate - 1 : -2),
+             sub: me2 && wr != null ? (me2[0] > 1 ? t("{wr} sur {n} parties", { wr: pct(wr), n: me2[0] }) : t("{wr} sur 1 partie", { wr: pct(wr) })) : r ? t("{wr} en Master+", { wr: pct(r.winrate) }) : "—" };
+  }).sort((a, b) => b.order - a.order).slice(0, 4);
   return (
     <div className="content home">
       <TopBar title={t("Draft")}>
         <Chip tone={clientOn ? "good" : undefined} dot>{clientOn ? `${t("Client connecté")}${region ? ` · ${region}` : ""}` : clientText}</Chip>
       </TopBar>
 
-      <div className="home__grid">
-        {/* dernière partie */}
-        <section className="card home-card">
-          <div className="home-card__head"><h2>{t("Dernière partie")}</h2>{last && <span className="muted small">{ago(last.created)}</span>}</div>
+      {ready}
+      <div className="home3">
+        <section className="pf-card home3__card">
+          <div className="pf-card__head"><h2>{t("Ta dernière partie")}</h2>{last && <small className="muted">{ago(last.created)}</small>}</div>
           {!clientOn ? (
             <div className="home-empty">
               <p>{t("Ouvre le client LoL pour retrouver ta dernière partie et ta semaine.")}</p>
@@ -95,78 +107,55 @@ export function HomeScreen({ stats, clientOn, clientText, region, me, pools, mai
             <p className="home-empty">{t("Pas encore de partie dans l’historique du client.")}</p>
           ) : (
             <>
-              <div className={`home-last home-last--${last.win ? "win" : "loss"}`}>
-                <div className="home-last__top">
-                  <ChampionIcon stats={stats} champ={last.champ} size={2.75} round />
-                  <div className="home-last__title">
-                    <p><strong className={last.win ? "tone-good" : "tone-bad"}>{last.win ? t("Victoire") : t("Défaite")}</strong>
-                      <span>{champName(stats, last.champ)}{last.role != null ? ` · ${ROLE_LABELS[last.role]}` : ""}</span></p>
-                    <small>{last.kills} / {last.deaths} / {last.assists} · {clock(last.duration)} · {last.queueName}</small>
-                  </div>
-                  {last.lp != null && <strong className={`home-last__lp tone-${last.lp >= 0 ? "good" : "bad"}`}>{signed(last.lp)} LP</strong>}
+              <div className="home3-last">
+                <ChampionIcon stats={stats} champ={last.champ} size={3} />
+                <div>
+                  <strong className={last.win ? "tone-good" : "tone-bad"}>{last.win ? t("Victoire") : t("Défaite")}</strong>
+                  <small>{[champName(stats, last.champ), last.role != null ? ROLE_LABELS[last.role] : null, clock(last.duration), opp ? t("contre {opp}", { opp }) : null].filter(Boolean).join(" · ")}</small>
                 </div>
-                {brief && <p className="home-last__brief">{brief}</p>}
               </div>
-              <div className="home-card__actions">
-                {me && <button className="btn btn--primary btn--small" onClick={() => onRecap(last)}>{t("Voir le récap")}</button>}
-                <button className="btn btn--secondary btn--small" onClick={onHistory}>{t("Historique")}</button>
+              <div className="pf-summary home3-stats">
+                <div><strong>{last.kills} / {last.deaths} / {last.assists}</strong><span>KDA</span></div>
+                <div><strong>{dec1(last.cs / Math.max(1, last.duration / 60))}</strong><span>{t("CS/min")}</span></div>
+                <div><strong className={last.lp == null ? "" : last.lp >= 0 ? "tone-good" : "tone-bad"}>{last.lp == null ? "—" : signed(last.lp)}</strong><span>{t("LP")}</span></div>
+              </div>
+              <span className="grow" />
+              <div className="home3__actions">
+                {me && <button className="btn btn--secondary home3__btn" onClick={() => onRecap(last)}>{t("Voir le récap")}</button>}
+                <button className="link-btn" onClick={onHistory}>{t("Historique")}</button>
               </div>
             </>
           )}
         </section>
 
-        {/* ton pool */}
-        <section className="card home-card home-card--side">
-          <div className="home-card__head"><h2>{t("Ton pool {v}", { v: ROLE_LABELS[role] })}</h2>
-            <button className="link-btn" onClick={onPool}>{pool.length ? t("Modifier") : t("Ajouter")}</button></div>
-          {pool.length === 0 ? (
-            <p className="home-empty">{t("Aucun champion pour l’instant : en draft, Spec proposera les meilleurs choix du rôle.")}</p>
-          ) : (
-            <ul className="home-list">
-              {pool.slice(0, 5).map((c) => {
-                const r = tierOf.get(c);
-                return (
-                  <li key={c}>
-                    <ChampionIcon stats={stats} champ={c} size={2} round />
-                    <span className="home-list__name">{champName(stats, c)}</span>
-                    {r && <span className={`tier-chip tier--${r.tier}`}>{r.tier}</span>}
-                    <span className={`home-list__wr${r && r.winrate < 0.49 ? " tone-bad" : ""}`}>{r ? pct(r.winrate) : "—"}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+        <section className="pf-card home3__card">
+          <div className="pf-card__head"><h2>{pool.length ? t("Tes meilleurs picks en {v}", { v: ROLE_LABELS[role] }) : t("Les plus forts en {v} ce patch", { v: ROLE_LABELS[role] })}</h2>
+            <button className="link-btn" onClick={pool.length ? onPool : () => onTierList(role)}>{pool.length ? t("Modifier") : t("Tier list")}</button></div>
+          {picks.length === 0 ? <p className="home-empty">{t("Pas encore assez de parties pour ce rôle.")}</p> : picks.map((x) => (
+            <div key={x.champ} className="home3-pick">
+              <ChampionIcon stats={stats} champ={x.champ} size={2.25} />
+              <span><strong>{champName(stats, x.champ)}</strong><small>{x.sub}</small></span>
+              <span className="grow" />
+              {x.tier && <span className={`tl2-group__tier tier--${x.tier}`}>{t("Tier {tier}", { tier: x.tier })}</span>}
+            </div>
+          ))}
+          {pool.length === 0 && <button className="link-btn home3__add" onClick={onPool}>{t("Ajouter des champions à ton pool")}</button>}
         </section>
 
-        {/* meilleurs picks du patch */}
-        <section className="card home-card">
-          <div className="home-card__head"><h2>{t("Les plus forts en {v} ce patch", { v: ROLE_LABELS[role] })}</h2>
-            <button className="link-btn" onClick={() => onTierList(role)}>{t("Tier list")}</button></div>
-          {best.length === 0 ? <p className="home-empty">{t("Pas encore assez de parties pour ce rôle.")}</p> : (
-            <div className="home-best">
-              {best.map((r) => (
-                <div key={r.champ} className="home-best__tile">
-                  <ChampionIcon stats={stats} champ={r.champ} size={2.25} round />
-                  <div><strong>{champName(stats, r.champ)}</strong>
-                    <small><span className={`tier-chip tier--${r.tier}`}>{r.tier}</span> {pct(r.winrate)}</small></div>
+        <section className="pf-card home3__card">
+          <div className="pf-card__head"><h2>{t("Objectifs de la semaine")}</h2></div>
+          {!clientOn || games == null ? <p className="home-empty">{t("Disponible avec le client LoL ouvert.")}</p> : (
+            <>
+              {week.length > 0 && (
+                <div className="pf-summary home3-stats">
+                  <div><strong className={tracked.length ? `tone-${weekLp >= 0 ? "good" : "bad"}` : ""}>{tracked.length ? signed(weekLp) : "—"}</strong><span>{t("LP")}</span></div>
+                  <div><strong>{pct(weekWins / week.length)}</strong><span>{t("Winrate")}</span></div>
+                  <div><strong>{week.length}</strong><span>{t("Parties")}</span></div>
                 </div>
-              ))}
-            </div>
+              )}
+              <WeekGoals stats={stats} games={games} defaultChamp={pool[0] ?? null} />
+            </>
           )}
-        </section>
-
-        {/* ta semaine */}
-        <section className="card home-card home-card--side">
-          <div className="home-card__head"><h2>{t("Ta semaine")}</h2></div>
-          {!clientOn || games == null ? <p className="home-empty">{t("Disponible avec le client LoL ouvert.")}</p>
-            : week.length === 0 ? <p className="home-empty">{t("Aucune partie ces 7 derniers jours.")}</p> : (
-            <div className="home-week">
-              <div><small>{t("LP")}</small><strong className={tracked.length ? `tone-${weekLp >= 0 ? "good" : "bad"}` : ""}>{tracked.length ? signed(weekLp) : "—"}</strong></div>
-              <div><small>{t("Winrate")}</small><strong>{pct(weekWins / week.length)}</strong></div>
-              <div><small>{t("Parties")}</small><strong>{week.length}</strong></div>
-            </div>
-          )}
-          {clientOn && games != null && <WeekGoals stats={stats} games={games} defaultChamp={pool[0] ?? null} />}
         </section>
       </div>
     </div>

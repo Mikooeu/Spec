@@ -6,7 +6,8 @@ import { t } from "../lib/i18n";
 /** Durée de la fenêtre d'acceptation dans le client (secondes). */
 const READY_SECONDS = 12;
 
-export function ReadyCheckToast({ check, compact = false }: { check: ReadyCheck | null | undefined; compact?: boolean }) {
+export function ReadyCheckToast({ check, compact = false, banner = false }: { check: ReadyCheck | null | undefined; compact?: boolean;
+  /** Bandeau en haut de l'écran d'attente, au lieu de la carte flottante. */ banner?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { if (!check) { setBusy(false); setError(null); } }, [check == null]);
@@ -19,7 +20,7 @@ export function ReadyCheckToast({ check, compact = false }: { check: ReadyCheck 
     setBusy(false);
   };
   return (
-    <div className={`readycheck${compact ? " readycheck--compact" : ""}`} role="alertdialog" aria-live="assertive" aria-label={t("Partie trouvée")}>
+    <div className={`readycheck${compact ? " readycheck--compact" : ""}${banner ? " readycheck--banner" : ""}`} role="alertdialog" aria-live="assertive" aria-label={t("Partie trouvée")}>
       <div className="readycheck__text">
         <strong>{t("Partie trouvée")}</strong>
         <small className="muted">{error ?? (accepted ? t("Acceptée. En attente des autres joueurs.") : t("{n} s pour accepter", { n: left }))}</small>

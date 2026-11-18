@@ -2319,3 +2319,45 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 /* partie dépliée : le détail des 10 joueurs prend toute la largeur, la colonne du compte s'efface */
 .pf:has(.game-open) { grid-template-columns: minmax(0, 1fr); }
 .pf:has(.game-open) > .pf__side { display: none; }
+
+/* ---- 0.15.6 : refonte, étape 5 ---- écran d'attente et premier lancement */
+.home3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: stretch; }
+.home3__card { gap: 0.75rem; }
+.home3__card .pf-card__head small { font-size: 0.6875rem; }
+.home3__card .link-btn { font-size: 0.75rem; color: var(--accent); }
+.home3-last { display: flex; align-items: center; gap: 0.75rem; }
+.home3-last > div { display: flex; flex-direction: column; gap: 0.1875rem; min-width: 0; }
+.home3-last strong { font-size: 1rem; font-weight: 600; }
+.home3-last small { font-size: 0.75rem; color: var(--text-2); }
+.home3-stats { padding: 0.25rem 0; border: 0; background: none; }
+.home3-stats strong { font-size: 0.9375rem; }
+.home3__actions { display: flex; align-items: center; gap: 0.75rem; }
+.home3__btn { flex: 1; padding: 0.5rem 0.875rem; border-radius: 0.5rem; font-size: 0.75rem; text-align: center; }
+.home3-pick { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 0; border-top: 1px solid var(--border); }
+.home3__card .pf-card__head + .home3-pick { border-top: 0; padding-top: 0; }
+.home3-pick > span:not(.grow):not(.tl2-group__tier) { display: flex; flex-direction: column; gap: 0.0625rem; min-width: 0; }
+.home3-pick strong { font-size: 0.875rem; font-weight: 500; }
+.home3-pick small { font-size: 0.6875rem; color: var(--text-2); }
+.home3__add { align-self: flex-start; }
+.readycheck--banner { position: relative; left: auto; bottom: auto; transform: none; width: auto; min-width: 0; display: flex; align-items: center; gap: 0.875rem; padding: 1rem;
+                      border-radius: 0.875rem; background: var(--bg-surface); border: 1px solid var(--accent); box-shadow: none; overflow: hidden; }
+.readycheck--banner .readycheck__text { flex: 1; display: flex; flex-direction: column; gap: 0.125rem; }
+.readycheck--banner .readycheck__text strong { font-size: 0.9375rem; font-weight: 600; }
+.readycheck--banner .btn { padding: 0.5rem 0.875rem; border-radius: 0.5rem; font-size: 0.75rem; }
+/* premier lancement : une carte centrée par réglage */
+.onboarding:not(.welcome) { align-items: center; }
+.onboarding:not(.welcome) .onboarding__inner { width: min(40rem, 100% - 3rem); min-height: 0; margin: 1.5rem 0; gap: 1.25rem; padding: 1.75rem;
+                                               border-radius: 1rem; background: var(--bg-surface); border: 1px solid var(--separator); }
+.onboarding__progress { display: flex; align-items: center; gap: 0.375rem; font-size: 0.6875rem; font-weight: 500; color: var(--text-3); }
+.onboarding__progress i { width: 0.5rem; height: 0.375rem; border-radius: 0.1875rem; background: var(--bg-surface-2); }
+.onboarding__progress i.is-done { background: var(--accent); }
+.onboarding__progress i.is-current { width: 1.375rem; background: var(--accent); }
+.onboarding__progress span { margin-left: 0.25rem; }
+.onboarding:not(.welcome) .onboarding__head h1 { margin: 0; font-size: 1.375rem; font-weight: 600; }
+.onboarding:not(.welcome) .onboarding__head p { display: none; }
+.onboarding:not(.welcome) .onboarding__foot { margin-top: 0; padding-top: 0; }
+.onboarding:not(.welcome) .onboarding__foot .btn { padding: 0.5rem 0.875rem; border-radius: 0.5rem; font-size: 0.75rem; }
+.onboarding:not(.welcome) .onboarding__foot .link-btn { font-size: 0.75rem; color: var(--text-3); }
+.onboarding:not(.welcome) .card { background: var(--bg-surface-2); }
+.home3-stats { display: flex; }
+.home3-stats > div { flex: 1; }
