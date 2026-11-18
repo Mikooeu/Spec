@@ -1,3 +1,4 @@
+import { TopBar } from "./TopBar";
 import { t } from "../lib/i18n";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { OVERLAY_STATS, closeOverlay, openOverlay, setOverlayInteractive, type Corner, type OverlaySettings, type OverlayStat } from "../lib/overlay";
@@ -24,13 +25,11 @@ export function OverlayScreen({ settings: s, onChange: save, inGame }: { setting
   const count = OVERLAY_STATS.filter((k) => s.stats[k]).length;
   return (
     <div className="content ovs">
-      <header className="page-head">
-        <div>
-          <h1>{t("Overlay")}</h1>
-        </div>
+      <TopBar title={t("Overlay")}>
+        <span className="grow" />
         <label className="ovs__master" title={t("Le jeu doit être en mode Sans bordure ou Fenêtré (Options › Vidéo › Mode fenêtre).")}><span>{t("Afficher l’overlay")}</span>
           <Toggle on={s.enabled} onChange={() => save({ ...s, enabled: !s.enabled })} label={t("Afficher l’overlay")} /></label>
-      </header>
+      </TopBar>
 
       <div className={`ovs__grid${s.enabled ? "" : " is-off"}`}>
         <section className="card ovs-card ovs-settings">

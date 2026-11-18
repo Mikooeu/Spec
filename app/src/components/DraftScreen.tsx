@@ -1,3 +1,4 @@
+import { Chip, TopBar } from "./TopBar";
 import { useEffect, useMemo, useState } from "react";
 import {
   LOW_DATA_GAMES, ROLE_LABELS, banSuggestions, type BanSuggestion, draftGain, explain, isBlind, recommend,
@@ -76,12 +77,10 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
 
   return (
     <div className="content">
-      <header className="page-head">
-        <div>
-          <p className="overline">{live ? t("Sélection des champions · en direct") : t("Sélection des champions · mode démo")}</p>
-          <h1>{t("Tu joues ")}{ROLE_LABELS[draft.role]}</h1>
-        </div>
-        <div className="head-actions">
+      <TopBar title={t("Draft")}>
+          <Chip>{t("Tu joues ")}{ROLE_LABELS[draft.role]}</Chip>
+          <Chip tone={live ? "accent" : undefined} dot={live}>{live ? t("En direct") : t("Mode démo")}</Chip>
+          <span className="grow" />
           <Segmented className="segmented" role="tablist" aria-label={t("Rôle assigné")}>
             {ROLE_LABELS.map((label, i) => (
               <button key={label} role="tab" aria-selected={draft.role === i}
@@ -94,8 +93,7 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
                     onClick={() => onChange({ ...draft, banPhase: !draft.banPhase })}>{t("Phase de bans")}</button>
           )}
           {!live && onEnd && <button className="btn btn--secondary" onClick={onEnd}>{t("Terminer la démo")}</button>}
-        </div>
-      </header>
+      </TopBar>
 
       <DraftBand stats={stats} draft={draft} live={live} onPick={live ? undefined : setPicking} />
 

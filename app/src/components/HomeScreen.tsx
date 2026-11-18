@@ -1,11 +1,12 @@
 // Accueil de l'onglet Draft hors draft : ta dernière partie, ton pool, les meilleurs picks du patch et ta semaine.
 // Remplace l'ancien écran « En attente de la draft » (un chargement qui tournait sans fin).
+import { Chip, TopBar } from "./TopBar";
 import { useEffect, useMemo, useState } from "react";
 import { loadHistory, type Game } from "../lib/history";
 import { t } from "../lib/i18n";
 import { loadRecap } from "../lib/recap";
 import { ROLE_LABELS, tierList, type Stats } from "../lib/score";
-import { champName, patchLabel, pct } from "../lib/ui";
+import { champName, pct } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { WeekGoals } from "./Goals";
 
@@ -13,6 +14,8 @@ interface Props {
   stats: Stats;
   clientOn: boolean;
   clientText: string;
+  /** région du compte connecté (pastille de la barre de contexte) */
+  region?: string | null;
   me: string | null;
   pools: number[][];
   mainRole: number | null;
@@ -36,7 +39,7 @@ const ago = (ms: number) => {
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 const signed = (x: number) => (x > 0 ? `+${x}` : x < 0 ? `−${-x}` : "0");
 
-export function HomeScreen({ stats, clientOn, clientText, me, pools, mainRole, version, onRecap, onHistory, onPool, onTierList, onDemo }: Props) {
+export function HomeScreen({ stats, clientOn, clientText, region, me, pools, mainRole, version, onRecap, onHistory, onPool, onTierList, onDemo }: Props) {
   const [games, setGames] = useState<Game[] | null>(null);
   useEffect(() => {
     if (!clientOn) { setGames(null); return; }
@@ -73,15 +76,9 @@ export function HomeScreen({ stats, clientOn, clientText, me, pools, mainRole, v
 
   return (
     <div className="content home">
-      <header className="page-head home__head">
-        <div>
-          <h1>{t("Prêt pour ta prochaine draft")}</h1>
-        </div>
-        <div className="home__status">
-          <span className="home__pill"><span className={clientOn ? "dot" : "dot dot--off"} />{clientOn ? clientText : t("Client LoL fermé")}</span>
-          <span className="home__pill"><span className="dot" />{t("Patch {v}", { v: patchLabel(stats.meta.patch) })}</span>
-        </div>
-      </header>
+      <TopBar title={t("Draft")}>
+        <Chip tone={clientOn ? "good" : undefined} dot>{clientOn ? `${t("Client connecté")}${region ? ` · ${region}` : ""}` : clientText}</Chip>
+      </TopBar>
 
       <div className="home__grid">
         {/* dernière partie */}

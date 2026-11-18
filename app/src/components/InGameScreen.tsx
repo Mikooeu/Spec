@@ -1,3 +1,4 @@
+import { Chip, TopBar } from "./TopBar";
 import { Fragment, type ReactNode } from "react";
 import { LengthChart } from "./LengthChart";
 import { adaptationsFor, enemySituations, situationChamps } from "../lib/adapt";
@@ -67,6 +68,17 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
 
   return (
     <div className={`content ingame${compact ? " ingame--compact" : ""}`}>
+      {!compact && (
+        <TopBar title={t("En partie")}>
+          <span className="topbar__ctx">
+            <ChampionIcon stats={stats} champ={champ} size={1.5} />
+            <strong>{champName(stats, champ)} · {ROLE_LABELS[role]}</strong>
+            {opponent != null && <><span className="topbar__dim">{t("contre")}</span><ChampionIcon stats={stats} champ={opponent} size={1.5} /><strong>{champName(stats, opponent)}</strong></>}
+          </span>
+          <span className="grow" />
+          <Chip tone="good" dot><GameClock game={game} /></Chip>
+        </TopBar>
+      )}
       <header className="ingame__head">
         <ChampionIcon stats={stats} champ={champ} size={compact ? 2.75 : 3.5} round />
         <div className="ingame__title">

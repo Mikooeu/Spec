@@ -145,6 +145,10 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![MINIMIZED_ARG])))
         .setup(|app| {
+            // la version s'affiche à côté du nom, dans la barre de titre de la fenêtre
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_title(&format!("Spec V{}", app.package_info().version));
+            }
             if std::env::args().any(|a| a == MINIMIZED_ARG) {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.minimize();

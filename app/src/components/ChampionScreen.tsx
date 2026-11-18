@@ -1,3 +1,4 @@
+import { Chip, TopBar } from "./TopBar";
 import { LengthChart } from "./LengthChart";
 import { useContext, useState, type ReactNode } from "react";
 import {
@@ -53,10 +54,11 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
 
   return (
     <div className="content champ">
-      <div className="champ__top">
-        <button className="link-back" onClick={onBack}>← {inGame ? t("Draft") : t("Tier list · {v}", { v: ROLE_LABELS[role] })}</button>
+      <TopBar title={<><button className="crumb" onClick={onBack}>← {inGame ? t("Draft") : t("Tier list")}</button><span className="crumb__sep" aria-hidden>/</span>{champName(stats, champ)}</>}>
+        <Chip tone="warn">{t("Tier {tier}", { tier })}</Chip>
+        <span className="grow" />
         {region}
-      </div>
+      </TopBar>
       <header className="champ__head">
         <ChampionIcon stats={stats} champ={champ} size={3.5} />
         <div>

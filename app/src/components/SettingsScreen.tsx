@@ -1,3 +1,4 @@
+import { TopBar } from "./TopBar";
 import { useEffect, useState } from "react";
 import { REGIONS, deleteMyData, type Region } from "../lib/api";
 import { journalText } from "../lib/journal";
@@ -57,11 +58,7 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
 
   return (
     <div className="content settings">
-      <header className="page-head">
-        <div>
-          <h1>{t("Réglages")}</h1>
-        </div>
-      </header>
+      <TopBar title={t("Réglages")} />
 
       <Section title={t("Général")}>
         <Row label={t("Langue")} desc={t("La langue de l’interface. Les noms des champions, objets, sorts et runes suivent la même langue.")}>
@@ -154,6 +151,7 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
           <span />
         </Row>
       </Section>
+      <p className="settings__legal">{t("Spec n’est pas approuvé par Riot Games.")}</p>
     </div>
   );
 }

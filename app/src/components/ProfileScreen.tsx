@@ -1,3 +1,4 @@
+import { TopBar } from "./TopBar";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ROLE_LABELS, type Stats } from "../lib/score";
@@ -64,10 +65,11 @@ export function ProfileScreen({ stats, account, clientOn, perso, onRegister, lpV
   };
   return (
     <div className="content">
-      <header className="page-head profile-head">
-        <div>{viewing ? <button className="link-back" onClick={() => setViewing(null)}>{t("← Ton profil")}</button> : <h1>{t("Ton profil")}</h1>}</div>
+      <TopBar title={t("Profil")}>
+        {viewing && <button className="link-back" onClick={() => setViewing(null)}>{t("← Ton profil")}</button>}
+        <span className="grow" />
         <PlayerSearch region={account?.region ?? null} clientOn={clientOn} onFound={open} />
-      </header>
+      </TopBar>
       <div key={viewing ?? "me"} className="profile-view fade-in">
       {viewing
         ? <OtherProfile key={viewing} stats={stats} puuid={viewing} me={account?.puuid ?? null} assets={assets}

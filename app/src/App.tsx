@@ -38,12 +38,13 @@ import { Onboarding } from "./components/Onboarding";
 import { Tour, specTour } from "./components/Tour";
 import { PrivacyDialog } from "./components/PrivacyDialog";
 import { ReadyCheckToast } from "./components/ReadyCheck";
-import { appVersion, useDefaultRegion, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
+import { useDefaultRegion, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
 import { t } from "./lib/i18n";
+import { TopBar, TopBarSlot } from "./components/TopBar";
 
 type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "overlay" | "settings";
 interface ChampView { champ: number; role: number }
-const SCREENS: [Screen, string][] = [["draft", t("Draft")], ["profile", t("Profil")], ["tier", t("Tier list")], ["pool", t("Champion pool")], ["overlay", t("Overlay")], ["settings", t("Réglages")]];
+const SCREENS: [Screen, string][] = [["draft", t("Draft")], ["profile", t("Profil")], ["tier", t("Tier list")], ["pool", t("Pool")], ["overlay", t("Overlay")], ["settings", t("Réglages")]];
 
 /** Icône de chaque onglet de la barre latérale (traits de 1,5 px, comme le reste de l'appli). */
 const NAV_PATHS: Record<Screen, string> = {
@@ -89,8 +90,7 @@ export default function App() {
   const [pools, setPools] = usePersistent<Pools>("spec.pools", [[], [], [], [], []]);
   const client = useLolClient();
   const readyCheck = client.status === "idle" ? client.readyCheck : null;
-  const [version, setVersion] = useState<string | null>(null);
-  useEffect(() => { appVersion().then(setVersion); }, []);
+  const [topSlot, setTopSlot] = useState<HTMLElement | null>(null);
   const [roleOverride, setRoleOverride] = useState<number | null>(null);
 
   const session = client.status === "champselect" ? client.session : null;
@@ -284,6 +284,8 @@ export default function App() {
     [stats],
   );
 
+  const isRecap = !live && !inGame && !draft && recap != null && me?.puuid != null;
+  const isHome = !live && !inGame && !draft && !isRecap;
   const runeImporter = live ? importRunes : null;
   const spellImporter = live ? importSpells : null;
   const itemSetImporter = live && itemSetOn && stats
@@ -329,49 +331,41 @@ export default function App() {
     <RuneImportContext.Provider value={runeImporter}>
     <SpellImportContext.Provider value={spellImporter}>
     <ItemSetImportContext.Provider value={itemSetImporter}>
+    <TopBarSlot.Provider value={topSlot}>
     <div className="window">
-      <aside className="sidebar">
-        <div className="brand">
-          <Logo className="brand__mark" />
-          <span className="brand__name">{t("Spec")}</span>
-          <button className="icon-btn brand__compact has-tip" data-tour="compact" onClick={() => setCompact(true)} disabled={!stats}
-                  data-tip={t("Mode compact")} data-tip-sub={t("Petite fenêtre à côté du client")} aria-label={t("Passer en mode compact")}>
-            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
-              <path d="M2 3h12v10H2zM8.5 8h4v3.5h-4z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-        <nav>
+      <aside className="rail">
+        <Logo className="rail__logo" />
+        <nav className="rail__nav">
           {SCREENS.map(([key, label]) => (
             <Fragment key={key}>
-              {key === "overlay" && <span className="nav__sep" aria-hidden />}
-              <button data-tour={key} className={`nav${screen === key || (key === "tier" && screen === "champion") ? " is-active" : ""}`}
+              {key === "overlay" && <span className="rail__sep" aria-hidden />}
+              <button data-tour={key} className={`rail__item${screen === key || (key === "tier" && screen === "champion") ? " is-active" : ""}`}
                       onClick={() => setScreen(key)} aria-current={screen === key ? "page" : undefined}>
                 <NavIcon screen={key} />
-                <span className="nav__label">{label}</span>
-                {key === "draft" && live && <span className="nav__live">{t("En direct")}</span>}
+                <span className="rail__label">{label}</span>
+                {key === "draft" && live && <span className="rail__live" role="img" aria-label={t("En direct")} />}
               </button>
             </Fragment>
           ))}
         </nav>
         <span className="grow" />
-        <UpdateCard state={update} onInstall={installUpdate} />
-        <div className="sidebar__account" title={account ? t("Compte connecté au client LoL") : undefined}>
+        <span className="rail__account has-tip has-tip--right" tabIndex={0}
+              data-tip={account?.name ?? savedAccount?.name ?? t("Aucun compte")}
+              data-tip-sub={`${clientOn ? t("Client connecté") : t("Client LoL fermé")}${account?.region ? ` · ${account.region}` : ""}`}>
           {sideIcon
-            ? <img className="sidebar__avatar" src={sideIcon} alt="" draggable={false} />
-            : <span className="sidebar__avatar sidebar__avatar--empty" />}
-          <span className="sidebar__who">
-            <strong>{account?.name ?? savedAccount?.name ?? t("Aucun compte")}</strong>
-            <small><span className={clientOn ? "dot" : "dot dot--off"} />{clientOn ? t("Client connecté") : t("Client LoL fermé")}{account?.region ? ` · ${account.region}` : ""}</small>
-          </span>
-        </div>
-        <p className="sidebar__legal" title={footer}>{stats ? `${t("Patch {v}", { v: patchLabel(stats.meta.patch) })} · ` : ""}{t("Spec n’est pas approuvé par Riot Games.")}</p>
-        <div className="sidebar__foot">
-          <button className="sidebar__privacy" onClick={() => setPrivacy(true)}>{t("Confidentialité")}</button>
-          {version && <span className="sidebar__version">v{version}</span>}
-        </div>
+            ? <img className={`rail__avatar${clientOn ? " is-on" : ""}`} src={sideIcon} alt="" draggable={false} />
+            : <span className={`rail__avatar rail__avatar--empty${clientOn ? " is-on" : ""}`} />}
+        </span>
       </aside>
 
+      <div className="stage">
+      <header className="topbar">
+        <div className="topbar__slot" ref={setTopSlot} />
+        {screen === "draft" && stats && (
+          <button className="btn-bar" data-tour="compact" onClick={() => setCompact(true)}>{t("Mode compact")}</button>
+        )}
+        {screen === "draft" && stats && isHome && <span className="topbar__dim" title={footer}>{t("Patch {v}", { v: patchLabel(stats.meta.patch) })}</span>}
+      </header>
       <main className="main">
         {error && <div className="content"><div className="empty-state"><h1>{t("Impossible de démarrer")}</h1><p className="muted">{error}</p></div></div>}
         {!error && !stats && <div className="content"><div className="empty-state"><div className="spinner" /><p className="muted">{t("Chargement des stats…")}</p></div></div>}
@@ -414,19 +408,25 @@ export default function App() {
         )}
         {stats && screen === "draft" && !live && inGame && loadingPhase && loading && (
           <div className="content">
-            <header className="page-head"><div><h1>{t("Chargement de la partie")}</h1>
-              <p className="muted small">{loading.queue ? `${loading.queue} · ` : ""}{t("Patch {v}", { v: patchLabel(stats.meta.patch) })}</p></div></header>
+            <TopBar title={t("Chargement de la partie")}>
+              <span className="topbar__dim">{loading.queue ? `${loading.queue} · ` : ""}{t("Patch {v}", { v: patchLabel(stats.meta.patch) })}</span>
+              <span className="grow" />
+            </TopBar>
             <LoadingCards data={loading} />
           </div>
         )}
         {stats && screen === "draft" && !live && inGame && !(loadingPhase && loading) && <InGameView stats={stats} start={inGame} game={liveGame} />}
         {stats && screen === "draft" && !live && !inGame && !draft && recap && me?.puuid && (
           <div className="content">
-            <RecapView stats={stats} game={recap} me={me.puuid} lpVersion={lpVersion} onClose={() => setRecap(null)} />
+            <TopBar title={t("Récap")}>
+              <span className="grow" />
+              <button className="btn-bar" onClick={() => setRecap(null)}>{t("Fermer")}</button>
+            </TopBar>
+            <RecapView stats={stats} game={recap} me={me.puuid} lpVersion={lpVersion} />
           </div>
         )}
         {stats && screen === "draft" && !live && !inGame && !draft && !(recap && me?.puuid) && (
-          <HomeScreen stats={stats} clientOn={clientOn} clientText={clientText} me={me?.puuid ?? null} pools={pools}
+          <HomeScreen stats={stats} clientOn={clientOn} clientText={clientText} region={account?.region ?? null} me={me?.puuid ?? null} pools={pools}
                       mainRole={roles.main} version={lpVersion} onRecap={setRecap} onHistory={() => setScreen("profile")}
                       onPool={() => setScreen("pool")} onTierList={(r) => { setTierRole(r); setScreen("tier"); }}
                       onDemo={() => setDraft(demoDraft(stats))} />
@@ -436,6 +436,8 @@ export default function App() {
                        onChange={setDraft} onEnd={() => setDraft(null)} perso={perso} />
         )}
       </main>
+      <UpdateCard state={update} onInstall={installUpdate} />
+      </div>
       <ReadyCheckToast check={readyCheck} />
       {privacy && <PrivacyDialog onClose={() => setPrivacy(false)} />}
       {tour && stats && (
@@ -443,6 +445,7 @@ export default function App() {
               onDemo={draft ? undefined : () => { setScreen("draft"); setDraft(demoDraft(stats)); }} />
       )}
     </div>
+    </TopBarSlot.Provider>
     </ItemSetImportContext.Provider>
     </SpellImportContext.Provider>
     </RuneImportContext.Provider>
@@ -453,8 +456,7 @@ export default function App() {
 function RegionWait({ region, missing, select }: { region: Region; missing: boolean; select: React.ReactNode }) {
   return (
     <div className="content">
-      <header className="page-head"><div><p className="overline">{t("Stats Master+ ")}{REGION_LABEL[region]}</p><h1>{t("Tier list")}</h1></div>
-        <div className="head-actions">{select}</div></header>
+      <TopBar title={t("Tier list")}><span className="grow" />{select}</TopBar>
       <div className="empty-state">
         {missing ? (
           <>
@@ -478,7 +480,7 @@ function clientStatus(client: ClientState): [boolean, string] {
 function UpdateCard({ state, onInstall }: { state: UpdateState; onInstall: () => void }) {
   if (state.kind === "none") return null;
   return (
-    <div className="update" role="status">
+    <div className="update update--float" role="status">
       <p className="update__title">{t("Spec {version} est disponible", { version: state.version })}</p>
       {state.kind === "available" && (
         <button className="btn btn--primary btn--small update__btn" onClick={onInstall}>{t("Installer et redémarrer")}</button>

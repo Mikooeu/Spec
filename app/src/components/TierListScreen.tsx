@@ -1,3 +1,4 @@
+import { TopBar } from "./TopBar";
 import { EloBadge } from "./EloBadge";
 import { useMemo, useState, type ReactNode } from "react";
 import { ROLE_LABELS, tierList, type Stats, type TierRow } from "../lib/score";
@@ -42,14 +43,7 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
 
   return (
     <div className="content">
-      <header className="page-head">
-        <div>
-          <h1>{t("Tier list")}</h1>
-        </div>
-        <div className="head-actions"><EloBadge matches={Number(stats.meta.matches ?? 0)} />{region}</div>
-      </header>
-
-      <div className="tier-controls">
+      <TopBar title={t("Tier list")}>
         <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
           <button role="tab" aria-selected={all} className={all ? "is-active" : ""} onClick={() => setAll(true)}>
             {t("Tous")} <span className="count">{total}</span>
@@ -61,6 +55,8 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
             </button>
           ))}
         </Segmented>
+        <span className="grow" />
+        <EloBadge matches={Number(stats.meta.matches ?? 0)} />{region}
         <div className="search-wrap tier-search">
           <svg className="search__icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden>
             <circle cx="7" cy="7" r="4.75" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -77,7 +73,7 @@ export function TierListScreen({ stats, role, onRole, onOpen, region }:
             </button>
           )}
         </div>
-      </div>
+      </TopBar>
 
       <div className={`tier-table${hasBan ? "" : " tier-table--noban"}`} role="region" aria-label={t("Tier list {v}", { v: scope })}>
         <div className="tier-row tier-row--head">

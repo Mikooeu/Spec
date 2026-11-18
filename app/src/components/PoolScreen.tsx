@@ -1,3 +1,4 @@
+import { Chip, TopBar } from "./TopBar";
 import { useMemo, useRef, useState } from "react";
 import { ROLE_LABELS, gamesIn, tierList, type Stats } from "../lib/score";
 import { champName, normalize, pct } from "../lib/ui";
@@ -73,11 +74,9 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
 
   return (
     <div className="content pool2">
-      <header className="page-head">
-        <div>
-          <h1>{t("Ton champion pool")}</h1>
-        </div>
-      </header>
+      <TopBar title={t("Champion pool")}>
+        <Chip>{pools.reduce((n, l) => n + l.length, 0) === 1 ? t("1 champion") : t("{n} champions", { n: pools.reduce((n, l) => n + l.length, 0) })}</Chip>
+      </TopBar>
 
       <Segmented className="segmented pool2__roles" role="tablist" aria-label={t("Rôle")}>
         {ROLE_LABELS.map((label, i) => (
