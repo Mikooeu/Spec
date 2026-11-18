@@ -5,7 +5,6 @@ import { t, plural } from "../lib/i18n";
 import { laneDiff, type Game, type LaneDiff } from "../lib/history";
 import { champRows, champScore, kdaOf, perMinute, type GW, type SeasonStats, type SortKey } from "../lib/seasonStats";
 import { ChampionIcon } from "./ChampionIcon";
-import { Trend } from "./Trend";
 
 const DAYS = () => [t("Lun"), t("Mar"), t("Mer"), t("Jeu"), t("Ven"), t("Sam"), t("Dim")];
 const DAY_NAMES = () => [t("lundi"), t("mardi"), t("mercredi"), t("jeudi"), t("vendredi"), t("samedi"), t("dimanche")];
@@ -40,35 +39,23 @@ export function StatsView({ stats, data, laneGames, me, guess, recentNote, other
         const ffShown = season || ff.known > 0;
         const n = 1 + (sides ? 2 : 0) + (ffShown ? 1 : 0);
         return (
-          <div className={`tiles tiles--${n}`}>
+          <div className="pf-tiles" data-n={n}>
             {sides && <SideTile label={t("Winrate côté bleu")} gw={data.sides[0]} missing={missing} />}
             {sides && <SideTile label={t("Winrate côté rouge")} gw={data.sides[1]} missing={missing} />}
+            <SideTile label={t("Parties de moins de 30 min")} gw={short} missing="—" />
+            <SideTile label={t("Parties de 30 min ou plus")} gw={long} missing="—" />
             {ffShown && (
-              <div className="tile-stat">
-                <span className="tile-stat__label">{t("Parties finies par FF")}</span>
-                <span className="tile-stat__value">{ff.known ? pctN(Math.round((ff.games / ff.known) * 100)) : "—"}</span>
-                <span className="tile-stat__detail">
-                  {ff.known ? `${plural(ff.games, "{n} partie", "{n} parties")} · ${t("{w} V – {l} D", { w: ff.wins, l: ff.games - ff.wins })}` : missing}
-                </span>
+              <div className="pf-tile">
+                <span>{t("Parties finies par FF")}</span>
+                <strong>{ff.known ? pctN(Math.round((ff.games / ff.known) * 100)) : "—"}</strong>
+                <small>{ff.known ? `${plural(ff.games, "{n} partie", "{n} parties")} · ${t("{w} V – {l} D", { w: ff.wins, l: ff.games - ff.wins })}` : missing}</small>
               </div>
             )}
-            <div className="tile-stat" title={t("{a} parties de moins de 30 min, {b} de 30 min ou plus", { a: short[0], b: long[0] })}>
-              <span className="tile-stat__label">{t("Winrate selon la durée")}</span>
-              <span className="tile-dur2">
-                <span><strong className={`tile-stat__value${short[0] ? ` tone-${wrTone(rate(short))}` : ""}`}>{short[0] ? pct(rate(short)) : "—"}</strong>
-                  <span className="tile-stat__detail">{t("moins de 30 min")}</span></span>
-                <span><strong className={`tile-stat__value${long[0] ? ` tone-${wrTone(rate(long))}` : ""}`}>{long[0] ? pct(rate(long)) : "—"}</strong>
-                  <span className="tile-stat__detail">{t("30 min ou plus")}</span></span>
-              </span>
-            </div>
           </div>
         );
       })()}
       <ChampionTable stats={stats} data={data} other={other} role={role} />
-      <div className="sview__row">
-        <DayChart days={data.days} season={data.source === "season"} other={other} />
-        <LaneCard games={laneGames} me={me} guess={guess} other={other} />
-      </div>
+      <LaneCard games={laneGames} me={me} guess={guess} other={other} />
     </div>
   );
 }
@@ -76,11 +63,31 @@ export function StatsView({ stats, data, laneGames, me, guess, recentNote, other
 function SideTile({ label, gw, missing }: { label: string; gw: GW; missing: string }) {
   const tone = gw[0] ? wrTone(rate(gw)) : undefined;
   return (
-    <div className="tile-stat">
-      <span className="tile-stat__label">{label}</span>
-      <span className={`tile-stat__value${tone ? ` tone-${tone}` : ""}`}>{gw[0] ? pct(rate(gw)) : "—"}{tone && <Trend tone={tone} />}</span>
-      <span className="tile-stat__detail">{gw[0] ? plural(gw[0], "{n} partie", "{n} parties") : missing}</span>
+    <div className="pf-tile">
+      <span>{label}</span>
+      <strong className={tone ? `tone-${tone}` : ""}>{gw[0] ? pct(rate(gw)).replace(/[,.]\d/, "") : "—"}</strong>
+      <small>{gw[0] ? plural(gw[0], "{n} partie", "{n} parties") : missing}</small>
     </div>
+  );
+}
+
+/** Winrate par jour de la semaine, en barres (colonne de gauche du profil). */
+export function DayBars({ days }: { days: GW[] }) {
+  if (!days.some((d) => d[0])) return null;
+  const h = (d: GW) => (d[0] ? 14 + Math.round(Math.min(1, Math.max(0, (rate(d) - 0.3) / 0.4)) * 44) : 4);
+  return (
+    <section className="pf-card">
+      <h2>{t("Winrate par jour")}</h2>
+      <div className="pf-days">
+        {days.map((d, i) => (
+          <span key={i} title={d[0] ? `${DAY_NAMES()[i]} · ${pct(rate(d))} · ${plural(d[0], "{n} partie", "{n} parties")}` : DAY_NAMES()[i]}>
+            <small>{d[0] ? pctN(Math.round(rate(d) * 100)) : "—"}</small>
+            <i className={d[0] >= 3 ? `tone-bg-${wrTone(rate(d))}` : ""} style={{ height: `${h(d)}px` }} />
+            <b>{DAYS()[i].slice(0, 1)}</b>
+          </span>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -143,50 +150,6 @@ function ChampionTable({ stats, data, other, role }: { stats: Stats; data: Seaso
           {all ? t("Voir moins") : t("Voir les {n} champions", { n: rows.length })}
         </button>
       )}
-    </section>
-  );
-}
-
-function DayChart({ days, season, other }: { days: GW[]; season: boolean; other: boolean }) {
-  const W = 700, H = 150, lo = 0.35, hi = 0.65;
-  const total = days.reduce((a, d) => a + d[0], 0);
-  const y = (v: number) => H - 10 - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (H - 20);
-  const xs = days.map((_, i) => ((i + 0.5) * W) / 7);
-  const pts = days.map((d, i) => (d[0] ? [xs[i], y(rate(d))] : null)).filter(Boolean) as number[][];
-  const best = days.reduce((b, d, i) => (d[0] >= 3 && (b < 0 || rate(d) > rate(days[b])) ? i : b), -1);
-  return (
-    <section className="card sday">
-      <div className="sday__head">
-        <div>
-          <h2>{t("Winrate par jour de la semaine")}</h2>
-          <p className="muted small">{season ? t("Sur tes {n} parties classées de la saison", { n: int(total) }) : t("Sur ces {n} parties", { n: int(total) })}</p>
-        </div>
-        <span className="muted small">{t("pointillés : 50 %")}</span>
-      </div>
-      <svg className="sday__chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("Winrate par jour de la semaine")}>
-        <defs>
-          <linearGradient id="sday-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="var(--accent)" stopOpacity="0.22" />
-            <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {pts.length > 1 && <path d={`M${pts[0][0]},${H} L${pts.map((p) => p.join(",")).join(" L")} L${pts[pts.length - 1][0]},${H} Z`} fill="url(#sday-fill)" />}
-        <line x1="0" x2={W} y1={y(0.5)} y2={y(0.5)} stroke="rgba(255,255,255,0.18)" strokeDasharray="4 4" />
-        {pts.length > 1 && <polyline points={pts.map((p) => p.join(",")).join(" ")} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
-        {days.map((d, i) => d[0] ? (
-          <circle key={i} cx={xs[i]} cy={y(rate(d))} r={i === best ? 5 : 3.5} fill={i === best ? "var(--accent)" : "var(--bg-surface)"} stroke="var(--accent)" strokeWidth="2" />
-        ) : null)}
-      </svg>
-      <div className="sday__days">
-        {days.map((d, i) => (
-          <span key={i} className={i === best ? "is-best" : ""}>
-            <span>{DAYS()[i]}</span>
-            <strong className={d[0] ? `tone-${wrTone(rate(d))}` : "muted"}>{d[0] ? pctN(Math.round(rate(d) * 100)) : "—"}</strong>
-            <small>{t("{n} p.", { n: d[0] })}</small>
-          </span>
-        ))}
-      </div>
-      {best >= 0 && <p className="muted small">{t(other ? "Son meilleur jour : {day} ({wr}, {n})." : "Ton meilleur jour : {day} ({wr}, {n}).", { day: DAY_NAMES()[best], wr: pct(rate(days[best])), n: plural(days[best][0], "{n} partie", "{n} parties") })}</p>}
     </section>
   );
 }

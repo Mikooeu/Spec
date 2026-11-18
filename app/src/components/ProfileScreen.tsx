@@ -20,7 +20,7 @@ import {
 } from "../lib/history";
 import { noteText, noteTone, rateGame, sortedParts, summaryParts, type Contribution, type Criterion, type Rating } from "../lib/rating";
 import { Segmented } from "./Segmented";
-import { StatsView } from "./StatsView";
+import { DayBars, StatsView } from "./StatsView";
 import { loadSeasonStats, statsOf, type SeasonStats } from "../lib/seasonStats";
 import { t, locale, ordinal, plural } from "../lib/i18n";
 
@@ -274,6 +274,7 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
         </section>
         <Summary games={games} season={perso.kind === "ready" ? perso.data : null} />
         {tab === "history" && <LpSpark games={games} />}
+        {tab === "stats" && statsData && statsData.games > 0 && <DayBars days={statsData.days} />}
         {tab === "history" && <TopChamps stats={stats} games={games} season={perso.kind === "ready" ? perso.data : null} />}
       </aside>
       <div className="pf__main">
@@ -450,6 +451,7 @@ function OtherProfile({ stats, puuid, me, assets, onOpenPlayer }:
             </section>
             <Summary games={player.games} season={null} />
             {tab === "history" && <TopChamps stats={stats} games={player.games} season={null} />}
+            {tab === "stats" && <DayBars days={statsOf(inQueue).days} />}
           </aside>
           <div className="pf__main">
           <ProfileTabs tab={tab} onTab={setTab} tabs={["history", "stats"]}
@@ -1046,42 +1048,40 @@ function DuoList({ stats, client, selected, onOpen }:
 
   if (error) return <p className="hint">{t("Le serveur Spec ne répond pas pour l’instant. Réessaie dans un instant.")}</p>;
   if (!duos) return <div className="skeleton">{[0, 1, 2].map((i) => <span key={i} />)}</div>;
+  if (duos.length === 0) return <p className="hint">{t("Aucune partie en duo avec un joueur Spec pour l’instant.")}</p>;
+  const total = duos.reduce((x, d) => x + d.games, 0), won = duos.reduce((x, d) => x + d.wins, 0);
+  const label = (d: Duo) => { const who = names.get(d.key); return who?.name ?? (names.has(d.key) ? t("Joueur Spec") : "…"); };
+  const sorted = [...duos].sort((x, y) => (y.wins / y.games - x.wins / x.games) || y.games - x.games);
+  const bestDuo = sorted.find((d) => d.games >= 3) ?? null;
   return (
-    <section className="best">
-      {duos.length === 0 ? (
-        <p className="hint">{t("Aucune partie en duo avec un joueur Spec pour l’instant.")}</p>
-      ) : (
-        <div className="card duo-list stagger">
-          <div className="duo-row duo-row--head"><span>{t("Joueur")}</span><span>{t("Winrate ensemble")}</span><span className="duo-row__combo">{t("Meilleur combo")}</span><span /></div>
-          {duos.map((d) => {
-            const who = names.get(d.key);
-            const name = who?.name ?? (names.has(d.key) ? t("Joueur Spec") : "…");
-            const wr = d.wins / d.games, tone = wrTone(wr);
-            const best = [...d.combos].sort((a, b) => (b[3] / b[2] - a[3] / a[2]) || b[2] - a[2]).find((c) => c[2] >= 3) ?? d.combos[0];
-            return (
-              <button key={d.key} className={`duo-row${selected === d.key ? " is-selected" : ""}`}
-                      onClick={() => onOpen({ key: d.key, name, icon: who?.icon ?? null, games: d.games, wins: d.wins,
-                                              partner: new Map(d.matches.map(([m, pc]) => [Number(m.split("_")[1] ?? 0), pc])) })}>
-                <span className="duo-row__who">
-                  <ProfileIcon version={stats.ddragon} icon={who?.icon ?? null} size={2.5} />
-                  <span><strong>{name}</strong><small>{plural(d.games, "{n} partie ensemble", "{n} parties ensemble")}</small></span>
-                </span>
-                <strong className={`duo-row__wr tone-${tone}`}>{pct(wr)}<Trend tone={tone} /></strong>
-                <span className="duo-row__combo">
-                  {best && <>
-                    <ChampionIcon stats={stats} champ={best[0]} size={2} /><span className="muted">+</span>
-                    <ChampionIcon stats={stats} champ={best[1]} size={2} />
-                    <span><strong>{champName(stats, best[0])} + {champName(stats, best[1])}</strong>
-                      <small>{pct(best[3] / best[2])} · {plural(best[2], "{n} partie", "{n} parties")}</small></span>
-                  </>}
-                </span>
-                <span className="duo-row__go" aria-hidden>{selected === d.key ? "✓" : "›"}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </section>
+    <>
+      <div className="pf-tiles">
+        <div className="pf-tile"><span>{t("Winrate en duo")}</span><strong className={`tone-${wrTone(won / total)}`}>{pct(won / total)}</strong><small>{plural(total, "{n} partie", "{n} parties")}</small></div>
+        <div className="pf-tile"><span>{t("Partenaires")}</span><strong>{duos.length}</strong></div>
+        {bestDuo && <div className="pf-tile"><span>{t("Meilleur duo")}</span><strong className="pf-tile__name">{label(bestDuo)}</strong><small>{pct(bestDuo.wins / bestDuo.games)} · {plural(bestDuo.games, "{n} partie", "{n} parties")}</small></div>}
+      </div>
+      <section className="pf-card duo2">
+        <h2>{t("Avec qui tu gagnes le plus")}</h2>
+        {sorted.map((d) => {
+          const who = names.get(d.key), name = label(d);
+          const wr = d.wins / d.games, tone = d.games >= 5 ? wrTone(wr) : "neutral";
+          const best = [...d.combos].sort((x, y) => (y[3] / y[2] - x[3] / x[2]) || y[2] - x[2]).find((c) => c[2] >= 3) ?? d.combos[0];
+          return (
+            <button key={d.key} className={`duo2__row${selected === d.key ? " is-selected" : ""}`}
+                    onClick={() => onOpen({ key: d.key, name, icon: who?.icon ?? null, games: d.games, wins: d.wins,
+                                            partner: new Map(d.matches.map(([m, pc]) => [Number(m.split("_")[1] ?? 0), pc])) })}>
+              <ProfileIcon version={stats.ddragon} icon={who?.icon ?? null} size={2.5} />
+              <span className="duo2__who"><strong>{name}</strong>
+                <small>{plural(d.games, "{n} partie", "{n} parties")}{best ? ` · ${champName(stats, best[0])} + ${champName(stats, best[1])}` : ""}</small></span>
+              <span className="grow" />
+              <span className={`duo2__bar tone-${tone}`} aria-hidden><i style={{ width: `${Math.round(wr * 100)}%` }} /></span>
+              <strong className={`duo2__wr tone-${tone}`}>{pct(wr).replace(/[,.]\d/, "")}</strong>
+              <span className="duo2__go" aria-hidden>›</span>
+            </button>
+          );
+        })}
+      </section>
+    </>
   );
 }
 
@@ -1194,6 +1194,15 @@ function LpChart({ stats, series, games, tier }: { stats: Stats; series: LpPoint
   const tierLines: number[] = [], divLines: number[] = [];
   for (let v = Math.ceil(lo / 100) * 100; v <= hi; v += 100) (v % 400 === 0 && v <= APEX ? tierLines : step === 100 ? divLines : []).push(v);
   return (
+    <>
+    <div className="pf-tiles">
+      <div className="pf-tile"><span>{period === "all" ? t("Bilan de la saison") : t("Bilan sur {n} jours", { n: period })}</span><strong className={`tone-${tone}`}>{lpText(gain)}</strong></div>
+      <div className="pf-tile"><span>{t("Parties suivies")}</span><strong>{wins + losses}</strong><small>{t("{w} V – {l} D", { w: wins, l: losses })}</small></div>
+      <div className="pf-tile"><span>{t("Pic")}</span><strong className="pf-tile__crest" style={{ color: tierColorOf(pts[peakI].lp) }}>{crest(pts[peakI].lp, "lp2__strip-crest")}{fullLabel(pts[peakI].lp)}</strong></div>
+      <div className="pf-tile"><span>{t("Série")}</span>
+        <strong className={streak ? `tone-${lastSign > 0 ? "good" : "bad"}` : ""}>
+          {streak ? plural(streak, lastSign > 0 ? "{n} victoire" : "{n} défaite", lastSign > 0 ? "{n} victoires" : "{n} défaites") : "—"}</strong></div>
+    </div>
     <section className="card lp2">
       {head}
       <div className="lp2__plot" onMouseLeave={() => setHover(null)}>
@@ -1241,15 +1250,8 @@ function LpChart({ stats, series, games, tier }: { stats: Stats; series: LpPoint
           </div>
         )}
       </div>
-      <div className="lp2__strip">
-        <div><small>{t("Bilan")}</small><strong className={`tone-${tone}`}>{lpText(gain)}</strong></div>
-        <div><small>{t("Pic")}</small>{crest(pts[peakI].lp, "lp2__strip-crest")}<strong style={{ color: tierColorOf(pts[peakI].lp) }}>{fullLabel(pts[peakI].lp)}</strong></div>
-        <div><small>{t("Parties")}</small><strong>{t("{w} V – {l} D", { w: wins, l: losses })}</strong></div>
-        <div><small>{t("Série")}</small>
-          <strong className={streak ? `tone-${lastSign > 0 ? "good" : "bad"}` : ""}>
-            {streak ? plural(streak, lastSign > 0 ? "{n} victoire" : "{n} défaite", lastSign > 0 ? "{n} victoires" : "{n} défaites") : "—"}</strong></div>
-      </div>
     </section>
+    </>
   );
 }
 
