@@ -383,7 +383,8 @@ export default function App() {
         )}
         {stats && screen === "tier" && regionStats.kind === "ready" && (
           <TierListScreen stats={regionStats.stats} role={tierRole} onRole={setTierRole} onOpen={openChamp}
-                          region={regionSelect} regionLabel={REGION_LABEL[region]} />
+                          region={regionSelect} regionLabel={REGION_LABEL[region]}
+                          perso={perso.kind === "ready" ? perso.data : null} />
         )}
         {stats && screen === "champion" && champView && regionStats.kind === "ready" && (
           <ChampionScreen stats={regionStats.stats} champ={champView.champ} role={champView.role}

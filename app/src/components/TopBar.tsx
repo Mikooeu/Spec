@@ -13,5 +13,5 @@ export function TopBar({ title, children }: { title: ReactNode; children?: React
 
 /** Pastille d'état de la barre de contexte. */
 export function Chip({ tone, dot = false, children }: { tone?: "good" | "accent" | "bad" | "warn"; dot?: boolean; children: ReactNode }) {
-  return <span className={`chip${tone ? ` chip--${tone}` : ""}`}>{dot && <span className="chip__dot" aria-hidden />}{children}</span>;
+  return <span className={`stag${tone ? ` stag--${tone}` : ""}`}>{dot && <span className="stag__dot" aria-hidden />}{children}</span>;
 }

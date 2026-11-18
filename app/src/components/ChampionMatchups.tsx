@@ -116,10 +116,10 @@ export function ChampionMatchups({ stats, champ, role, perso }: { stats: Stats; 
             <thead>
               <tr>
                 <th scope="col">{t("Adversaire")}</th>
-                {head("wr", t("Winrate Master+"))}
+                {head("wr", t("Winrate de {c}", { c: champLabel }))}
                 {head("games", t("Parties"))}
-                {head("me", t("Ton winrate"))}
-                <th scope="col" className="num">{t("Ta note")}</th>
+                {head("me", t("Toi"))}
+                <th scope="col" className="num">{t("Note")}</th>
               </tr>
             </thead>
             <tbody>
@@ -129,7 +129,7 @@ export function ChampionMatchups({ stats, champ, role, perso }: { stats: Stats; 
                 return (
                   <tr key={r.enemy}>
                     <td><span className="mups__who"><ChampionIcon stats={stats} champ={r.enemy} size={2} />{r.name}</span></td>
-                    <td className={`num tone-${wrTone(r.wr)}`}><strong>{pct(r.wr)}</strong></td>
+                    <td className={`num tone-${wrTone(r.wr)}`}><span className="mups__wr"><span className="mups__bar" aria-hidden><i style={{ width: `${Math.max(4, Math.min(100, ((r.wr - 0.4) / 0.2) * 100))}%` }} /></span><strong>{pct(r.wr)}</strong></span></td>
                     <td className="num muted">{int(r.games)}</td>
                     <td className="num">
                       {r.me && meWr != null ? (
@@ -139,7 +139,7 @@ export function ChampionMatchups({ stats, champ, role, perso }: { stats: Stats; 
                     </td>
                     <td className="num">
                       <button className={has ? "mups__chip" : "link-btn"} onClick={() => setEditing({ enemy: r.enemy, pick: false })}>
-                        {has ? t("✓ Voir la note") : t("+ Ajouter")}
+                        {has ? t("1 note") : t("+ Ajouter")}
                       </button>
                     </td>
                   </tr>

@@ -10,7 +10,7 @@ import { ROLE_LABELS, type ChampPage, type Stats } from "../lib/score";
 import { champName, int, patchLabel, pct, pctN } from "../lib/ui";
 import { SITUATION_LABEL } from "./Adaptations";
 import { ChampionIcon } from "./ChampionIcon";
-import { groupIcons, ItemIcon, mergeStarts, SkillGrid } from "./ChampionScreen";
+import { groupIcons, ItemIcon, mergeStarts, SkillGrid, SkillStrip } from "./ChampionScreen";
 
 import { MatchupNote } from "./MatchupNote";
 interface Props {
@@ -210,16 +210,8 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
                 <Chip tone="accent">{t("Niveau {n} : monte {s}", { n: nextSkill + 1, s: order[nextSkill] })}</Chip>
               )}
             </div>
-            {order ? (
-              <div className="ig2-skills" role="list" aria-label={t("Ordre des sorts")}>
-                {order.split("").map((k, i) => (
-                  <span key={i} role="listitem"
-                        className={`ig2-skill${k === "R" ? " is-ult" : ""}${i === nextSkill ? " is-now" : ""}${game?.level != null && i < (nextSkill >= 0 ? nextSkill : game.level) ? " is-past" : ""}`}>
-                    <strong>{k}</strong><small>{i + 1}</small>
-                  </span>
-                ))}
-              </div>
-            ) : <Collecting />}
+            {order ? <SkillStrip order={order} now={nextSkill} level={game?.level} />
+            : <Collecting />}
           </section>
 
           {(page?.length?.length ?? 0) >= 2 && (
