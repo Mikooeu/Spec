@@ -9,6 +9,7 @@ import { ROLE_LABELS, type Stats } from "../lib/score";
 import { champName, dec1, int, pctN } from "../lib/ui";
 import { ChampionIcon } from "./ChampionIcon";
 import { Segmented } from "./Segmented";
+import { Chip, TopBar } from "./TopBar";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 const signed = (x: number) => (x > 0 ? `+${int(x)}` : x < 0 ? `−${int(-x)}` : "0");
@@ -38,10 +39,18 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
   }, [game.id, me, guess]);
   const lp = useMemo(() => game.lp ?? gameLp(game.id), [game.id, game.lp, lpVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (recap === "error") return <p className="game-detail__msg">{t("Le récap passe par le client LoL : ouvre-le, puis réessaie.")}</p>;
-  if (recap === "none") return <p className="game-detail__msg">{t("Pas de récap pour cette partie.")}</p>;
-  if (!recap) return <div className="skeleton" aria-label={t("Chargement du récap")}>{[0, 1, 2, 3, 4].map((i) => <span key={i} />)}</div>;
-  if (recap.remake) return <p className="game-detail__msg">{t("Partie annulée (remake) : pas de récap.")}</p>;
+  // plein écran (onglet Draft) : le résultat et les actions vont dans la barre de contexte
+  const bar = (extra?: React.ReactNode) => embedded ? null : (
+    <TopBar title={t("Récap")}>
+      {extra}
+      <span className="grow" />
+      {onClose && <button className="btn-bar" onClick={onClose}>{t("Fermer")}</button>}
+    </TopBar>
+  );
+  if (recap === "error") return <>{bar()}<p className="game-detail__msg">{t("Le récap passe par le client LoL : ouvre-le, puis réessaie.")}</p></>;
+  if (recap === "none") return <>{bar()}<p className="game-detail__msg">{t("Pas de récap pour cette partie.")}</p></>;
+  if (!recap) return <>{bar()}<div className="skeleton" aria-label={t("Chargement du récap")}>{[0, 1, 2, 3, 4].map((i) => <span key={i} />)}</div></>;
+  if (recap.remake) return <>{bar()}<p className="game-detail__msg">{t("Partie annulée (remake) : pas de récap.")}</p></>;
 
   const r = recap;
   const opp = r.oppChamp != null ? champName(stats, r.oppChamp) : null;
@@ -59,6 +68,68 @@ export function RecapView({ stats, game, me, embedded = false, lpVersion = 0, on
     tips.splice(Math.min(tips.length, 2), tips.length, tip);
   }
   const keep = tips.filter((x) => x.kind === "keep").length, work = tips.filter((x) => x.kind === "work").length;
+  if (!embedded) return (
+    <div className="grecap grecap--cols">
+      {bar(<span className="topbar__ctx">
+        <Chip tone={r.win ? "good" : "bad"}>{r.win ? t("Victoire") : t("Défaite")}</Chip>
+        <ChampionIcon stats={stats} champ={r.champ} size={1.5} />
+        <strong>{champName(stats, r.champ)}{r.role != null ? ` · ${ROLE_LABELS[r.role]}` : ""}</strong>
+        {r.oppChamp != null && <><span className="topbar__dim">{t("contre")}</span><ChampionIcon stats={stats} champ={r.oppChamp} size={1.5} /></>}
+        <span className="topbar__dim">{[opp, clock(r.duration), game.queueName].filter(Boolean).join(" · ")}</span>
+      </span>)}
+      <div className="grecap__col">
+      {r.curve.length >= 4 && <GoldCurve r={r} focus={focus} />}
+        <section className="card grecap-card">
+          <div className="grecap-head">
+            <h2>{t("Ta lane")}</h2>
+            <ChampionIcon stats={stats} champ={r.champ} size={1.25} round />
+            {r.oppChamp != null && <><span className="muted small">{t("vs")}</span><ChampionIcon stats={stats} champ={r.oppChamp} size={1.25} round /></>}
+            <span className="grow" />
+            {r.laneVerdict && <span className={`grecap-chip grecap-chip--${r.laneVerdict}`}>
+              {r.laneVerdict === "won" ? t("Lane gagnée") : r.laneVerdict === "lost" ? t("Lane perdue") : t("Lane équilibrée")}</span>}
+          </div>
+          {r.lane ? <div className="grecap-bars">{r.lane.map((b) => <BarRow key={b.label} b={b} />)}</div>
+            : <p className="muted small">{t("Vis-à-vis non identifié sur cette partie.")}</p>}
+        </section>
+      </div>
+      <div className="grecap__col">
+        <div className="grecap-kpis">
+          <Kpi label={t("KDA")} value={`${r.kills} / ${r.deaths} / ${r.assists}`} />
+          <Kpi label={t("CS/min")} value={dec1(r.csMin)} />
+          {r.kp != null && <Kpi label={t("KP")} value={pctN(r.kp)} />}
+          {lp != null && <Kpi label={t("LP")} value={signed(lp)} tone={lp >= 0 ? "good" : "bad"} />}
+        </div>
+      {tips.length > 0 && (
+        <section className="card grecap-card grecap-tips">
+          <div className="grecap-head">
+            <h2>{t("À retenir pour la prochaine")}</h2><span className="grow" />
+            {(keep > 0 || work > 0) && <span className="muted small">{[keep ? plural(keep, "{n} à garder", "{n} à garder") : null, work ? plural(work, "{n} à travailler", "{n} à travailler") : null].filter(Boolean).join(" · ")}</span>}
+          </div>
+          <ul className="grecap-tips__list">
+            {tips.map((p) => (
+              <li key={p.title} className={`grecap-tip grecap-tip--${p.kind}`}>
+                <div className="grecap-tip__text">
+                  <p><span className="grecap-tip__kind">{p.kind === "keep" ? t("À garder") : p.kind === "work" ? t("À travailler") : t("Draft")}</span><strong>{fill(p.title)}</strong></p>
+                  <small>{fill(p.detail)}</small>
+                </div>
+                <div className="grecap-tip__side">
+                  {p.metric && <span className="grecap-tip__metric">{fill(p.metric)}</span>}
+                  {p.at != null && r.curve.length >= 4 && (
+                    <button className="link-btn" onClick={() => { setFocus(p.at!); document.querySelector(".grecap-curve")?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>
+                      {t("Voir à {m} min", { m: Math.floor(p.at) })} ›</button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+        <PositionCard stats={stats} r={r} />
+        <RecapGoals stats={stats} game={game} />
+        <CopyButton r={r} stats={stats} opp={opp} lp={lp} queue={game.queueName} />
+      </div>
+    </div>
+  );
   return (
     <div className={`grecap${embedded ? " grecap--embedded" : ""}`}>
       <section className={`grecap-hero grecap-hero--${r.win ? "win" : "loss"}`}>

@@ -1,5 +1,5 @@
-import { TopBar } from "./TopBar";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Chip, TopBar } from "./TopBar";
+import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ROLE_LABELS, type Stats } from "../lib/score";
 import { champName, dec1, int, pct, usePersistent, wrTone } from "../lib/ui";
@@ -38,6 +38,9 @@ interface Props {
 
 type Guess = import("../lib/history").Guess;
 
+/** Emplacement des onglets et des filtres du profil, dans la barre de contexte. */
+const ProfileBar = createContext<HTMLElement | null>(null);
+
 /** Poste probable d'après les parties Master+, quand le client ne le donne pas. */
 function useGuess(stats: Stats): Guess {
   return useMemo(() => Object.assign((champ: number, notJungle: boolean) => {
@@ -58,6 +61,7 @@ export function ProfileScreen({ stats, account, clientOn, perso, onRegister, lpV
   const assets: Assets = {
     items: useInfo(loadItems, stats.ddragon), spells: useInfo(loadSpells, stats.ddragon), runes: useRuneData(stats.ddragon),
   };
+  const [bar, setBar] = useState<HTMLElement | null>(null);
   const open = (puuid: string | null) => {
     if (!puuid) return;
     setViewing(puuid === account?.puuid ? null : puuid);
@@ -67,9 +71,10 @@ export function ProfileScreen({ stats, account, clientOn, perso, onRegister, lpV
     <div className="content">
       <TopBar title={t("Profil")}>
         {viewing && <button className="link-back" onClick={() => setViewing(null)}>{t("← Ton profil")}</button>}
-        <span className="grow" />
+        <div className="topbar__sub" ref={setBar} />
         <PlayerSearch region={account?.region ?? null} clientOn={clientOn} onFound={open} />
       </TopBar>
+      <ProfileBar.Provider value={bar}>
       <div key={viewing ?? "me"} className="profile-view fade-in">
       {viewing
         ? <OtherProfile key={viewing} stats={stats} puuid={viewing} me={account?.puuid ?? null} assets={assets}
@@ -77,6 +82,7 @@ export function ProfileScreen({ stats, account, clientOn, perso, onRegister, lpV
         : <OwnProfile stats={stats} account={account} clientOn={clientOn} perso={perso} onRegister={onRegister}
                       lpVersion={lpVersion} assets={assets} onOpenPlayer={open} />}
       </div>
+      </ProfileBar.Provider>
     </div>
   );
 }
@@ -238,22 +244,39 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
     setBusy(false);
   };
 
+  const weekGames = (games ?? []).filter((g) => g.lp != null && Date.now() - g.created < 7 * 86400_000);
+  const weekLp = weekGames.reduce((a, g) => a + (g.lp ?? 0), 0);
   return (
     <>
-      {/* bandeau : compte, rang, statut et chiffres de la saison (au lieu d'une carte et de 3 tuiles) */}
-      <div className="card account account--band">
-        <span className="account__avatar">
-          <ProfileIcon version={stats.ddragon} icon={account?.icon ?? null} size={3.25} />
-          {account?.level != null && <span className="account__level">{account.level}</span>}
-        </span>
-        <div className="grow account__who">
-          <p className="account__name">{account ? account.name : t("Aucun compte lié")}{account?.region && <span className="account__region">{account.region}</span>}</p>
-          {rank && <RankLine tier={tier} rank={rank} />}
+      <div className="pf">
+      <aside className="pf__side">
+        <section className="pf-card pf-account">
+          <div className="pf-account__top">
+            <span className="account__avatar">
+              <ProfileIcon version={stats.ddragon} icon={account?.icon ?? null} size={3.25} />
+              {account?.level != null && <span className="account__level">{account.level}</span>}
+            </span>
+            <div className="pf-account__who">
+              <strong>{account ? account.name : t("Aucun compte lié")}</strong>
+              <span>{account?.region && <Chip>{account.region}</Chip>}</span>
+            </div>
+          </div>
+          {rank && (
+            <div className="pf-account__rank">
+              <RankLine tier={tier} rank={rank} />
+              <small>{QUEUE_LABELS.solo}</small>
+              <span className="grow" />
+              {weekGames.length > 0 && <strong className={weekLp > 0 ? "tone-good" : weekLp < 0 ? "tone-bad" : ""} title={t("LP cette semaine")}>{lpText(weekLp)}</strong>}
+            </div>
+          )}
           <p className="muted small account__status"><span className={clientOn ? "dot" : "dot dot--off"} />
             {clientOn ? t("Client connecté") : t("Client LoL fermé")} · {persoText(perso).split(" · ")[0]}</p>
-        </div>
-        {perso.kind === "ready" && <SeasonTiles stats={stats} data={perso.data} games={games} />}
-      </div>
+        </section>
+        <Summary games={games} season={perso.kind === "ready" ? perso.data : null} />
+        {tab === "history" && <LpSpark games={games} />}
+        {tab === "history" && <TopChamps stats={stats} games={games} season={perso.kind === "ready" ? perso.data : null} />}
+      </aside>
+      <div className="pf__main">
 
       {perso.kind === "unregistered" && (
         <form className="card activate" onSubmit={(e) => { e.preventDefault(); if (code.trim()) activate(); }}>
@@ -317,45 +340,71 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
         <DuoList stats={stats} client={account.puuid} selected={duo?.key ?? null} onOpen={openDuo} />
       )}
       </div>
+      </div>
+      </div>
     </>
   );
 }
 
-/** Winrate de la saison, champion le plus joué, rôle principal ou LP de la semaine. */
-function SeasonTiles({ stats, data, games: history }: { stats: Stats; data: Personal; games: Game[] | null }) {
-  let games = 0, wins = 0;
-  for (const [g, w] of data.byChamp.values()) { games += g; wins += w; }
-  const top = [...data.byChamp.entries()].sort((a, b) => b[1][0] - a[1][0])[0];
-  const byRole = [0, 0, 0, 0, 0];
-  for (const [, r, g] of data.champions) if (r >= 0) byRole[r] += g;
-  const mainRole = byRole.indexOf(Math.max(...byRole));
-  if (!games) return null;
-  const week = (history ?? []).filter((g) => g.lp != null && Date.now() - g.created < 7 * 86400_000);
-  const total = week.reduce((a, g) => a + (g.lp ?? 0), 0);
+const kdaOf = (list: Game[]) => { const k = list.reduce((a, g) => a + g.kills + g.assists, 0), d = list.reduce((a, g) => a + g.deaths, 0); return list.length ? k / Math.max(1, d) : null; };
+
+/** Winrate, parties et KDA : la saison quand les stats perso sont actives, sinon les dernières parties. */
+function Summary({ games, season }: { games: Game[] | null; season: Personal | null }) {
+  const list = (games ?? []).filter((g) => !g.remake && g.queue !== "other");
+  let n = list.length, w = list.filter((g) => g.win).length;
+  if (season) { let sg = 0, sw = 0; for (const [g, x] of season.byChamp.values()) { sg += g; sw += x; } if (sg) { n = sg; w = sw; } }
+  const kda = kdaOf(list);
+  if (!n) return null;
   return (
-    <div className="account__kpis">
-      <Kpi label={t("Winrate saison")} value={pct(wins / games)} detail={t("{int} parties classées", { int: int(games) })} />
-      <Kpi label={t("Le plus joué")} stats={stats} champ={top?.[0]}
-           value={top ? champName(stats, top[0]) : "—"}
-           detail={top ? t("{pct} · {n} parties", { pct: pct(top[1][1] / top[1][0]), n: int(top[1][0]) }) : ""} />
-      {week.length
-        ? <Kpi label={t("LP cette semaine")} value={lpText(total)} tone={total > 0 ? "good" : total < 0 ? "bad" : "neutral"}
-               detail={plural(week.length, "{n} partie suivie", "{n} parties suivies")} />
-        : <Kpi label={t("Rôle principal")} value={ROLE_LABELS[mainRole]} detail={t("{pct} de tes parties", { pct: pct(byRole[mainRole] / games) })} />}
-    </div>
+    <section className="pf-card pf-summary">
+      <div><strong className={`tone-${wrTone(w / n)}`}>{pct(w / n)}</strong><span>{t("Winrate")}</span></div>
+      <div><strong>{int(n)}</strong><span>{t("Parties")}</span></div>
+      <div><strong>{kda == null ? "—" : dec1(kda)}</strong><span>KDA</span></div>
+    </section>
   );
 }
 
-function Kpi({ label, value, detail, tone, stats, champ }:
-  { label: string; value: string; detail: string; tone?: string; stats?: Stats; champ?: number }) {
+/** Courbe des LP cumulés sur les dernières parties suivies. */
+function LpSpark({ games }: { games: Game[] | null }) {
+  const tracked = (games ?? []).filter((g) => g.lp != null).slice(0, 20).reverse();
+  if (tracked.length < 2) return null;
+  let sum = 0;
+  const ys = [0, ...tracked.map((g) => (sum += g.lp ?? 0))];
+  const min = Math.min(...ys), max = Math.max(...ys), span = Math.max(1, max - min);
+  const W = 286, H = 70, x = (i: number) => (i / (ys.length - 1)) * W, y = (v: number) => H - 4 - ((v - min) / span) * (H - 8);
+  const d = ys.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const tone = sum > 0 ? "var(--good)" : sum < 0 ? "var(--bad)" : "var(--text-2)";
   return (
-    <div className="account__kpi">
-      <span className="account__kpi-label">{label}</span>
-      <span className={`account__kpi-value${tone ? ` tone-${tone}` : ""}`}>
-        {stats && champ != null && <ChampionIcon stats={stats} champ={champ} size={1.25} />}{value}
-      </span>
-      <span className="account__kpi-detail">{detail}</span>
-    </div>
+    <section className="pf-card">
+      <div className="pf-card__head"><h2>{t("LP sur les {n} dernières parties", { n: tracked.length })}</h2>
+        <strong className={sum > 0 ? "tone-good" : sum < 0 ? "tone-bad" : ""}>{lpText(sum)}</strong></div>
+      <svg className="pf-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+        <path d={`${d} L${W} ${H} L0 ${H} Z`} fill={tone} opacity="0.12" />
+        <path d={d} fill="none" stroke={tone} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </section>
+  );
+}
+
+/** Les 4 champions les plus joués, avec leur winrate. */
+function TopChamps({ stats, games, season }: { stats: Stats; games: Game[] | null; season: Personal | null }) {
+  const by = new Map<number, [number, number]>();
+  if (season && season.byChamp.size) for (const [c, [g, w]] of season.byChamp) by.set(c, [g, w]);
+  else for (const g of games ?? []) { if (g.remake || g.queue === "other") continue; const cur = by.get(g.champ) ?? [0, 0]; by.set(g.champ, [cur[0] + 1, cur[1] + (g.win ? 1 : 0)]); }
+  const top = [...by.entries()].filter(([, [g]]) => g > 0).sort((a, b) => b[1][0] - a[1][0]).slice(0, 4);
+  if (!top.length) return null;
+  return (
+    <section className="pf-card">
+      <h2>{t("Champions les plus joués")}</h2>
+      {top.map(([c, [g, w]]) => (
+        <div key={c} className="pf-champ">
+          <ChampionIcon stats={stats} champ={c} size={2} />
+          <span><strong>{champName(stats, c)}</strong><small>{plural(g, "{n} partie", "{n} parties")}</small></span>
+          <span className="grow" />
+          <strong className={`tone-${g >= 5 ? wrTone(w / g) : "neutral"}`}>{pct(w / g)}</strong>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -377,15 +426,6 @@ function OtherProfile({ stats, puuid, me, assets, onOpenPlayer }:
   }, [puuid, guess]);
 
   const ranked = (player?.games ?? []).filter((g) => !g.remake && g.queue !== "other");
-  const wins = ranked.filter((g) => g.win).length;
-  const counts = new Map<number, number>();
-  const roles = [0, 0, 0, 0, 0];
-  for (const g of ranked) {
-    counts.set(g.champ, (counts.get(g.champ) ?? 0) + 1);
-    if (g.role != null) roles[g.role] += 1;
-  }
-  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  const mainRole = roles.indexOf(Math.max(...roles));
   const inQueue = (player?.games ?? []).filter((g) => (queue === "all" ? g.queue !== "other" : g.queue === queue));
   const queueCount = (q: "all" | QueueKind) => (player?.games ?? []).filter((g) => (q === "all" ? g.queue !== "other" : g.queue === q)).length;
 
@@ -395,24 +435,23 @@ function OtherProfile({ stats, puuid, me, assets, onOpenPlayer }:
       {error && <p className="hint">{t("Le client LoL n’a pas renvoyé ce profil. Vérifie qu’il est ouvert, puis réessaie.")}</p>}
       {player && (
         <>
-          <div className="card account account--band">
-            <span className="account__avatar"><ProfileIcon version={stats.ddragon} icon={player.icon} size={3.25} /></span>
-            <div className="grow account__who">
-              <p className="account__name">{player.name}</p>
-              {player.rank ? <RankLine tier={player.tier} rank={player.rank} /> : <p className="account__rank">{t("Non classé en Solo/Duo")}</p>}
-              <p className="muted small account__status">{ranked.length > 0 ? t("Sur ses {n} dernières parties", { n: ranked.length }) : t("Via le client LoL")}</p>
-            </div>
-            {ranked.length > 0 && (
-              <div className="account__kpis">
-                <Kpi label={t("Winrate récent")} value={pct(wins / ranked.length)} tone={wrTone(wins / ranked.length)}
-                     detail={t("{w} V – {l} D", { w: wins, l: ranked.length - wins })} />
-                <Kpi label={t("Le plus joué")} stats={stats} champ={top?.[0]} value={top ? champName(stats, top[0]) : "—"}
-                     detail={top ? plural(top[1], "{n} partie", "{n} parties") : ""} />
-                <Kpi label={t("Rôle principal")} value={roles[mainRole] ? ROLE_LABELS[mainRole] : "—"}
-                     detail={roles[mainRole] ? plural(roles[mainRole], "{n} partie", "{n} parties") : ""} />
+          <div className="pf">
+          <aside className="pf__side">
+            <section className="pf-card pf-account">
+              <div className="pf-account__top">
+                <span className="account__avatar"><ProfileIcon version={stats.ddragon} icon={player.icon} size={3.25} /></span>
+                <div className="pf-account__who"><strong>{player.name}</strong>
+                  <span className="muted small">{ranked.length > 0 ? t("Sur ses {n} dernières parties", { n: ranked.length }) : t("Via le client LoL")}</span></div>
               </div>
-            )}
-          </div>
+              <div className="pf-account__rank">
+                {player.rank ? <RankLine tier={player.tier} rank={player.rank} /> : <p className="account__rank">{t("Non classé en Solo/Duo")}</p>}
+                {player.rank && <small>{QUEUE_LABELS.solo}</small>}
+              </div>
+            </section>
+            <Summary games={player.games} season={null} />
+            {tab === "history" && <TopChamps stats={stats} games={player.games} season={null} />}
+          </aside>
+          <div className="pf__main">
           <ProfileTabs tab={tab} onTab={setTab} tabs={["history", "stats"]}
                        extra={<>
                          <QueueFilter queue={queue} onQueue={setQueue} count={queueCount} />
@@ -428,6 +467,8 @@ function OtherProfile({ stats, puuid, me, assets, onOpenPlayer }:
                      intro={null} queue={queue}
                      onOpenPlayer={onOpenPlayer} subject={puuid} />
           )}
+          </div>
+          </div>
           </div>
         </>
       )}
@@ -480,6 +521,11 @@ function History({ stats, games, assets, role, onRole, me, subject, title, intro
   const inQueue = useMemo(() => (games ?? []).filter((g) => queue === "all" ? g.queue !== "other" : g.queue === queue), [games, queue]);
   const shown = role == null ? inQueue : inQueue.filter((g) => g.role === role);
   const count = (q: "all" | QueueKind) => (games ?? []).filter((g) => q === "all" ? g.queue !== "other" : g.queue === q).length;
+  // série en cours : victoires (ou défaites) d'affilée depuis la partie la plus récente
+  const real = shown.filter((g) => !g.remake);
+  let streak = 0;
+  while (streak < real.length && real[streak].win === real[0].win) streak++;
+  if (shown[0]?.remake) streak = 0;
 
   return (
     <section className="history">
@@ -515,7 +561,13 @@ function History({ stats, games, assets, role, onRole, me, subject, title, intro
               ))}
             </Segmented>
           </div>}
-          <div className="history__list stagger" key={`${queue}-${role}`}>
+          <div className="hist">
+          <div className="hist__head">
+            <h2>{plural(shown.length, "{n} dernière partie", "{n} dernières parties")}</h2>
+            <span className="grow" />
+            {streak >= 2 && <Chip tone={shown[0].win ? "good" : "bad"}>{shown[0].win ? t("{n} victoires de suite", { n: streak }) : t("{n} défaites de suite", { n: streak })}</Chip>}
+          </div>
+          <div className="history__list" key={`${queue}-${role}`}>
           {shown.map((g) => (
             <Fragment key={g.id}>
               {open === g.id ? (
@@ -530,7 +582,8 @@ function History({ stats, games, assets, role, onRole, me, subject, title, intro
               )}
             </Fragment>
           ))}
-          {shown.length === 0 && <p className="hint">{t("Aucune partie pour ce filtre.")}</p>}
+          {shown.length === 0 && <p className="hint hist__empty">{t("Aucune partie pour ce filtre.")}</p>}
+          </div>
           </div>
           {footer}
         </>
@@ -639,11 +692,10 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onTogg
             aria-label={[result === "remake" ? t("Remake") : g.win ? t("Victoire") : t("Défaite"), champName(stats, g.champ),
               `${g.kills} / ${g.deaths} / ${g.assists}`, t("{n} min", { n: min }), ago(g.created),
               ...(showLp && g.lp != null ? [lpText(g.lp)] : [])].join(" · ")}>
-      <ChampionIcon stats={stats} champ={g.champ} size={2.5} />
-      <Loadout spells={g.spells} keystone={g.keystone} subStyle={g.subStyle} assets={assets} size="md" />
+      <span className="game__icon" title={champName(stats, g.champ)}><ChampionIcon stats={stats} champ={g.champ} size={2.5} /></span>
       <span className="game__id">
-        <span className="game__name">
-          {champName(stats, g.champ)}
+        <span className={`game__name tone-${result === "remake" ? "neutral" : g.win ? "good" : "bad"}`}>
+          {result === "remake" ? t("Remake") : g.win ? t("Victoire") : t("Défaite")}
           {rating?.badge && (
             <span className={`badge-note badge-note--lg badge-note--${rating.badge.toLowerCase()}`}
                   title={rating.badge === "MVP" ? t("Meilleure note de l’équipe gagnante") : t("Meilleure note de l’équipe perdante")}>
@@ -652,39 +704,21 @@ function GameRow({ stats, game: g, assets, open, showLp, rating, partner, onTogg
           )}
         </span>
         <span className="muted small">
-          {partner ?? `${g.queue === "other" ? g.queueName : QUEUE_LABELS[g.queue]}${g.role != null ? ` · ${ROLE_LABELS[g.role]}` : ""}`} · {ago(g.created)}
+          {partner ?? [g.queue === "other" ? g.queueName : g.queue !== "solo" ? QUEUE_LABELS[g.queue] : null, g.role != null ? ROLE_LABELS[g.role] : null].filter(Boolean).join(" · ")}
+          {(partner || g.queue !== "solo" || g.role != null) ? " · " : ""}{t("{n} min", { n: min })} · {ago(g.created)}
         </span>
       </span>
-      <ItemRow items={g.items} role={g.role} assets={assets} size="md" />
-      <span className="grow" />
-      <span className="stat-col game__note">
-        {rating && rating.parts.length > 0 && <NoteTip rating={rating} />}
-        <span className="stat-col__value">
-          <span className={`tone-${rating ? noteTone(rating.note) : "neutral"}`}>{rating ? noteText(rating.note) : "—"}</span>
-          {rating && <Trend tone={noteTone(rating.note)} />}
-          <small> /20</small>
-        </span>
-        <span className="stat-col__label">
-          {rating ? t("{rank} sur 10", { rank: ordinal(rating.rank) })
-            : rating === null ? (g.remake ? t("Remake") : t("Note")) : t("Calcul…")}
-        </span>
-      </span>
-      <span className="game__sep" aria-hidden />
-      <span className="stat-col game__kda">
+      <span className="stat-col stat-col--left game__kda">
         <span className="stat-col__value">{g.kills} / {g.deaths} / {g.assists}</span>
         <span className="stat-col__label">KDA {dec1(kda)} · {int(g.cs)} CS</span>
       </span>
-      <span className="game__sep" aria-hidden />
-      <span className="stat-col game__lp">
-        {showLp && g.lp != null ? (
-          <span className={`game__lp-value${g.lp > 0 ? " tone-good" : g.lp < 0 ? " tone-bad" : ""}`}>{lpText(g.lp)}</span>
-        ) : (
-          <span className={`game__lp-value tone-${result === "remake" ? "neutral" : g.win ? "good" : "bad"}`}>
-            {result === "remake" ? t("Remake") : g.win ? t("Victoire") : t("Défaite")}
-          </span>
-        )}
-        <span className="stat-col__label">{showLp && g.lp != null ? `${result === "remake" ? t("Remake") : g.win ? t("Victoire") : t("Défaite")} · ` : ""}{t("{n} min", { n: min })}</span>
+      <span className="game__note" title={rating ? t("{rank} sur 10", { rank: ordinal(rating.rank) }) : undefined}>
+        {rating && rating.parts.length > 0 && <NoteTip rating={rating} />}
+        <strong className={`tone-${rating ? noteTone(rating.note) : "neutral"}`}>{rating ? noteText(rating.note) : rating === null ? "—" : "…"}</strong><small>/20</small>
       </span>
+      <span className="grow" />
+      <ItemRow items={g.items} role={g.role} assets={assets} size="sm" />
+      <span className={`game__lp-value${showLp && g.lp != null ? (g.lp > 0 ? " tone-good" : g.lp < 0 ? " tone-bad" : "") : ""}`}>{showLp && g.lp != null ? lpText(g.lp) : ""}</span>
       <svg className="game__chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden>
         <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -870,18 +904,20 @@ type Tab = "history" | "stats" | "progress" | "duo";
 const TAB_LABELS: Record<Tab, string> = { history: t("Historique"), stats: t("Stats"), progress: t("Progression"), duo: t("Duo") };
 
 function ProfileTabs({ tab, onTab, tabs, extra }: { tab: Tab; onTab: (t: Tab) => void; tabs: Tab[]; extra?: React.ReactNode }) {
-  return (
-    <div className="ptabs-bar">
-      <div className="ptabs" role="tablist" aria-label={t("Sections du profil")}>
-        {tabs.map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "is-active" : ""} onClick={() => onTab(t)}>
-            {TAB_LABELS[t]}
+  const bar = useContext(ProfileBar);
+  if (!bar) return null;
+  return createPortal(
+    <>
+      <Segmented className="segmented" role="tablist" aria-label={t("Sections du profil")}>
+        {tabs.map((k) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "is-active" : ""} onClick={() => onTab(k)}>
+            {TAB_LABELS[k]}
           </button>
         ))}
-      </div>
-      {extra && <div className="ptabs-bar__extra">{extra}</div>}
-    </div>
-  );
+      </Segmented>
+      <span className="grow" />
+      {extra}
+    </>, bar);
 }
 
 /** Filtre de file (Toutes, Solo/Duo, Flex, 5c5) : menu déroulant avec le nombre de parties de chaque file. */

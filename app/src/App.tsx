@@ -419,11 +419,7 @@ export default function App() {
         {stats && screen === "draft" && !live && inGame && !(loadingPhase && loading) && <InGameView stats={stats} start={inGame} game={liveGame} />}
         {stats && screen === "draft" && !live && !inGame && !draft && recap && me?.puuid && (
           <div className="content">
-            <TopBar title={t("Récap")}>
-              <span className="grow" />
-              <button className="btn-bar" onClick={() => setRecap(null)}>{t("Fermer")}</button>
-            </TopBar>
-            <RecapView stats={stats} game={recap} me={me.puuid} lpVersion={lpVersion} />
+            <RecapView stats={stats} game={recap} me={me.puuid} lpVersion={lpVersion} onClose={() => setRecap(null)} />
           </div>
         )}
         {stats && screen === "draft" && !live && !inGame && !draft && !(recap && me?.puuid) && (
