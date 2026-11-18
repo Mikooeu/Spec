@@ -91,6 +91,23 @@ export default function App() {
   const client = useLolClient();
   const readyCheck = client.status === "idle" ? client.readyCheck : null;
   const [topSlot, setTopSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const fit = (e: MouseEvent | FocusEvent) => {
+      const host = (e.target as Element | null)?.closest?.(".rune, .item-ic");
+      const tip = host?.querySelector<HTMLElement>(":scope > .rune__tip");
+      if (!tip) return;
+      tip.style.marginLeft = ""; tip.classList.remove("rune__tip--below");
+      const area = host!.closest(".main, .compact__body")?.getBoundingClientRect()
+        ?? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+      const r = tip.getBoundingClientRect(), M = 8;
+      if (r.left < area.left + M) tip.style.marginLeft = `${area.left + M - r.left}px`;
+      else if (r.right > area.right - M) tip.style.marginLeft = `${area.right - M - r.right}px`;
+      if (r.top < area.top + M) tip.classList.add("rune__tip--below");
+    };
+    document.addEventListener("mouseover", fit);
+    document.addEventListener("focusin", fit);
+    return () => { document.removeEventListener("mouseover", fit); document.removeEventListener("focusin", fit); };
+  }, []);
   const [roleOverride, setRoleOverride] = useState<number | null>(null);
 
   const session = client.status === "champselect" ? client.session : null;

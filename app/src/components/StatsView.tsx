@@ -31,7 +31,6 @@ export function StatsView({ stats, data, laneGames, me, guess, recentNote, other
   const missing = data.source === "season" ? t("Relecture des parties en cours") : t("Non renvoyé par le client");
   return (
     <div className="sview">
-      {recentNote && <p className="muted small">{recentNote}</p>}
       {(() => {
         // côté et abandon : affichés seulement si le client les renvoie (ou pendant la relecture des parties)
         const season = data.source === "season";
@@ -54,6 +53,7 @@ export function StatsView({ stats, data, laneGames, me, guess, recentNote, other
           </div>
         );
       })()}
+      {recentNote && <p className="muted small sview__note">{recentNote}</p>}
       <ChampionTable stats={stats} data={data} other={other} role={role} />
       <LaneCard games={laneGames} me={me} guess={guess} other={other} />
     </div>

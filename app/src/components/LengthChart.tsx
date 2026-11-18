@@ -5,7 +5,8 @@ import { t } from "../lib/i18n";
 export type LengthPoint = [number, number, number];   // début de tranche, parties, victoires
 
 const H = 200, L = 40, R = 12, T = 12, B = 26;
-const X0 = 15, X1 = 45;
+// la courbe va d'un bord à l'autre : du milieu de la 1re tranche (< 20 min) au milieu de la dernière (40 min +)
+const X0 = 17.5, X1 = 42.5;
 const mid = (b: number) => (b <= 15 ? 17.5 : b >= 40 ? 42.5 : b + 2.5);
 
 /** Courbe lisse (Catmull-Rom → Bézier) passant par les points. */
@@ -58,10 +59,8 @@ export function LengthChart({ points, now, height = H }: { points: LengthPoint[]
           <text x={L - 8} y={y(v) + 4} textAnchor="end" className="lchart__axis">{label(v)}</text>
         </g>
       ))}
-      {[15, 30, 45].map((m) => (
-        <text key={m} x={x(m)} y={h - 6} textAnchor={m === 15 ? "start" : m === 45 ? "end" : "middle"} className="lchart__axis">
-          {t("{n} min", { n: m })}
-        </text>
+      {([[X0, t("< {n} min", { n: 20 }), "start"], [30, t("{n} min", { n: 30 }), "middle"], [X1, t("{n} min +", { n: 40 }), "end"]] as const).map(([m, label, anchor]) => (
+        <text key={m} x={x(m)} y={h - 6} textAnchor={anchor} className="lchart__axis">{label}</text>
       ))}
       <path d={area} fill={`url(#lg${id})`} />
       <path d={line} className="lchart__line" />

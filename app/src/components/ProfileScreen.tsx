@@ -262,12 +262,9 @@ function OwnProfile({ stats, account, clientOn, perso, onRegister, lpVersion, as
             </div>
           </div>
           {rank && (
-            <div className="pf-account__rank">
-              <RankLine tier={tier} rank={rank} />
-              <small>{QUEUE_LABELS.solo}</small>
-              <span className="grow" />
+            <RankBlock tier={tier} rank={rank}>
               {weekGames.length > 0 && <strong className={weekLp > 0 ? "tone-good" : weekLp < 0 ? "tone-bad" : ""} title={t("LP cette semaine")}>{lpText(weekLp)}</strong>}
-            </div>
+            </RankBlock>
           )}
           <p className="muted small account__status"><span className={clientOn ? "dot" : "dot dot--off"} />
             {clientOn ? t("Client connecté") : t("Client LoL fermé")} · {persoText(perso).split(" · ")[0]}</p>
@@ -444,10 +441,8 @@ function OtherProfile({ stats, puuid, me, assets, onOpenPlayer }:
                 <div className="pf-account__who"><strong>{player.name}</strong>
                   <span className="muted small">{ranked.length > 0 ? t("Sur ses {n} dernières parties", { n: ranked.length }) : t("Via le client LoL")}</span></div>
               </div>
-              <div className="pf-account__rank">
-                {player.rank ? <RankLine tier={player.tier} rank={player.rank} /> : <p className="account__rank">{t("Non classé en Solo/Duo")}</p>}
-                {player.rank && <small>{QUEUE_LABELS.solo}</small>}
-              </div>
+              {player.rank ? <RankBlock tier={player.tier} rank={player.rank} />
+                : <div className="pf-account__rank"><p className="account__rank">{t("Non classé en Solo/Duo")}</p></div>}
             </section>
             <Summary games={player.games} season={null} />
             {tab === "history" && <TopChamps stats={stats} games={player.games} season={null} />}
@@ -531,10 +526,12 @@ function History({ stats, games, assets, role, onRole, me, subject, title, intro
 
   return (
     <section className="history">
-      <div>
-        {title && <h2>{title}</h2>}
-        {intro && <p className="muted small">{intro}</p>}
-      </div>
+      {(title || intro) && (
+        <div>
+          {title && <h2>{title}</h2>}
+          {intro && <p className="muted small">{intro}</p>}
+        </div>
+      )}
       {duo && (
         <div className="duo-filter">
           <button className="duo-chip" onClick={onClearDuo} title={t("Revenir à tout l’historique")}>
@@ -1430,15 +1427,19 @@ function RankTip({ puuid, queue }: { puuid: string; queue: "solo" | "flex" }) {
   );
 }
 
-function RankLine({ tier, rank }: { tier: string | null; rank: string }) {
+/** Rang du compte dans la carte du profil : blason, rang et file l'un sous l'autre, puis les LP à droite. */
+function RankBlock({ tier, rank, children }: { tier: string | null; rank: string; children?: React.ReactNode }) {
   const [failed, setFailed] = useState(false);
   return (
-    <p className="account__rank rank-line">
+    <div className="pf-account__rank">
       {tier && !failed && (
-        <img src={`https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/${tier}.svg`}
-             alt="" aria-hidden draggable={false} onError={() => setFailed(true)} />
+        <img className="pf-account__crest" alt="" aria-hidden draggable={false} onError={() => setFailed(true)}
+             src={`https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/${tier}.svg`} />
       )}
-      {rank}
-    </p>
+      <span className="pf-account__rank-text"><strong>{rank}</strong><small>{QUEUE_LABELS.solo}</small></span>
+      <span className="grow" />
+      {children}
+    </div>
   );
 }
+

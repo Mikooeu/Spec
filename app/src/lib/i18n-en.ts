@@ -439,6 +439,8 @@ export const EN: Record<string, string> = {
   "Ajouter des champions à ton pool": "Add champions to your pool",
   "Objectifs de la semaine": "Goals for the week",
   "Quels champions joues-tu en {v} ?": "Which champions do you play {v}?",
+  "< {n} min": "< {n} min",
+  "{n} min +": "{n} min +",
   "Mode compact": "Compact mode",
   "Ne plus garder au premier plan": "Stop keeping on top",
   "Non classé en Solo/Duo": "Unranked in Solo/Duo",

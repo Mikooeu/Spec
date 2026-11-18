@@ -2279,7 +2279,8 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .grecap-kpis .grecap-kpi { flex: 1; min-width: 0; padding: 0.75rem 0.5rem; border-radius: 0.75rem; background: var(--bg-surface); border: 1px solid var(--border); flex-direction: column-reverse; }
 .grecap--cols .grecap-tip { align-items: flex-start; flex-direction: column; gap: 0.375rem; }
 .grecap--cols .grecap-tip__side { flex-direction: row; align-items: center; gap: 0.625rem; }
-.grecap--cols .grecap-map--small { max-height: 14rem; }
+/* carte de la position : toujours carrée (la carte de la Faille l'est), centrée dans la carte */
+.grecap--cols .grecap-map--small { width: min(100%, 17rem); height: auto; max-height: none; aspect-ratio: 1; align-self: center; margin: 0 auto; }
 .grecap--cols > .grecap__col > .btn, .grecap--cols .grecap__col > button { align-self: flex-start; }
 /* tuiles de chiffres (Stats, Progression, Duo) */
 .pf-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.75rem; }
@@ -2361,3 +2362,25 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .onboarding:not(.welcome) .card { background: var(--bg-surface-2); }
 .home3-stats { display: flex; }
 .home3-stats > div { flex: 1; }
+
+/* ---- 0.15.7 : retours sur la refonte ---- */
+.rune__tip--below { bottom: auto; top: calc(100% + 0.5rem); }
+/* titre de la barre du haut : centré comme les pastilles et les filtres */
+.topbar__title { margin: 0; line-height: 1.2; }
+/* profil : la première carte de droite démarre à la hauteur de la carte du compte */
+.pf__main > .profile-view > :empty, .history > :empty { display: none; }
+.sview__note { margin-top: -0.25rem; }
+/* aperçu de la tier list : winrate, pick et ban sur une ligne, séparés par un trait */
+.tl2-prev__tiles { gap: 0; }
+.tl2-prev__tiles > div { align-items: center; padding: 0.5rem 0; border-radius: 0; background: none; text-align: center; }
+.tl2-prev__tiles > div + div { border-left: 1px solid var(--separator); }
+/* carte du compte : rang sans fond, blason en grand, rang et file l'un sous l'autre (maquette) */
+.pf-account__rank { padding: 0; background: none; gap: 0.75rem; }
+.pf-account__crest { width: 2.25rem; height: 2.25rem; flex: none; object-fit: contain; }
+.pf-account__rank-text { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; }
+.pf-account__rank-text strong { font-size: 0.9375rem; font-weight: 600; white-space: nowrap; }
+.pf-account__rank-text small { font-size: 0.6875rem; color: var(--text-2); }
+/* chargement de la partie : cartes calculées sur la largeur du rail (et non plus de l'ancienne barre latérale), centrées */
+/* largeur : 5 cartes entre le rail et les marges ; hauteur : les deux équipes tiennent sans défiler */
+.lcards:not(.lcards--full) { --cw: clamp(8rem, min(calc((100vw - 10.5rem) / 5), calc((100vh - 13rem) * 0.262)), 14rem); align-items: center; }
+.lcards:not(.lcards--full) > * { width: calc(5 * var(--cw) + 3rem); }

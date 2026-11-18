@@ -170,7 +170,7 @@ export function Row({ label, desc, error = false, children }: { label: string; d
     <div className="settings__row">
       <div className="settings__text">
         <span className="settings__label">{label}</span>
-        <span className={`settings__desc${error ? " tone-bad" : ""}`}>{desc}</span>
+        {error && desc && <span className="settings__desc tone-bad">{desc}</span>}
       </div>
       <div className="settings__control">{children}</div>
     </div>
