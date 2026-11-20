@@ -297,6 +297,8 @@ function GoldCurve({ r, focus }: { r: Recap; focus: number | null }) {
   const onCurve = r.marks.filter((m) => m.kind === "kill" || m.kind === "death");
   const h = hover != null ? r.curve[hover] : null;
   const legend = (["kill", "death", "dragon", "tower", "baron", "herald"] as Mark["kind"][]).filter((k) => r.marks.some((m) => m.kind === k));
+  // près d'un bord, la bulle s'aligne sur ce bord au lieu de déborder sur la colonne voisine
+  const edge = (px: number) => (px / W > 0.72 ? " is-right" : px / W < 0.2 ? " is-left" : "");
   return (
     <section className="card grecap-card">
       <div className="grecap-head">
@@ -332,12 +334,12 @@ function GoldCurve({ r, focus }: { r: Recap; focus: number | null }) {
           {r.curve.map((p, i) => <rect key={`h${i}`} x={x(p.min) - 8} y={4} width={16} height={B - 4} fill="transparent" onMouseEnter={() => setHover(i)} />)}
         </svg>
         {r.turn && hover == null && (
-          <div className="grecap-curve__note" style={{ left: `${(x(r.turn.min) / W) * 100}%`, top: `${(y(goldAt(r.turn.min)) / H) * 100}%` }}>
+          <div className={`grecap-curve__note${edge(x(r.turn.min))}`} style={{ left: `${(x(r.turn.min) / W) * 100}%`, top: `${(y(goldAt(r.turn.min)) / H) * 100}%` }}>
             <strong>{t("{m} min · le tournant", { m: r.turn.min })}</strong><small>{r.turn.detail}</small>
           </div>
         )}
         {h && (
-          <div className="grecap-curve__note is-hover" style={{ left: `${(x(h.min) / W) * 100}%`, top: `${(y(h.gold) / H) * 100}%` }}>
+          <div className={`grecap-curve__note is-hover${edge(x(h.min))}`} style={{ left: `${(x(h.min) / W) * 100}%`, top: `${(y(h.gold) / H) * 100}%` }}>
             <strong>{t("{m} min", { m: Math.round(h.min) })}</strong><small className={h.gold >= 0 ? "tone-good" : "tone-bad"}>{signed(h.gold)} {t("d’or")}</small>
           </div>
         )}

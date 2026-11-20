@@ -2389,3 +2389,9 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .topbar .segmented button { white-space: nowrap; }
 /* objectifs : les listes prennent toute la largeur (sans le retrait par défaut des listes) */
 .goals-dialog__list, .goal-list { margin: 0; padding: 0; }
+
+/* ---- 0.15.9 ---- */
+/* récap : la bulle de la courbe d'or reste au-dessus de la colonne de droite et ne déborde plus */
+.grecap--cols > .grecap__col:first-child { position: relative; z-index: 2; }
+.grecap-curve__note.is-right { transform: translate(calc(-100% + 0.75rem), calc(-100% - 0.875rem)); }
+.grecap-curve__note.is-left { transform: translate(-0.75rem, calc(-100% - 0.875rem)); }

@@ -75,16 +75,17 @@ export function PoolScreen({ stats, pools, onChange, perso, initialRole = 2 }: P
   return (
     <div className="content pool2">
       <TopBar title={t("Champion pool")}>
+        <Segmented className="segmented" role="tablist" aria-label={t("Rôle")}>
+          {ROLE_LABELS.map((label, i) => (
+            <button key={label} role="tab" aria-selected={role === i} className={role === i ? "is-active" : ""} onClick={() => setRole(i)}
+                    title={plural(pools[i].length, "{n} champion", "{n} champions")}>
+              {label}
+            </button>
+          ))}
+        </Segmented>
+        <span className="grow" />
         <Chip>{pools.reduce((n, l) => n + l.length, 0) === 1 ? t("1 champion") : t("{n} champions", { n: pools.reduce((n, l) => n + l.length, 0) })}</Chip>
       </TopBar>
-
-      <Segmented className="segmented pool2__roles" role="tablist" aria-label={t("Rôle")}>
-        {ROLE_LABELS.map((label, i) => (
-          <button key={label} role="tab" aria-selected={role === i} className={role === i ? "is-active" : ""} onClick={() => setRole(i)}>
-            {label} <span className="count">{pools[i].length}</span>
-          </button>
-        ))}
-      </Segmented>
 
       <section className="card pool2-card">
         <div className="pool2-card__head">
