@@ -7,7 +7,7 @@ import type { Account } from "../lib/lcu";
 import { useFlashKey } from "./Runes";
 import { Segmented } from "./Segmented";
 import { useItemSetSetting } from "../lib/itemset";
-import { appVersion, autostartEnabled, installPath, revealInstall, setAutostart, useDefaultRegion, useLang, useSelectAlert } from "../lib/settings";
+import { appVersion, autostartEnabled, installPath, revealInstall, setAutostart, useAutoCompact, useDefaultRegion, useImportOnLock, useLang, useSelectAlert } from "../lib/settings";
 import type { CheckResult } from "../lib/updater";
 import { t } from "../lib/i18n";
 
@@ -28,6 +28,8 @@ interface Props {
 export function SettingsScreen({ account, registered, compact, onCompact, onTop, onOnTop, onCheckUpdate, onReplayOnboarding, onReplayTour, onPrivacy, onDeleted }: Props) {
   const [selectAlert, setSelectAlert] = useSelectAlert();
   const [itemSet, setItemSet] = useItemSetSetting();
+  const [autoCompact, setAutoCompact] = useAutoCompact();
+  const [importOnLock, setImportOnLock] = useImportOnLock();
   const [copied, setCopied] = useState(false);
   const [del, setDel] = useState<"idle" | "confirm" | "busy" | "done" | string>("idle");
   const [lang, setLang] = useLang();
@@ -80,6 +82,14 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
       <Section title={t("Draft")}>
         <Row label={t("Touche du Flash")} desc={t("L’ordre de tes sorts quand Spec les importe dans le client : Flash sur D ou sur F.")}>
           <Choice value={flashKey} onChange={setFlashKey} options={[["D", "D"], ["F", "F"]]} />
+        </Row>
+        <Row label={t("Mode compact au début de la draft")}
+             desc={t("Spec passe en mode compact quand la sélection des champions commence, et revient en grand à la fin de la draft.")}>
+          <Toggle on={autoCompact} onChange={() => setAutoCompact(!autoCompact)} label={t("Mode compact au début de la draft")} />
+        </Row>
+        <Row label={t("Importer runes et sorts au verrouillage")}
+             desc={t("Quand tu verrouilles ton champion, Spec importe les runes et les sorts conseillés. Spec ne verrouille jamais à ta place.")}>
+          <Toggle on={importOnLock} onChange={() => setImportOnLock(!importOnLock)} label={t("Importer runes et sorts au verrouillage")} />
         </Row>
         <Row label={t("Alerte au début de la sélection")}
              desc={t("Si Spec est réduit ou derrière le client, il clignote dans la barre des tâches quand la sélection des champions commence.")}>

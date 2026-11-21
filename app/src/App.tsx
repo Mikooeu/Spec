@@ -11,12 +11,12 @@ import { TierListScreen } from "./components/TierListScreen";
 import { ChampionScreen } from "./components/ChampionScreen";
 import { loadHistory, useLpTracking, type Game } from "./lib/history";
 import { useIconSrc } from "./lib/icons";
-import { recommend, topForRole, type Result, type Stats } from "./lib/score";
+import { orderSpells, recommend, runePageFor, scoreChampion, spellsFor, topForRole, type Result, type Stats } from "./lib/score";
 import { recordPick } from "./lib/impact";
 import { loadStats, register, usePersonal, useRegionStats, type Region } from "./lib/api";
-import { int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
+import { champName, int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
 import { importRunes, importSpells, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
-import { ItemSetImportContext, RuneImportContext, SpellImportContext } from "./components/Runes";
+import { AutoImportContext, ItemSetImportContext, RuneImportContext, SpellImportContext, useFlashKey, type AutoImport } from "./components/Runes";
 import { importItemSet, useItemSetSetting } from "./lib/itemset";
 import { loadItems, useInfo } from "./lib/ddragon";
 import { REGION_LABEL, RegionSelect } from "./components/RegionSelect";
@@ -38,7 +38,7 @@ import { Onboarding } from "./components/Onboarding";
 import { Tour, specTour } from "./components/Tour";
 import { PrivacyDialog } from "./components/PrivacyDialog";
 import { ReadyCheckToast } from "./components/ReadyCheck";
-import { useDefaultRegion, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
+import { useAutoCompact, useDefaultRegion, useImportOnLock, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
 import { t } from "./lib/i18n";
 import { TopBar, TopBarSlot } from "./components/TopBar";
 
@@ -255,6 +255,53 @@ export default function App() {
   useEffect(() => {
     if (inSelect && selectAlert && (document.hidden || !document.hasFocus())) requestAttention();
   }, [inSelect]); // eslint-disable-line react-hooks/exhaustive-deps
+  // début de la draft : Spec passe tout seul en mode compact, et revient en grand quand la draft se termine
+  // (seulement s'il était en grand avant : un joueur déjà en compact y reste)
+  const [autoCompact] = useAutoCompact();
+  const autoOpened = useRef(false);
+  const selectHandled = useRef(false);   // une seule bascule par draft, une fois les stats chargées
+  useEffect(() => {
+    if (inSelect) {
+      if (selectHandled.current || !stats || onboarding) return;
+      selectHandled.current = true;
+      if (autoCompact && !compact) { autoOpened.current = true; setCompact(true); }
+      return;
+    }
+    selectHandled.current = false;
+    if (autoOpened.current) { autoOpened.current = false; setCompact(false); }
+  }, [inSelect, stats != null, onboarding]); // eslint-disable-line react-hooks/exhaustive-deps
+  // repassé en grand par le joueur pendant la draft : Spec n'y touche plus jusqu'à la prochaine draft
+  useEffect(() => { if (!compact) autoOpened.current = false; }, [compact]);
+  // champion verrouillé : import des runes et des sorts conseillés, si le joueur a activé le réglage
+  const [importOnLock] = useImportOnLock();
+  const [flashKey] = useFlashKey();
+  const [autoImport, setAutoImport] = useState<AutoImport | null>(null);
+  const autoImportKey = useRef("");
+  useEffect(() => { if (!inSelect) { autoImportKey.current = ""; setAutoImport(null); } }, [inSelect]);
+  useEffect(() => {
+    if (!importOnLock || !stats || !live?.myLocked || live.myChamp == null) return;
+    const champ = live.myChamp, role = live.role;
+    const key = `${champ}|${role}`;
+    if (autoImportKey.current === key) return;
+    autoImportKey.current = key;
+    const allies = live.allies.filter((c, i): c is number => c != null && i !== role);
+    const enemies = live.enemies.filter((c): c is number => c != null);
+    const lane = scoreChampion(stats, champ, role, allies, enemies).details[0];
+    const laner = lane && lane.p >= 0.5 ? lane.enemy : null;
+    const found = runePageFor(stats, champ, role, laner);
+    if (!found) return;
+    const name = champName(stats, champ);
+    (async () => {
+      const error = await importRunes(found.page, name);
+      const sp = error ? null : spellsFor(stats, champ, role, laner);
+      const ordered = sp ? orderSpells(sp.spells, flashKey) : null;
+      const spellError = ordered ? await importSpells(ordered[0], ordered[1]) : null;
+      setAutoImport({ champ, vs: found.vs, ok: !error,
+        text: error ? t("Import au verrouillage impossible : {error}", { error })
+          : spellError ? t("Runes importées au verrouillage, mais pas les sorts : {spellError}", { spellError })
+          : t("Importé au verrouillage : runes dans ta page « Spec : {name} runes »{v}.", { name, v: ordered ? t(", sorts choisis") : "" }) });
+    })();
+  }, [importOnLock, stats, live?.myLocked, live?.myChamp, live?.role]); // eslint-disable-line react-hooks/exhaustive-deps
   // fenêtre compacte agrandie à la main (bouton Agrandir de Windows, bord tiré) : on repasse en affichage complet
   const expandedByUser = useRef(false);
   useEffect(() => {
@@ -327,6 +374,7 @@ export default function App() {
     const game = inGame ? <InGameView stats={stats} start={inGame} game={liveGame} compact /> : null;
     return (
       <RuneImportContext.Provider value={runeImporter}>
+      <AutoImportContext.Provider value={autoImport}>
       <SpellImportContext.Provider value={spellImporter}>
       <ItemSetImportContext.Provider value={itemSetImporter}>
       <CompactScreen stats={stats} draft={current} pool={current ? pools[current.role] : []} live={!!live}
@@ -340,12 +388,14 @@ export default function App() {
       <ReadyCheckToast check={readyCheck} compact />
       </ItemSetImportContext.Provider>
       </SpellImportContext.Provider>
+      </AutoImportContext.Provider>
       </RuneImportContext.Provider>
     );
   }
 
   return (
     <RuneImportContext.Provider value={runeImporter}>
+      <AutoImportContext.Provider value={autoImport}>
     <SpellImportContext.Provider value={spellImporter}>
     <ItemSetImportContext.Provider value={itemSetImporter}>
     <TopBarSlot.Provider value={topSlot}>
@@ -463,7 +513,8 @@ export default function App() {
     </TopBarSlot.Provider>
     </ItemSetImportContext.Provider>
     </SpellImportContext.Provider>
-    </RuneImportContext.Provider>
+    </AutoImportContext.Provider>
+      </RuneImportContext.Provider>
   );
 }
 

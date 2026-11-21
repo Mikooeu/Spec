@@ -20,6 +20,10 @@ export const RuneImportContext = createContext<((page: Page, champion: string) =
 /** Import des sorts d'invocateur (D puis F) : fourni en direct pendant la draft, absent sinon. */
 export const SpellImportContext = createContext<((spell1: number, spell2: number) => Promise<string | null>) | null>(null);
 
+/** Import fait tout seul au verrouillage (réglage « Importer runes et sorts au verrouillage ») : affiché sous les runes du pick. */
+export interface AutoImport { champ: number; vs: number | null; ok: boolean; text: string }
+export const AutoImportContext = createContext<AutoImport | null>(null);
+
 /** Touche de Flash choisie par le joueur (F par défaut), gardée d'une partie à l'autre. */
 export function useFlashKey(): ["D" | "F", (k: "D" | "F") => void] {
   return usePersistent<"D" | "F">("spec.flashKey", "F");
@@ -120,6 +124,13 @@ function RunePageView({ stats, champ, role, page, vs, data, spells }:
   const [busy, setBusy] = useState(false);
   // vis-à-vis visé par le dernier import réussi : null = runes génériques, undefined = rien importé
   const [importedVs, setImportedVs] = useState<number | null | undefined>(undefined);
+  // import fait au verrouillage par Spec : même retour que si le joueur avait cliqué
+  const auto = useContext(AutoImportContext);
+  useEffect(() => {
+    if (!auto || auto.champ !== champ) return;
+    if (auto.ok) setImportedVs(auto.vs);
+    setStatus({ ok: auto.ok, text: auto.text });
+  }, [auto, champ]);
   const outdated = importedVs === null && vs != null;
   const ordered = spells ? orderSpells(spells.spells, flashKey) : null;
   const run = async () => {
@@ -154,7 +165,7 @@ function RunePageView({ stats, champ, role, page, vs, data, spells }:
         <span className="runes__sep" />
         {page.shards.map((r, i) => <Rune key={`f${i}`} data={data} id={r} size="shard" />)}
         {!outdated && (
-          <button className="btn btn--secondary btn--tiny runes__import" onClick={run} disabled={busy}>
+          <button className="btn btn--primary btn--tiny runes__import" onClick={run} disabled={busy}>
             {busy ? "Import…" : ordered ? (itemImporter ? t("Importer runes, sorts et objets") : t("Importer runes et sorts")) : t("Importer dans le client")}
           </button>
         )}

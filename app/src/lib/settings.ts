@@ -20,6 +20,10 @@ export const useRoles = () => usePersistent<Roles>("spec.roles", { main: null, s
 export const useOnboarded = () => usePersistent<boolean>("spec.onboarded", false);
 /** Au début de la sélection des champions, si Spec n'est pas au premier plan : clignote dans la barre des tâches. */
 export const useSelectAlert = () => usePersistent<boolean>("spec.alert.select", true);
+/** Début de la sélection des champions : Spec passe tout seul en mode compact, puis revient en grand quand la draft se termine. */
+export const useAutoCompact = () => usePersistent<boolean>("spec.compact.auto", true);
+/** Champion verrouillé : Spec importe tout seul les runes et les sorts conseillés (à activer dans les réglages). */
+export const useImportOnLock = () => usePersistent<boolean>("spec.import.onLock", false);
 
 /** Lancement au démarrage de Windows (fenêtre réduite dans la barre des tâches). null : inconnu ou hors appli. */
 export async function autostartEnabled(): Promise<boolean | null> {
