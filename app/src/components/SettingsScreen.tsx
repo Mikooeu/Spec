@@ -6,8 +6,7 @@ import { RIOT_LEGAL } from "./PrivacyDialog";
 import type { Account } from "../lib/lcu";
 import { useFlashKey } from "./Runes";
 import { Segmented } from "./Segmented";
-import { useItemSetSetting } from "../lib/itemset";
-import { appVersion, autostartEnabled, installPath, revealInstall, setAutostart, shortcutLabel, useAutoCompact, useCompactShape, useDefaultRegion, useDockCompact, useImportOnLock, useLang, useSelectAlert, useSpecShortcut } from "../lib/settings";
+import { appVersion, autostartEnabled, installPath, revealInstall, setAutostart, shortcutLabel, useCompactShape, useDefaultRegion, useDockCompact, useImportOnLock, useLang, useSelectAlert, useSpecShortcut } from "../lib/settings";
 import { getShortcutError, pauseShortcut } from "../lib/window";
 import type { CheckResult } from "../lib/updater";
 import { t } from "../lib/i18n";
@@ -28,8 +27,6 @@ interface Props {
 /** Réglages : langue, démarrage, mode compact, touche du Flash, région par défaut, compte, dossier, version. */
 export function SettingsScreen({ account, registered, compact, onCompact, onTop, onOnTop, onCheckUpdate, onReplayOnboarding, onReplayTour, onPrivacy, onDeleted }: Props) {
   const [selectAlert, setSelectAlert] = useSelectAlert();
-  const [itemSet, setItemSet] = useItemSetSetting();
-  const [autoCompact, setAutoCompact] = useAutoCompact();
   const [importOnLock, setImportOnLock] = useImportOnLock();
   const [dockCompact, setDockCompact] = useDockCompact();
   const [shape, setShape] = useCompactShape();
@@ -87,6 +84,10 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
         <Row label={t("Toujours au premier plan en mode compact")} desc={t("La fenêtre compacte reste visible par-dessus le client LoL.")}>
           <Toggle on={onTop} onChange={() => onOnTop(!onTop)} label={t("Toujours au premier plan en mode compact")} />
         </Row>
+        <Row label={t("Alerte au début de la sélection")}
+             desc={t("Si Spec est réduit ou derrière le client, il clignote dans la barre des tâches quand la sélection des champions commence.")}>
+          <Toggle on={selectAlert} onChange={() => setSelectAlert(!selectAlert)} label={t("Alerte au début de la sélection")} />
+        </Row>
         <Row label={t("Raccourci pour afficher Spec")} error={!!shortcutErr && !!shortcut}
              desc={t("Ce raccourci est déjà pris par une autre appli : choisis-en un autre.")}>
           <ShortcutField value={shortcut} onChange={setShortcut} />
@@ -97,32 +98,19 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
         <Row label={t("Touche du Flash")} desc={t("L’ordre de tes sorts quand Spec les importe dans le client : Flash sur D ou sur F.")}>
           <Choice value={flashKey} onChange={setFlashKey} options={[["D", "D"], ["F", "F"]]} />
         </Row>
-        <Row label={t("Mode compact au début de la draft")}
-             desc={t("Quand la sélection des champions commence, Spec ouvre le mode compact en plus de sa fenêtre, qui reste où tu l’as laissée.")}>
-          <Toggle on={autoCompact} onChange={() => setAutoCompact(!autoCompact)} label={t("Mode compact au début de la draft")} />
+        <Row label={t("Mode compact pendant la draft")}
+             desc={t("Spec l’ouvre en plus de sa fenêtre quand la sélection des champions commence. Côté : à côté du client LoL. Bulle : posée sur le client, elle s’ouvre au survol et quand c’est à toi.")}>
+          <Choice value={shape} onChange={setShape} options={[["side", t("Côté")], ["bubble", t("Bulle")], ["off", t("Désactivé")]]} />
         </Row>
-        {autoCompact && (
-          <Row label={t("Forme du mode compact")} desc={t("Côté : une fenêtre à côté du client LoL. Bulle : posée dans le coin du client, elle s’ouvre au survol et quand c’est à toi.")}>
-            <Choice value={shape} onChange={setShape} options={[["side", t("Côté")], ["bubble", t("Bulle")]]} />
-          </Row>
-        )}
-        {autoCompact && shape === "side" && (
+        {shape === "side" && (
           <Row label={t("Coller le mode compact au client")}
                desc={t("Pendant la draft, la fenêtre compacte se place à côté du client LoL, à sa hauteur. Déplace-la pour la décoller.")}>
             <Toggle on={dockCompact} onChange={() => setDockCompact(!dockCompact)} label={t("Coller le mode compact au client")} />
           </Row>
         )}
-        <Row label={t("Importer runes et sorts au verrouillage")}
-             desc={t("Quand tu verrouilles ton champion, Spec importe les runes et les sorts conseillés. Spec ne verrouille jamais à ta place.")}>
-          <Toggle on={importOnLock} onChange={() => setImportOnLock(!importOnLock)} label={t("Importer runes et sorts au verrouillage")} />
-        </Row>
-        <Row label={t("Alerte au début de la sélection")}
-             desc={t("Si Spec est réduit ou derrière le client, il clignote dans la barre des tâches quand la sélection des champions commence.")}>
-          <Toggle on={selectAlert} onChange={() => setSelectAlert(!selectAlert)} label={t("Alerte au début de la sélection")} />
-        </Row>
-        <Row label={t("Set d’objets dans le shop")}
-             desc={t("Spec crée un set à son nom et le met à jour à la fin de la draft. Tes propres sets ne sont jamais modifiés.")}>
-          <Toggle on={itemSet} onChange={() => setItemSet(!itemSet)} label={t("Set d’objets dans le shop")} />
+        <Row label={t("Importer runes, sorts et set d’objets au verrouillage")}
+             desc={t("Runes et sorts conseillés quand tu verrouilles ton champion, puis set d’objets du shop à la fin de la draft. Spec ne verrouille jamais à ta place.")}>
+          <Toggle on={importOnLock} onChange={() => setImportOnLock(!importOnLock)} label={t("Importer runes, sorts et set d’objets au verrouillage")} />
         </Row>
         <Row label={t("Région des stats par défaut")}
              desc={t("Région affichée à l’ouverture de la tier list et des pages champion. La draft utilise toujours les stats EUW.")}>

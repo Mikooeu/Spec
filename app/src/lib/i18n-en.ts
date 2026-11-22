@@ -1284,4 +1284,9 @@ export const EN: Record<string, string> = {
   "Côté": "Side",
   "Bulle": "Bubble",
   "La sélection des champions est terminée.": "Champion select is over.",
+  "Mode compact pendant la draft": "Compact mode during the draft",
+  "Spec l’ouvre en plus de sa fenêtre quand la sélection des champions commence. Côté : à côté du client LoL. Bulle : posée sur le client, elle s’ouvre au survol et quand c’est à toi.": "Spec opens it alongside its window when champion select starts. Side: next to the LoL client. Bubble: sits on the client and opens on hover and when it's your turn.",
+  "Désactivé": "Off",
+  "Importer runes, sorts et set d’objets au verrouillage": "Import runes, spells and item set on lock-in",
+  "Runes et sorts conseillés quand tu verrouilles ton champion, puis set d’objets du shop à la fin de la draft. Spec ne verrouille jamais à ta place.": "Suggested runes and spells when you lock in your champion, then the shop item set at the end of the draft. Spec never locks in for you.",
 };

@@ -20,17 +20,19 @@ export const useRoles = () => usePersistent<Roles>("spec.roles", { main: null, s
 export const useOnboarded = () => usePersistent<boolean>("spec.onboarded", false);
 /** Au début de la sélection des champions, si Spec n'est pas au premier plan : clignote dans la barre des tâches. */
 export const useSelectAlert = () => usePersistent<boolean>("spec.alert.select", true);
-/** Début de la sélection des champions : Spec passe tout seul en mode compact, puis revient en grand quand la draft se termine. */
-export const useAutoCompact = () => usePersistent<boolean>("spec.compact.auto", true);
-/** Champion verrouillé : Spec importe tout seul les runes et les sorts conseillés (à activer dans les réglages). */
 /** Mode compact collé sur le côté du client LoL, à sa hauteur, pendant la draft. */
 export const useDockCompact = () => usePersistent<boolean>("spec.compact.dock", true);
 /** Forme du mode compact ouvert en plus pendant la draft : collé au côté du client, ou bulle posée dessus. */
-export const useCompactShape = () => usePersistent<"side" | "bubble">("spec.compact.shape", "side");
+export type CompactShape = "side" | "bubble" | "off";
+// avant la 0.18.1, un interrupteur à part (spec.compact.auto) : désactivé, il donne « Désactivé »
+const oldAutoOff = () => { try { return localStorage.getItem("spec.compact.auto") === "false"; } catch { return false; } };
+export const useCompactShape = () => usePersistent<CompactShape>("spec.compact.shape", oldAutoOff() ? "off" : "side");
 /** Raccourci global pour afficher ou cacher Spec (format des raccourcis Tauri, ex. « Alt+S »). Vide : désactivé. */
 export const useSpecShortcut = () => usePersistent<string>("spec.shortcut", "Alt+S");
 /** « Alt+S » → « Alt + S » pour l'affichage. */
 export const shortcutLabel = (accel: string) => accel.split("+").map((k) => (k === "Control" ? "Ctrl" : k === "Shift" ? t("Maj") : k)).join(" + ");
+/** Champion verrouillé : Spec importe tout seul les runes et les sorts conseillés, puis le set d'objets à la fin de la draft. */
+// réglage unique depuis la 0.18.1 (runes, sorts et set d'objets), désactivé par défaut : l'import sans clic reste un choix du joueur
 export const useImportOnLock = () => usePersistent<boolean>("spec.import.onLock", false);
 
 /** Lancement au démarrage de Windows (fenêtre réduite dans la barre des tâches). null : inconnu ou hors appli. */

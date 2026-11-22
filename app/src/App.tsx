@@ -17,7 +17,7 @@ import { loadStats, register, usePersonal, useRegionStats, type Region } from ".
 import { champName, int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
 import { importRunes, importSpells, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
 import { AutoImportContext, ItemSetImportContext, RuneImportContext, SpellImportContext, useFlashKey, type AutoImport } from "./components/Runes";
-import { importItemSet, useItemSetSetting } from "./lib/itemset";
+import { importItemSet } from "./lib/itemset";
 import { loadItems, useInfo } from "./lib/ddragon";
 import { REGION_LABEL, RegionSelect } from "./components/RegionSelect";
 import { applyCompact, registerShortcut, requestAttention, setOnTop, showMainWindow, toggleBuildWindow, toggleFromShortcut, watchCompactExpand } from "./lib/window";
@@ -38,7 +38,7 @@ import { Onboarding } from "./components/Onboarding";
 import { Tour, specTour } from "./components/Tour";
 import { PrivacyDialog } from "./components/PrivacyDialog";
 import { ReadyCheckToast } from "./components/ReadyCheck";
-import { useAutoCompact, useCompactShape, useDefaultRegion, useImportOnLock, useSpecShortcut, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
+import { useCompactShape, useDefaultRegion, useImportOnLock, useSpecShortcut, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
 import { t } from "./lib/i18n";
 import { usePublishState, type SharedState } from "./lib/bridge";
 import { TopBar, TopBarSlot } from "./components/TopBar";
@@ -115,18 +115,18 @@ export default function App() {
   useEffect(() => { if (!session) setRoleOverride(null); }, [session == null]); // eslint-disable-line react-hooks/exhaustive-deps
   const live = session ? sessionToDraft(session, roleOverride) : null;
   // set d'objets du shop : remis à jour quand la draft se termine (ton champion et les 5 adversaires verrouillés)
-  const [itemSetOn] = useItemSetSetting();
+  const [importOnLock] = useImportOnLock();   // runes et sorts au verrouillage, set d'objets à la fin de la draft
   const itemInfo = useInfo(loadItems, stats?.ddragon ?? "");
   const itemSetDone = useRef("");
   const draftEnd = live && live.myLocked && live.myChamp && live.enemies.every((e) => e != null) && live.enemies.length === 5
     ? `${live.myChamp}|${live.role}|${live.enemies.join(",")}` : "";
   useEffect(() => {
-    if (!draftEnd || !itemSetOn || !stats || !itemInfo || itemSetDone.current === draftEnd) return;
+    if (!draftEnd || !importOnLock || !stats || !itemInfo || itemSetDone.current === draftEnd) return;
     itemSetDone.current = draftEnd;
     const [champ, role, foes] = draftEnd.split("|");
     importItemSet(stats, Number(champ), Number(role), foes.split(",").map(Number), itemInfo)
       .then((err) => { if (err) console.warn("[item set]", err); });
-  }, [draftEnd, itemSetOn, stats, itemInfo]);
+  }, [draftEnd, importOnLock, stats, itemInfo]);
   const [roles, setRoles] = useRoles();
   const [tierRole, setTierRole] = useState(roles.main ?? 0);
   // région des stats de la tier list et des pages champion : celle des réglages à chaque lancement (la draft reste en EUW)
@@ -258,12 +258,11 @@ export default function App() {
   }, [inSelect]); // eslint-disable-line react-hooks/exhaustive-deps
   // début de la draft : la fenêtre principale reste où le joueur l'a laissée, et Spec ouvre en plus le mode compact
   // dans sa propre fenêtre (collée au côté du client, ou en bulle selon le réglage), refermée à la fin de la draft
-  const [autoCompact] = useAutoCompact();
   const [shape] = useCompactShape();
   const sideKind = shape === "bubble" ? "bubble" : "compact";
   const [sideDismissed, setSideDismissed] = useState(false);   // « Agrandir » : plus de fenêtre d'appoint pour cette draft
   useEffect(() => { if (!inSelect) setSideDismissed(false); }, [inSelect]);
-  const sideOpen = inSelect && autoCompact && stats != null && !onboarding && !compact && !sideDismissed;
+  const sideOpen = inSelect && shape !== "off" && stats != null && !onboarding && !compact && !sideDismissed;
   useEffect(() => {
     closeOverlay(sideKind === "bubble" ? "compact" : "bubble");
     if (sideOpen) openOverlay(sideKind); else closeOverlay(sideKind);
@@ -285,7 +284,6 @@ export default function App() {
   }, [shortcut]);
   useEffect(() => { if (!inGame) closeOverlay("build"); }, [inGame == null]); // eslint-disable-line react-hooks/exhaustive-deps
   // champion verrouillé : import des runes et des sorts conseillés, si le joueur a activé le réglage
-  const [importOnLock] = useImportOnLock();
   const [flashKey] = useFlashKey();
   const [autoImport, setAutoImport] = useState<AutoImport | null>(null);
   const autoImportKey = useRef("");
@@ -379,7 +377,7 @@ export default function App() {
   const isHome = !live && !inGame && !draft && !isRecap;
   const runeImporter = live ? importRunes : null;
   const spellImporter = live ? importSpells : null;
-  const itemSetImporter = live && itemSetOn && stats
+  const itemSetImporter = live && stats
     ? (champ: number, role: number) => importItemSet(stats, champ, role, live.enemies.filter((e): e is number => e != null), itemInfo)
     : null;
 

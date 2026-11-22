@@ -8,10 +8,7 @@ import type { InfoMap } from "./ddragon";
 import { t } from "./i18n";
 import { ROLE_LABELS, type Stats } from "./score";
 import { champName } from "./ui";
-import { usePersistent } from "./ui";
 
-/** Réglage : écrire le set d'objets (à l'import et à la fin de la draft). */
-export const useItemSetSetting = () => usePersistent<boolean>("spec.itemset", true);
 export function itemSetEnabled(): boolean {
   try { return JSON.parse(localStorage.getItem("spec.itemset") ?? "true") !== false; } catch { return true; }
 }

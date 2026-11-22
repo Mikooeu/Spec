@@ -11,7 +11,7 @@ import { banSuggestions, ROLE_LABELS, type Stats } from "../lib/score";
 import { champName, pct, usePersistent, wrTone } from "../lib/ui";
 import { sendAction, useSharedState, type SharedState } from "../lib/bridge";
 import { importRunes, importSpells, IN_APP } from "../lib/lcu";
-import { importItemSet, useItemSetSetting } from "../lib/itemset";
+import { importItemSet } from "../lib/itemset";
 import { dockToClient, resetDock, setOnTop } from "../lib/window";
 import { shortcutLabel, useSpecShortcut } from "../lib/settings";
 import { useLiveGame } from "../lib/live";
@@ -45,10 +45,9 @@ function useTransparentPage() {
 
 /** Importeurs de runes, sorts et set d'objets, comme dans la fenêtre principale. */
 function Importers({ stats, shared, children }: { stats: Stats; shared: SharedState; children: ReactNode }) {
-  const [itemSetOn] = useItemSetSetting();
   const itemInfo = useInfo(loadItems, stats.ddragon);
   const enemies = (shared.draft?.enemies ?? []).filter((e): e is number => e != null);
-  const itemSet = shared.live && itemSetOn ? (champ: number, role: number) => importItemSet(stats, champ, role, enemies, itemInfo) : null;
+  const itemSet = shared.live ? (champ: number, role: number) => importItemSet(stats, champ, role, enemies, itemInfo) : null;
   return (
     <RuneImportContext.Provider value={shared.live ? importRunes : null}>
       <AutoImportContext.Provider value={shared.autoImport}>
