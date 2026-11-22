@@ -81,6 +81,95 @@ async function fit(w: Win["w"], LogicalSize: Win["LogicalSize"]): Promise<boolea
   return true;
 }
 
+// ---------- mode compact collé au client LoL ----------
+
+/** Dernière place donnée à la fenêtre compacte (pixels physiques), pour savoir si le joueur l'a déplacée lui-même. */
+let docked: { x: number; y: number } | null = null;
+
+/** Oublie la dernière place collée (nouvelle draft, sortie du mode compact). */
+export function resetDock(): void { docked = null; }
+
+/** Colle la fenêtre compacte contre le bord droit du client LoL (ou le gauche s'il n'y a pas de place), à la même hauteur.
+ *  « moved » : le joueur a déplacé la fenêtre lui-même, on arrête de la coller jusqu'à la prochaine draft.
+ *  « none » : client introuvable ou réduit, rien n'a bougé. */
+export async function dockToClient(): Promise<"ok" | "moved" | "none"> {
+  if (!IN_APP) return "none";
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const rect = await invoke<[number, number, number, number] | null>("client_window");
+    if (!rect) return "none";
+    const [cx, cy, cw, ch] = rect;
+    const mod = await import("@tauri-apps/api/window");
+    const w = mod.getCurrentWindow();
+    const pos = await w.outerPosition();
+    if (docked && (Math.abs(pos.x - docked.x) > 8 || Math.abs(pos.y - docked.y) > 8)) return "moved";
+    const scale = await w.scaleFactor();
+    const outer = await w.outerSize(), inner = await w.innerSize();
+    const width = Math.round(COMPACT.width * scale) + (outer.width - inner.width);
+    // écran qui contient le centre du client : on ne sort pas de cet écran
+    const mons = await mod.availableMonitors();
+    const mx = cx + cw / 2, my = cy + ch / 2;
+    const mon = mons.find((m) => mx >= m.position.x && mx < m.position.x + m.size.width && my >= m.position.y && my < m.position.y + m.size.height) ?? mons[0];
+    const left = mon ? mon.position.x : -Infinity, right = mon ? mon.position.x + mon.size.width : Infinity;
+    let x = cx + cw;
+    if (x + width > right) x = cx - width >= left ? cx - width : right - width;   // pas de place : à gauche, sinon par-dessus le bord du client
+    if (pos.x !== x || pos.y !== cy || outer.height !== ch || outer.width !== width) {
+      await w.setSize(new mod.PhysicalSize(width - (outer.width - inner.width), ch - (outer.height - inner.height)));
+      await w.setPosition(new mod.PhysicalPosition(x, cy));
+    }
+    docked = { x, y: cy };
+    return "ok";
+  } catch {
+    return "none";
+  }
+}
+
+// ---------- raccourci global : afficher ou cacher Spec ----------
+
+let raisedByShortcut = false;
+/** Pendant qu'on choisit un nouveau raccourci dans Réglages, l'ancien ne doit pas ranger la fenêtre. */
+let shortcutPaused = false;
+export function pauseShortcut(on: boolean): void { shortcutPaused = on; }
+/** Dernière erreur d'enregistrement du raccourci (déjà pris par une autre appli), affichée dans Réglages. */
+let shortcutError: string | null = null;
+export const getShortcutError = () => shortcutError;
+
+/** Raccourci appuyé : Spec passe devant (même par-dessus le jeu en fenêtré sans bordure) ; deuxième appui : il se range.
+ *  `keepOnTop` : la fenêtre est déjà au premier plan (mode compact), on lui rend cet état en la rangeant. */
+export async function toggleFromShortcut(keepOnTop: boolean): Promise<void> {
+  if (!IN_APP) return;
+  try {
+    const w = (await import("@tauri-apps/api/window")).getCurrentWindow();
+    const shown = (await w.isVisible()) && !(await w.isMinimized());
+    if (shown && (raisedByShortcut || (await w.isFocused()))) {
+      if (raisedByShortcut) await w.setAlwaysOnTop(keepOnTop);
+      raisedByShortcut = false;
+      await w.minimize();
+      return;
+    }
+    await w.unminimize();
+    await w.show();
+    if (!keepOnTop) { await w.setAlwaysOnTop(true); raisedByShortcut = true; }
+    await w.setFocus();
+  } catch { /* permission manquante : rien à faire */ }
+}
+
+/** Enregistre le raccourci global. Renvoie la fonction pour le retirer, ou une erreur lisible s'il est déjà pris. */
+export async function registerShortcut(accel: string, onPress: () => void): Promise<{ stop: () => void; error: string | null }> {
+  if (!IN_APP || !accel) return { stop: () => undefined, error: null };
+  try {
+    const gs = await import("@tauri-apps/plugin-global-shortcut");
+    await gs.register(accel, (e) => { if (e.state === "Pressed" && !shortcutPaused) onPress(); });
+    shortcutError = null;
+    window.dispatchEvent(new Event("spec-shortcut"));
+    return { stop: () => { gs.unregister(accel).catch(() => undefined); }, error: null };
+  } catch (e) {
+    shortcutError = String(e);
+    window.dispatchEvent(new Event("spec-shortcut"));
+    return { stop: () => undefined, error: shortcutError };
+  }
+}
+
 /** Fait clignoter Spec dans la barre des tâches jusqu'à ce que la fenêtre soit ouverte (début de la sélection). */
 export async function requestAttention(): Promise<void> {
   if (!IN_APP) return;
@@ -88,4 +177,25 @@ export async function requestAttention(): Promise<void> {
     const mod = await import("@tauri-apps/api/window");
     await mod.getCurrentWindow().requestUserAttention(mod.UserAttentionType.Critical);
   } catch { /* ignoré */ }
+}
+
+/** Remet la fenêtre principale devant (bouton « Agrandir » d'une fenêtre d'appoint). */
+export async function showMainWindow(): Promise<void> {
+  if (!IN_APP) return;
+  try {
+    const w = (await import("@tauri-apps/api/window")).getCurrentWindow();
+    await w.unminimize();
+    await w.show();
+    await w.setFocus();
+  } catch { /* ignoré */ }
+}
+
+/** En partie : ouvre le menu de build seul par-dessus le jeu, ou le referme s'il est déjà affiché. */
+export async function toggleBuildWindow(): Promise<void> {
+  if (!IN_APP) return;
+  const { openOverlay, closeOverlay } = await import("./overlay");
+  try {
+    const { Window } = await import("@tauri-apps/api/window");
+    if (await Window.getByLabel("build")) await closeOverlay("build"); else await openOverlay("build");
+  } catch { await openOverlay("build"); }
 }

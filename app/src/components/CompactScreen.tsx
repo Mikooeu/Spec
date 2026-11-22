@@ -41,7 +41,7 @@ export function CompactScreen(props: Props) {
   const { draft, live, onTop, onToggleTop, onExpand } = props;
   return (
     <div className="compact">
-      <header className="compact__bar">
+      <header className="compact__bar" data-tauri-drag-region>
         <Logo className="brand__mark brand__mark--small" />
         <span className="compact__title">
           {props.game ? t("En partie") : draft ? t("Tu joues {v}", { v: ROLE_LABELS[draft.role] }) : t("Spec")}

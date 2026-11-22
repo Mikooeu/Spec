@@ -20,6 +20,7 @@ export interface Session {
   theirTeam: Member[];
   actions?: Action[][];
   bans?: { myTeamBans?: number[]; theirTeamBans?: number[] };
+  timer?: { phase?: string };       // PLANNING (annonce des picks), BAN_PICK, FINALIZATION
 }
 
 export type ClientState =
@@ -57,6 +58,9 @@ export interface LiveDraft {
   myChamp: number | null;           // ton champion : survolé ou verrouillé
   myLocked: boolean;
   banPhase: boolean;                // il te reste un ban à faire
+  planning: boolean;                // annonce des picks, avant les bans
+  myTurn: boolean;                  // c'est à toi de choisir ton champion
+  picksBefore: number;              // picks encore à faire avant le tien (0 si c'est à toi ou déjà fait)
 }
 
 const POSITIONS: Record<string, number> = { top: 0, jungle: 1, middle: 2, bottom: 3, utility: 4 };
@@ -117,9 +121,17 @@ export function sessionToDraft(s: Session, chosenRole: number | null): LiveDraft
   const banPhase = (s.actions ?? []).flat()
     .some((a) => a.actorCellId === s.localPlayerCellId && a.type === "ban" && !a.completed);
 
+  // tour de pick : groupes d'actions dans l'ordre ; on compte les picks pas encore faits avant le groupe du joueur
+  const groups = s.actions ?? [];
+  const myGroup = groups.findIndex((g) => g.some((a) => a.actorCellId === s.localPlayerCellId && a.type === "pick" && !a.completed));
+  const myTurn = myGroup >= 0 && groups[myGroup].some((a) => a.actorCellId === s.localPlayerCellId && a.type === "pick" && !!a.isInProgress);
+  const picksBefore = myGroup < 0 || myTurn ? 0
+    : groups.slice(0, myGroup).flat().filter((a) => a.type === "pick" && !a.completed).length;
+  const planning = (s.timer?.phase ?? "").toUpperCase() === "PLANNING";
+
   return { role, assigned: assignedRole != null && chosenRole == null, allies, allyLocked,
            enemies: enemies.slice(0, 5), bans: [...bans], allyBans: [...allyBans].slice(0, 5), enemyBans: [...enemyBans].slice(0, 5),
-           allyPicking, enemyPicking, myChamp, myLocked, banPhase };
+           allyPicking, enemyPicking, myChamp, myLocked, banPhase, planning, myTurn, picksBefore };
 }
 
 /** Action de pick du joueur encore ouverte, ou null. */

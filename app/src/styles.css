@@ -2395,3 +2395,68 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .grecap--cols > .grecap__col:first-child { position: relative; z-index: 2; }
 .grecap-curve__note.is-right { transform: translate(calc(-100% + 0.75rem), calc(-100% - 0.875rem)); }
 .grecap-curve__note.is-left { transform: translate(-0.75rem, calc(-100% - 0.875rem)); }
+
+/* 0.16.1 · choix du raccourci global dans Réglages */
+.shortcut-field { min-width: 7.5rem; font-variant-numeric: tabular-nums; }
+.shortcut-field.is-listening { border-color: var(--accent, #0a84ff); color: var(--accent, #0a84ff); }
+
+/* ---------- fenêtres d'appoint : bulle et menu de build seul (fond transparent) ---------- */
+.bubble-host { height: 100%; display: flex; align-items: flex-end; justify-content: flex-end; padding: 0.5rem; }
+.bubble-stack { width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 0.5rem; position: relative; }
+.bubble-pill { display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.5rem 0.5rem 0.75rem; min-height: 3.5rem;
+  border-radius: 999px; background: rgba(28, 28, 31, 0.94); border: 1px solid var(--border);
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.45); backdrop-filter: blur(20px); }
+.bubble-pill__logo { flex: none; width: 1.125rem; height: 1.125rem; }
+.bubble-pill__text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.bubble-pill__text strong { font-size: 0.8125rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bubble-pill__text small { font-size: 0.6875rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bubble-pill__action { flex: none; padding: 0.4375rem 0.75rem; border-radius: 999px; font-size: 0.75rem; }
+.bubble-pill--bad { border-color: rgba(255, 69, 58, 0.55); }
+.bubble-pill--bad .bubble-pill__action { background: var(--bad); }
+.bubble-pill--good { border-color: rgba(48, 209, 88, 0.45); }
+.bubble-pill.is-glow, .bubble-card.is-glow { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 1.5rem rgba(64, 156, 255, 0.45); }
+.bubble-card { display: flex; flex-direction: column; gap: 0.625rem; padding: 0.875rem; border-radius: 1rem;
+  background: rgba(28, 28, 31, 0.96); border: 1px solid var(--border); box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.5);
+  animation: bubble-in 160ms ease-out; }
+@keyframes bubble-in { from { opacity: 0; transform: translateY(0.375rem); } to { opacity: 1; transform: none; } }
+.bubble-card__head { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; }
+.bubble-card__head .link { font-size: 0.75rem; }
+.bubble-card__hint { margin: 0; font-size: 0.75rem; color: var(--text-2); }
+.bubble-card__hint--center { text-align: center; }
+.bubble-card__ok { margin: 0; text-align: center; font-size: 0.8125rem; color: var(--good); }
+.bubble-card__cta { width: 100%; }
+.bubble-card__more { display: none; }
+.bubble-rows { display: flex; flex-direction: column; gap: 0.25rem; }
+.bubble-row { display: flex; align-items: center; gap: 0.625rem; width: 100%; padding: 0.375rem 0.5rem; border-radius: 0.625rem;
+  text-align: left; border: 1px solid transparent; }
+.bubble-row:hover { background: var(--bg-surface-2); }
+.bubble-row.is-selected { background: var(--accent-tint); border-color: rgba(64, 156, 255, 0.5); }
+.bubble-row.is-ban { background: rgba(255, 69, 58, 0.12); border-color: rgba(255, 69, 58, 0.45); }
+.bubble-row__text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.bubble-row__text strong { font-size: 0.8125rem; font-weight: 600; }
+.bubble-row__text small { font-size: 0.6875rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bubble-row__val { flex: none; font-size: 0.875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bubble-pager { position: relative; display: flex; align-items: center; gap: 0.375rem; }
+.bubble-pager__view { flex: 1; min-width: 0; overflow: hidden; }
+.bubble-pager__track { display: flex; transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.bubble-pager__page { flex: none; width: 100%; }
+.bubble-pager__arrow { flex: none; width: 1.75rem; height: 1.75rem; border-radius: 50%; display: grid; place-items: center;
+  background: var(--bg-surface-2); color: var(--text); }
+.bubble-pager__arrow:hover { background: var(--accent-tint); color: var(--accent); }
+.bubble-pager__foot { display: flex; align-items: center; justify-content: space-between; font-size: 0.6875rem; color: var(--text-2); }
+.bubble-dots { display: inline-flex; gap: 0.25rem; }
+.bubble-dots i { width: 0.375rem; height: 0.375rem; border-radius: 50%; background: var(--bg-surface-2); }
+.bubble-dots i.is-on { background: var(--accent); }
+.bubble-toast { position: absolute; left: 0; right: 0; bottom: calc(100% + 0.5rem); padding: 0.5rem 0.75rem; border-radius: 0.625rem;
+  font-size: 0.75rem; background: rgba(28, 28, 31, 0.96); border: 1px solid var(--border); }
+@media (prefers-reduced-motion: reduce) { .bubble-pager__track, .bubble-card { transition: none; animation: none; } }
+
+.build-window { position: relative; height: 100%; display: flex; flex-direction: column; margin: 1rem; height: calc(100% - 2rem);
+  border-radius: 1rem; overflow: hidden; background: var(--bg-window); border: 1px solid var(--border);
+  box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.55); }
+.build-window__bar { padding: 0 0.75rem 0 1.25rem; }
+.build-window__body { flex: 1; min-height: 0; overflow: auto; padding: 1rem 1.25rem; }
+.build-window__hint { position: absolute; left: 50%; bottom: 1rem; transform: translateX(-50%); padding: 0.5rem 0.875rem;
+  border-radius: 999px; font-size: 0.75rem; background: rgba(28, 28, 31, 0.94); border: 1px solid var(--border);
+  animation: hint-out 4s forwards; pointer-events: none; }
+@keyframes hint-out { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }

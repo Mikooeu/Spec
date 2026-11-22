@@ -29,6 +29,9 @@ export interface Draft {
   myChamp?: number | null;         // ton champion, survolé ou verrouillé
   myLocked?: boolean;
   banPhase?: boolean;              // il te reste un ban à faire
+  planning?: boolean;              // en direct : annonce des picks, avant les bans
+  myTurn?: boolean;                // en direct : c'est à toi de choisir
+  picksBefore?: number;            // en direct : picks à faire avant le tien
 }
 
 interface Props {

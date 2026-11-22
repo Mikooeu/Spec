@@ -20,7 +20,7 @@ import { AutoImportContext, ItemSetImportContext, RuneImportContext, SpellImport
 import { importItemSet, useItemSetSetting } from "./lib/itemset";
 import { loadItems, useInfo } from "./lib/ddragon";
 import { REGION_LABEL, RegionSelect } from "./components/RegionSelect";
-import { applyCompact, requestAttention, setOnTop, watchCompactExpand } from "./lib/window";
+import { applyCompact, registerShortcut, requestAttention, setOnTop, showMainWindow, toggleBuildWindow, toggleFromShortcut, watchCompactExpand } from "./lib/window";
 import { CompactScreen } from "./components/CompactScreen";
 import { InGameView, type GameStart } from "./components/InGameScreen";
 import { RecapView } from "./components/RecapView";
@@ -38,8 +38,9 @@ import { Onboarding } from "./components/Onboarding";
 import { Tour, specTour } from "./components/Tour";
 import { PrivacyDialog } from "./components/PrivacyDialog";
 import { ReadyCheckToast } from "./components/ReadyCheck";
-import { useAutoCompact, useDefaultRegion, useImportOnLock, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
+import { useAutoCompact, useCompactShape, useDefaultRegion, useImportOnLock, useSpecShortcut, useOnboarded, useRoles, useSelectAlert } from "./lib/settings";
 import { t } from "./lib/i18n";
+import { usePublishState, type SharedState } from "./lib/bridge";
 import { TopBar, TopBarSlot } from "./components/TopBar";
 
 type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "overlay" | "settings";
@@ -255,23 +256,34 @@ export default function App() {
   useEffect(() => {
     if (inSelect && selectAlert && (document.hidden || !document.hasFocus())) requestAttention();
   }, [inSelect]); // eslint-disable-line react-hooks/exhaustive-deps
-  // début de la draft : Spec passe tout seul en mode compact, et revient en grand quand la draft se termine
-  // (seulement s'il était en grand avant : un joueur déjà en compact y reste)
+  // début de la draft : la fenêtre principale reste où le joueur l'a laissée, et Spec ouvre en plus le mode compact
+  // dans sa propre fenêtre (collée au côté du client, ou en bulle selon le réglage), refermée à la fin de la draft
   const [autoCompact] = useAutoCompact();
-  const autoOpened = useRef(false);
-  const selectHandled = useRef(false);   // une seule bascule par draft, une fois les stats chargées
+  const [shape] = useCompactShape();
+  const sideKind = shape === "bubble" ? "bubble" : "compact";
+  const [sideDismissed, setSideDismissed] = useState(false);   // « Agrandir » : plus de fenêtre d'appoint pour cette draft
+  useEffect(() => { if (!inSelect) setSideDismissed(false); }, [inSelect]);
+  const sideOpen = inSelect && autoCompact && stats != null && !onboarding && !compact && !sideDismissed;
   useEffect(() => {
-    if (inSelect) {
-      if (selectHandled.current || !stats || onboarding) return;
-      selectHandled.current = true;
-      if (autoCompact && !compact) { autoOpened.current = true; setCompact(true); }
-      return;
-    }
-    selectHandled.current = false;
-    if (autoOpened.current) { autoOpened.current = false; setCompact(false); }
-  }, [inSelect, stats != null, onboarding]); // eslint-disable-line react-hooks/exhaustive-deps
-  // repassé en grand par le joueur pendant la draft : Spec n'y touche plus jusqu'à la prochaine draft
-  useEffect(() => { if (!compact) autoOpened.current = false; }, [compact]);
+    closeOverlay(sideKind === "bubble" ? "compact" : "bubble");
+    if (sideOpen) openOverlay(sideKind); else closeOverlay(sideKind);
+  }, [sideOpen, sideKind]);
+  // raccourci global : en partie, affiche le menu de build seul par-dessus le jeu (et le range au deuxième appui) ;
+  // hors partie, affiche ou range la fenêtre de Spec
+  const [shortcut] = useSpecShortcut();
+  const onTopNow = useRef(false);
+  onTopNow.current = compact && onTop;
+  const inGameNow = useRef(false);
+  inGameNow.current = inGame != null;
+  useEffect(() => {
+    let stop: () => void = () => undefined, cancelled = false;
+    registerShortcut(shortcut, () => (inGameNow.current ? toggleBuildWindow() : toggleFromShortcut(onTopNow.current))).then((r) => {
+      if (cancelled) r.stop(); else stop = r.stop;
+      if (r.error) console.warn("[Spec] raccourci indisponible", shortcut, r.error);
+    });
+    return () => { cancelled = true; stop(); };
+  }, [shortcut]);
+  useEffect(() => { if (!inGame) closeOverlay("build"); }, [inGame == null]); // eslint-disable-line react-hooks/exhaustive-deps
   // champion verrouillé : import des runes et des sorts conseillés, si le joueur a activé le réglage
   const [importOnLock] = useImportOnLock();
   const [flashKey] = useFlashKey();
@@ -319,6 +331,21 @@ export default function App() {
   const [clientOn, clientText] = clientStatus(client);
   const doPreselect = (champ: number) => preselect(session!, champ);
   const doBan = (champ: number) => preselectBan(session!, champ);
+  // état de la draft envoyé aux fenêtres d'appoint (mode compact, bulle, menu de build), qui renvoient les actions du joueur
+  const sideDraft = live ?? null;
+  const shared = useMemo<SharedState>(() => ({
+    draft: sideDraft, live: !!live, pool: sideDraft ? pools[sideDraft.role] : [], perso, autoImport,
+    clientOn, clientText, inGame,
+  }), [JSON.stringify(sideDraft), !!live, pools, perso, autoImport, clientOn, clientText, inGame]); // eslint-disable-line react-hooks/exhaustive-deps
+  usePublishState(shared, async (a) => {
+    switch (a.kind) {
+      case "preselect": return session ? preselect(session, a.champ) : t("La sélection des champions est terminée.");
+      case "ban": return session ? preselectBan(session, a.champ) : t("La sélection des champions est terminée.");
+      case "role": setRoleOverride(a.role); return null;
+      case "pool": setSideDismissed(true); onPool(a.role); await showMainWindow(); return null;
+      case "expand": setSideDismissed(true); setScreen("draft"); await showMainWindow(); return null;
+    }
+  });
 
   useEffect(() => {
     loadStats()

@@ -7,7 +7,8 @@ import type { Account } from "../lib/lcu";
 import { useFlashKey } from "./Runes";
 import { Segmented } from "./Segmented";
 import { useItemSetSetting } from "../lib/itemset";
-import { appVersion, autostartEnabled, installPath, revealInstall, setAutostart, useAutoCompact, useDefaultRegion, useImportOnLock, useLang, useSelectAlert } from "../lib/settings";
+import { appVersion, autostartEnabled, installPath, revealInstall, setAutostart, shortcutLabel, useAutoCompact, useCompactShape, useDefaultRegion, useDockCompact, useImportOnLock, useLang, useSelectAlert, useSpecShortcut } from "../lib/settings";
+import { getShortcutError, pauseShortcut } from "../lib/window";
 import type { CheckResult } from "../lib/updater";
 import { t } from "../lib/i18n";
 
@@ -30,6 +31,15 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
   const [itemSet, setItemSet] = useItemSetSetting();
   const [autoCompact, setAutoCompact] = useAutoCompact();
   const [importOnLock, setImportOnLock] = useImportOnLock();
+  const [dockCompact, setDockCompact] = useDockCompact();
+  const [shape, setShape] = useCompactShape();
+  const [shortcut, setShortcut] = useSpecShortcut();
+  const [shortcutErr, setShortcutErr] = useState(getShortcutError());
+  useEffect(() => {
+    const on = () => setShortcutErr(getShortcutError());
+    window.addEventListener("spec-shortcut", on);
+    return () => window.removeEventListener("spec-shortcut", on);
+  }, []);
   const [copied, setCopied] = useState(false);
   const [del, setDel] = useState<"idle" | "confirm" | "busy" | "done" | string>("idle");
   const [lang, setLang] = useLang();
@@ -77,6 +87,10 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
         <Row label={t("Toujours au premier plan en mode compact")} desc={t("La fenêtre compacte reste visible par-dessus le client LoL.")}>
           <Toggle on={onTop} onChange={() => onOnTop(!onTop)} label={t("Toujours au premier plan en mode compact")} />
         </Row>
+        <Row label={t("Raccourci pour afficher Spec")} error={!!shortcutErr && !!shortcut}
+             desc={t("Ce raccourci est déjà pris par une autre appli : choisis-en un autre.")}>
+          <ShortcutField value={shortcut} onChange={setShortcut} />
+        </Row>
       </Section>
 
       <Section title={t("Draft")}>
@@ -84,9 +98,20 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
           <Choice value={flashKey} onChange={setFlashKey} options={[["D", "D"], ["F", "F"]]} />
         </Row>
         <Row label={t("Mode compact au début de la draft")}
-             desc={t("Spec passe en mode compact quand la sélection des champions commence, et revient en grand à la fin de la draft.")}>
+             desc={t("Quand la sélection des champions commence, Spec ouvre le mode compact en plus de sa fenêtre, qui reste où tu l’as laissée.")}>
           <Toggle on={autoCompact} onChange={() => setAutoCompact(!autoCompact)} label={t("Mode compact au début de la draft")} />
         </Row>
+        {autoCompact && (
+          <Row label={t("Forme du mode compact")} desc={t("Côté : une fenêtre à côté du client LoL. Bulle : posée dans le coin du client, elle s’ouvre au survol et quand c’est à toi.")}>
+            <Choice value={shape} onChange={setShape} options={[["side", t("Côté")], ["bubble", t("Bulle")]]} />
+          </Row>
+        )}
+        {autoCompact && shape === "side" && (
+          <Row label={t("Coller le mode compact au client")}
+               desc={t("Pendant la draft, la fenêtre compacte se place à côté du client LoL, à sa hauteur. Déplace-la pour la décoller.")}>
+            <Toggle on={dockCompact} onChange={() => setDockCompact(!dockCompact)} label={t("Coller le mode compact au client")} />
+          </Row>
+        )}
         <Row label={t("Importer runes et sorts au verrouillage")}
              desc={t("Quand tu verrouilles ton champion, Spec importe les runes et les sorts conseillés. Spec ne verrouille jamais à ta place.")}>
           <Toggle on={importOnLock} onChange={() => setImportOnLock(!importOnLock)} label={t("Importer runes et sorts au verrouillage")} />
@@ -172,6 +197,36 @@ export function Section({ title, children }: { title: string; children: React.Re
       <h2>{title}</h2>
       <div className="card settings__card">{children}</div>
     </section>
+  );
+}
+
+/** Choix du raccourci : clic, puis la combinaison voulue (au moins Ctrl, Alt ou Maj, sauf touches F1 à F12).
+ *  Échap annule, Retour arrière désactive le raccourci. */
+function ShortcutField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [listening, setListening] = useState(false);
+  useEffect(() => {
+    if (!listening) return;
+    pauseShortcut(true);
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") { setListening(false); return; }
+      if (e.key === "Backspace" || e.key === "Delete") { onChange(""); setListening(false); return; }
+      const key = /^Key([A-Z])$/.exec(e.code)?.[1] ?? /^Digit(\d)$/.exec(e.code)?.[1] ?? (/^F([1-9]|1[0-2])$/.test(e.code) ? e.code : null);
+      if (!key) return;   // une touche de modification seule : on attend la suite
+      const mods = [e.ctrlKey && "Control", e.altKey && "Alt", e.shiftKey && "Shift"].filter((m): m is string => !!m);
+      if (!mods.length && !key.startsWith("F")) return;   // une lettre seule gênerait la saisie en jeu
+      onChange([...mods, key].join("+"));
+      setListening(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => { window.removeEventListener("keydown", onKey, true); pauseShortcut(false); };
+  }, [listening, onChange]);
+  return (
+    <button className={`btn btn--secondary btn--tiny shortcut-field${listening ? " is-listening" : ""}`} onClick={() => setListening(!listening)}
+            aria-label={t("Raccourci pour afficher Spec")}>
+      {listening ? t("Appuie sur ta combinaison…") : value ? shortcutLabel(value) : t("Aucun")}
+    </button>
   );
 }
 

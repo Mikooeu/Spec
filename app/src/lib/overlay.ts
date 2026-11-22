@@ -47,10 +47,12 @@ export function useOverlaySettings(): [OverlaySettings, (s: OverlaySettings) => 
   return [s, save];
 }
 
-export type OverlayKind = "overlay" | "loading";
+export type OverlayKind = "overlay" | "loading" | "compact" | "bubble" | "build";
 
 // état voulu de chaque fenêtre : une fermeture demandée pendant l'ouverture (fenêtre encore en création) l'emporte
-const want: Record<OverlayKind, boolean> = { overlay: false, loading: false };
+const want: Record<OverlayKind, boolean> = { overlay: false, loading: false, compact: false, bubble: false, build: false };
+/** Fenêtre ouverte (ou en cours d'ouverture) d'après les demandes de cette fenêtre-ci. */
+export const isOverlayWanted = (kind: OverlayKind) => want[kind];
 
 export async function openOverlay(kind: OverlayKind): Promise<void> {
   if (!IN_APP) return;
@@ -73,5 +75,5 @@ export async function setOverlayInteractive(on: boolean): Promise<void> {
 /** Vue affichée par cette fenêtre : l'appli, ou l'une des fenêtres par-dessus le jeu (?view=…). */
 export function currentView(): "app" | OverlayKind {
   const v = new URLSearchParams(location.search).get("view");
-  return v === "overlay" || v === "loading" ? v : "app";
+  return v === "overlay" || v === "loading" || v === "compact" || v === "bubble" || v === "build" ? v : "app";
 }

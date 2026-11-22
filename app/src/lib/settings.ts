@@ -23,6 +23,14 @@ export const useSelectAlert = () => usePersistent<boolean>("spec.alert.select", 
 /** Début de la sélection des champions : Spec passe tout seul en mode compact, puis revient en grand quand la draft se termine. */
 export const useAutoCompact = () => usePersistent<boolean>("spec.compact.auto", true);
 /** Champion verrouillé : Spec importe tout seul les runes et les sorts conseillés (à activer dans les réglages). */
+/** Mode compact collé sur le côté du client LoL, à sa hauteur, pendant la draft. */
+export const useDockCompact = () => usePersistent<boolean>("spec.compact.dock", true);
+/** Forme du mode compact ouvert en plus pendant la draft : collé au côté du client, ou bulle posée dessus. */
+export const useCompactShape = () => usePersistent<"side" | "bubble">("spec.compact.shape", "side");
+/** Raccourci global pour afficher ou cacher Spec (format des raccourcis Tauri, ex. « Alt+S »). Vide : désactivé. */
+export const useSpecShortcut = () => usePersistent<string>("spec.shortcut", "Alt+S");
+/** « Alt+S » → « Alt + S » pour l'affichage. */
+export const shortcutLabel = (accel: string) => accel.split("+").map((k) => (k === "Control" ? "Ctrl" : k === "Shift" ? t("Maj") : k)).join(" + ");
 export const useImportOnLock = () => usePersistent<boolean>("spec.import.onLock", false);
 
 /** Lancement au démarrage de Windows (fenêtre réduite dans la barre des tâches). null : inconnu ou hors appli. */
