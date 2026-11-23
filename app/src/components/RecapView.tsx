@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { CDN } from "../lib/ddragon";
+import { MAP_SIZE, RIFT, ZONE_LABEL, ZONE_PATHS, ZONES, zoneAt, type ZoneCode } from "../lib/riftMap";
 import { gameLp, type Game } from "../lib/history";
 import { plural, t } from "../lib/i18n";
 import { loadRecap, useRoleGuess, type Bar, type Mark, type Recap, type Spot, type Tip } from "../lib/recap";
@@ -348,27 +348,23 @@ function GoldCurve({ r, focus }: { r: Recap; focus: number | null }) {
   );
 }
 
-/** Petite carte de tes déplacements ; « Agrandir » ouvre la carte complète avec les périodes. */
+/** Petite carte de tes zones ; « Agrandir » ouvre la carte complète avec les périodes, les % et tes morts par zone. */
 function PositionCard({ stats, r }: { stats: Stats; r: Recap }) {
+  void stats;
   const [big, setBig] = useState(false);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const c = canvas.current, ctx = c?.getContext("2d");
-    if (c && ctx) drawHeat(ctx, c.width, r.heat.path);
-  }, [r]);
   useEffect(() => {
     if (!big) return;
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") setBig(false); };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, [big]);
+  const share = useMemo(() => zoneShares(r.heat.path), [r]);
   const zones = r.zones.length === 2 ? t("Surtout {a} et {b}.", { a: r.zones[0], b: r.zones[1] }) : r.zones.length ? t("Surtout {a}.", { a: r.zones[0] }) : "";
   return (
     <section className="card grecap-card grecap-pos">
       <div className="grecap-head"><h2>{t("Ta position")}</h2><span className="grow" />
         {r.heat.path.length > 0 && <button className="link-btn" onClick={() => setBig(true)}>{t("Agrandir")}</button>}</div>
       <button className="grecap-map grecap-map--small" onClick={() => setBig(true)} disabled={!r.heat.path.length} aria-label={t("Agrandir la carte")}>
-        <img src={`${CDN}/${stats.ddragon}/img/map/map11.png`} alt="" />
-        <canvas ref={canvas} width={256} height={256} />
+        <RiftZones share={share} deaths={r.heat.deaths} />
         {!r.heat.path.length && <p className="grecap-map__empty">{t("Pas de positions pour cette partie.")}</p>}
       </button>
       {zones && <small className="muted">{zones}</small>}
@@ -377,7 +373,7 @@ function PositionCard({ stats, r }: { stats: Stats; r: Recap }) {
         <div className="grecap-modal" role="dialog" aria-modal="true" aria-label={t("Ta position")} onClick={() => setBig(false)}>
           <div className="card grecap-card grecap-modal__box" onClick={(e) => e.stopPropagation()}>
             <div className="grecap-head"><h2>{t("Tes déplacements")}</h2><span className="grow" /><button className="btn btn--secondary btn--small" autoFocus onClick={() => setBig(false)}>{t("Fermer")}</button></div>
-            <Heatmap stats={stats} heat={r.heat} side={r.side} duration={r.duration} />
+            <ZoneMap heat={r.heat} side={r.side} duration={r.duration} />
           </div>
         </div>, document.body)}
     </section>
@@ -390,17 +386,93 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone?: "goo
 
 type Period = "all" | "early" | "late";
 
-function Heatmap({ stats, heat, side, duration }: { stats: Stats; heat: Recap["heat"]; side: 0 | 1; duration: number }) {
+/** Part du temps passé dans chaque zone (une position par minute ; la première minute, en base, ne compte pas). */
+function zoneShares(path: Spot[]): Map<ZoneCode, number> {
+  const n = new Map<ZoneCode, number>();
+  let total = 0;
+  for (const p of path) { const z = zoneAt(p.x, p.y); if (!z) continue; n.set(z, (n.get(z) ?? 0) + 1); total++; }
+  const out = new Map<ZoneCode, number>();
+  if (total) for (const [z, c] of n) out.set(z, c / total);
+  return out;
+}
+
+/** Nom d'une zone vu de ton côté (jungle et base alliées ou adverses). */
+function zoneName(z: ZoneCode, side: 0 | 1): string {
+  const mine = (blue: boolean) => (side === 0) === blue;
+  switch (z) {
+    case "T": return t("Top lane");
+    case "M": return t("Mid");
+    case "B": return t("Bot lane");
+    case "R": return t("Rivière");
+    case "J": return mine(true) ? t("Jungle alliée") : t("Jungle adverse");
+    case "K": return mine(false) ? t("Jungle alliée") : t("Jungle adverse");
+    case "b": return mine(true) ? t("Ta base") : t("Base adverse");
+    case "r": return mine(false) ? t("Ta base") : t("Base adverse");
+  }
+}
+function zonePlace(z: ZoneCode, side: 0 | 1): string {
+  const mine = (blue: boolean) => (side === 0) === blue;
+  switch (z) {
+    case "T": return t("en top lane");
+    case "M": return t("en mid");
+    case "B": return t("en bot lane");
+    case "R": return t("dans la rivière");
+    case "J": return mine(true) ? t("dans ta jungle") : t("dans la jungle adverse");
+    case "K": return mine(false) ? t("dans ta jungle") : t("dans la jungle adverse");
+    case "b": return mine(true) ? t("dans ta base") : t("dans la base adverse");
+    case "r": return mine(false) ? t("dans ta base") : t("dans la base adverse");
+  }
+}
+
+/** La carte de la Faille de Spec, chaque zone teintée selon le temps que tu y as passé, et tes morts. */
+function RiftZones({ share, deaths, labels = false }: { share: Map<ZoneCode, number>; deaths: Spot[]; labels?: boolean }) {
+  const S = MAP_SIZE;
+  return (
+    <svg className="rift" viewBox={`0 0 ${S} ${S}`} role="img" aria-label={t("Carte de la Faille")}>
+      <path d={RIFT.inside} className="rift__path" />
+      <path d={RIFT.baseBlue} className="rift__base rift__base--blue" />
+      <path d={RIFT.baseRed} className="rift__base rift__base--red" />
+      <path d={RIFT.baseHi} className="rift__base-hi" />
+      <path d={RIFT.river} className="rift__river" />
+      {ZONES.map((z) => {
+        const v = share.get(z) ?? 0;
+        return v > 0 ? <path key={z} d={ZONE_PATHS[z]} fillRule="evenodd" className={`rift__zone${z === "R" ? " rift__zone--river" : ""}`} style={{ fillOpacity: Math.min(0.78, 0.08 + v * 0.95) }} /> : null;
+      })}
+      <path d={RIFT.walls} className="rift__walls" />
+      <circle cx={S * 0.042} cy={S * 0.958} r={10} className="rift__nexus rift__nexus--blue" />
+      <circle cx={S * 0.958} cy={S * 0.042} r={10} className="rift__nexus rift__nexus--red" />
+      {labels && ZONES.map((z) => {
+        const v = share.get(z) ?? 0;
+        if (v < 0.03) return null;
+        const [x, y] = ZONE_LABEL[z], txt = `${Math.round(v * 100)} %`, w = txt.length * 8 + 12;
+        return (
+          <g key={z} className="rift__label" transform={`translate(${x * S} ${y * S})`}>
+            <rect x={-w / 2} y={-11} width={w} height={22} rx={6} />
+            <text textAnchor="middle" dominantBaseline="central">{txt}</text>
+          </g>
+        );
+      })}
+      {deaths.map((d, i) => (
+        <g key={i} className="rift__death" transform={`translate(${d.x * S} ${(1 - d.y) * S})`}>
+          <circle r={8} />
+          <path d="M -3 -3 L 3 3 M 3 -3 L -3 3" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+/** Carte complète : période, % par zone sur la carte, puis la liste des zones avec tes morts. */
+function ZoneMap({ heat, side, duration }: { heat: Recap["heat"]; side: 0 | 1; duration: number }) {
   const [period, setPeriod] = useState<Period>("all");
-  const canvas = useRef<HTMLCanvasElement>(null);
   const keep = (s: Spot) => period === "all" || (period === "early" ? s.min < 15 : s.min >= 15);
-  const path = heat.path.filter(keep), kills = heat.kills.filter(keep), deaths = heat.deaths.filter(keep);
-  useEffect(() => {
-    const c = canvas.current;
-    const ctx = c?.getContext("2d");
-    if (!c || !ctx) return;
-    drawHeat(ctx, c.width, path);
-  }, [period, heat]); // eslint-disable-line react-hooks/exhaustive-deps
+  const path = heat.path.filter(keep), deaths = heat.deaths.filter(keep);
+  const share = useMemo(() => zoneShares(path), [period, heat]); // eslint-disable-line react-hooks/exhaustive-deps
+  const deathBy = new Map<ZoneCode, number>();
+  for (const d of deaths) { const z = zoneAt(d.x, d.y); if (z) deathBy.set(z, (deathBy.get(z) ?? 0) + 1); }
+  const rows = [...share.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const max = rows[0]?.[1] ?? 1;
+  const worst = [...deathBy.entries()].sort((a, b) => b[1] - a[1])[0];
   const periods: [Period, string][] = [["all", t("Toute la partie")], ["early", t("0–15 min")], ["late", t("Après 15 min")]];
   return (
     <>
@@ -411,44 +483,28 @@ function Heatmap({ stats, heat, side, duration }: { stats: Stats; heat: Recap["h
         ))}
       </Segmented>
       <div className="grecap-map">
-        <img src={`${CDN}/${stats.ddragon}/img/map/map11.png`} alt="" />
-        <canvas ref={canvas} width={256} height={256} />
-        {kills.map((s, i) => <span key={`k${i}`} className="grecap-map__dot grecap-map__dot--kill" style={{ left: `${s.x * 100}%`, top: `${(1 - s.y) * 100}%` }} />)}
-        {deaths.map((s, i) => <span key={`d${i}`} className="grecap-map__dot grecap-map__dot--death" style={{ left: `${s.x * 100}%`, top: `${(1 - s.y) * 100}%` }} />)}
+        <RiftZones share={share} deaths={deaths} labels />
         {!path.length && <p className="grecap-map__empty">{t("Pas de positions pour cette période.")}</p>}
       </div>
+      {rows.length > 0 && (
+        <div className="zone-list">
+          {rows.map(([z, v]) => (
+            <div key={z} className="zone-list__row">
+              <span className="zone-list__name">{zoneName(z, side)}</span>
+              <span className="zone-list__bar"><i style={{ width: `${(v / max) * 100}%` }} /></span>
+              <strong>{Math.round(v * 100)} %</strong>
+              <span className={(deathBy.get(z) ?? 0) ? "tone-bad" : "muted"}>{(deathBy.get(z) ?? 0) ? plural(deathBy.get(z) ?? 0, "{n} mort", "{n} morts") : "—"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {worst && worst[1] >= 2 && deaths.length >= 3 && (
+        <p className="zone-insight">{t("{n} de tes {total} morts {place}", { n: worst[1], total: deaths.length, place: zonePlace(worst[0], side) })}</p>
+      )}
       <div className="grecap-legend">
-        <span><i className="grecap-legend__heat" />{t("Présence")}</span>
-        <span><i className="grecap-legend__kill" />{t("Kills")}</span>
         <span><i className="grecap-legend__death" />{t("Morts")}</span>
         <span className="muted">{side ? t("Côté rouge (en haut à droite)") : t("Côté bleu (en bas à gauche)")}</span>
       </div>
-      <small className="muted">{t("Ta position toutes les minutes, plus tes kills et tes morts.")}</small>
     </>
   );
-}
-
-/** Carte de chaleur : on accumule des taches floues en niveaux de gris, puis on colore (jaune → orange → rouge). */
-function drawHeat(ctx: CanvasRenderingContext2D, size: number, spots: Spot[]) {
-  ctx.clearRect(0, 0, size, size);
-  const r = size * 0.075;
-  for (const s of spots) {
-    const x = s.x * size, y = (1 - s.y) * size;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, "rgba(0,0,0,0.32)");
-    g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
-  }
-  const img = ctx.getImageData(0, 0, size, size), d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const a = d[i + 3] / 255;
-    if (!a) continue;
-    const k = Math.min(1, a * 1.4);
-    d[i] = 255;
-    d[i + 1] = Math.round(220 - 170 * k);
-    d[i + 2] = Math.round(60 - 50 * k);
-    d[i + 3] = Math.round(Math.min(0.85, 0.25 + k * 0.7) * 255);
-  }
-  ctx.putImageData(img, 0, 0);
 }

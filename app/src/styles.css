@@ -2460,3 +2460,66 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
   border-radius: 999px; font-size: 0.75rem; background: rgba(28, 28, 31, 0.94); border: 1px solid var(--border);
   animation: hint-out 4s forwards; pointer-events: none; }
 @keyframes hint-out { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---------- accueil de la draft (maquette « draft waiting », A) ---------- */
+.next-draft { gap: 1rem; padding: 1.25rem; }
+.next-draft__head { display: flex; align-items: center; gap: 0.75rem; }
+.next-draft__head h2 { flex: 1; font-size: 1.125rem; font-weight: 600; color: var(--text); }
+.next-draft__picks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.next-pick { display: flex; flex-direction: column; gap: 0.875rem; padding: 1rem; border-radius: 0.75rem; background: var(--bg-surface-2);
+  border: 1px solid rgba(255, 255, 255, 0.06); min-width: 0; }
+.next-pick.is-best { border-color: var(--accent); box-shadow: inset 0 0 0 0.5px var(--accent); }
+.next-pick__top { display: flex; align-items: center; gap: 0.875rem; }
+.next-pick__name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.next-pick__name strong { font-size: 1.25rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.next-pick__name small { font-size: 0.75rem; color: var(--text-2); }
+.next-pick__top .stag { align-self: flex-start; }
+.next-pick__tags { display: flex; flex-wrap: wrap; gap: 0.375rem; padding-bottom: 0.875rem; border-bottom: 1px solid var(--border); }
+.next-pick__vs { display: flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; color: var(--text-2); min-height: 1.5rem; }
+.next-draft__actions { display: flex; align-items: center; gap: 1rem; }
+.next-draft__actions .link-btn { font-size: 0.75rem; color: var(--accent); }
+.home-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: stretch; }
+.home-lastrow { display: flex; align-items: center; gap: 1.25rem; }
+.home-lastrow__text { display: flex; flex-direction: column; gap: 0.1875rem; min-width: 0; }
+.home-lastrow__text strong { font-size: 0.9375rem; font-weight: 600; }
+.home-lastrow__text small { font-size: 0.75rem; color: var(--text-2); }
+.home-stat { display: flex; flex-direction: column; gap: 0.125rem; }
+.home-stat strong { font-size: 1.0625rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.home-stat span { font-size: 0.6875rem; color: var(--text-2); }
+.home-stat--end { align-items: flex-end; }
+.home-weekrow { display: flex; align-items: center; gap: 1.25rem; }
+.home-spark { flex: none; overflow: visible; }
+.home-spark__zero { stroke: rgba(255, 255, 255, 0.1); stroke-width: 1; }
+.home-off { flex-direction: row; align-items: center; gap: 1rem; padding: 1.25rem; }
+.home-off__dot { width: 0.625rem; height: 0.625rem; border-radius: 50%; background: var(--text-3); flex: none; }
+.home-off__text { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
+.home-off__text strong { font-size: 0.9375rem; font-weight: 600; }
+.home-off__text small { font-size: 0.75rem; color: var(--text-2); }
+@container (max-width: 56rem) { .next-draft__picks { grid-template-columns: 1fr; } .home-row { grid-template-columns: 1fr; } }
+.next-pick__tags .stag:not([class*="stag--"]) { background: rgba(255, 255, 255, 0.08); color: var(--text-2); }
+
+/* ---------- carte de la Faille de Spec (récap : temps passé par zone) ---------- */
+.grecap-map .rift { position: absolute; inset: 0; width: 100%; height: 100%; }
+.grecap-map:has(.rift) { background: transparent; }
+.rift__path { fill: #26262c; }
+.rift__walls { fill: #121215; stroke: rgba(255, 255, 255, 0.05); stroke-width: 1; }
+.rift__base { fill-opacity: 0.12; }
+.rift__base--blue { fill: #0a84ff; }
+.rift__base--red { fill: var(--bad); fill-opacity: 0.11; }
+.rift__base-hi { fill: #fff; fill-opacity: 0.05; }
+.rift__river { fill: #0a84ff; fill-opacity: 0.22; }
+.rift__zone { fill: #0a84ff; }
+.rift__zone--river { fill: #9edbff; }
+.rift__nexus--blue { fill: var(--accent); }
+.rift__nexus--red { fill: var(--bad); }
+.rift__label rect { fill: rgba(11, 11, 15, 0.78); }
+.rift__label text { fill: var(--text); font-size: 13px; font-weight: 700; font-family: inherit; }
+.rift__death circle { fill: var(--bad); stroke: #0b0b0f; stroke-width: 2; }
+.rift__death path { stroke: #fff; stroke-width: 1.6; stroke-linecap: round; }
+.zone-list { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.75rem; }
+.zone-list__row { display: grid; grid-template-columns: 7rem 1fr 2.75rem 4rem; align-items: center; gap: 0.75rem; }
+.zone-list__row strong { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.zone-list__row > span:last-child { text-align: right; }
+.zone-list__bar { height: 0.375rem; border-radius: 999px; background: var(--bg-surface-2); overflow: hidden; }
+.zone-list__bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.zone-insight { margin: 0; padding: 0.625rem 0.75rem; border-radius: 0.625rem; background: rgba(255, 69, 58, 0.1); color: var(--bad); font-size: 0.75rem; font-weight: 600; }

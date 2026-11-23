@@ -1,6 +1,7 @@
 // Récap d'une partie terminée : ta lane face à ton vis-à-vis (à 15 min et en fin de partie), ton équipe,
 // ce qui a joué pour ou contre toi, et tes déplacements. Tout vient du client LoL : le détail de la partie
 // et sa timeline (une image par minute : or, CS et position de chaque joueur, plus les évènements).
+import { zoneAt } from "./riftMap";
 import { invoke } from "@tauri-apps/api/core";
 import { useMemo } from "react";
 import type { Stats } from "./score";
@@ -368,19 +369,23 @@ export function makeRecap(g: RawGame, tl: Timeline, me: string, guess?: Guess): 
   for (const p of top([...good])) if (tips.length < 3 && !tips.some((x) => x.title === p.title)) tips.push({ kind: "keep", title: p.title, detail: p.detail, weight: p.weight });
   tips.sort((x, y) => (x.kind === y.kind ? y.weight - x.weight : x.kind === "keep" ? -1 : 1));
 
-  // --- zones
-  const zoneOf = (p: Spot) => {
-    const { x, y } = p;
-    if ((x < 0.22 && y < 0.22) || (x > 0.78 && y > 0.78)) return t("dans ta base");
-    if (x < 0.2 || y > 0.8) return t("en top");
-    if (y < 0.2 || x > 0.8) return t("en bot");
-    if (Math.abs(x - y) < 0.1) return t("en mid");
-    if (Math.abs(x + y - 1) < 0.09) return t("dans la rivière");
-    return t("dans la jungle");
+  // --- zones (carte de la Faille de Spec : lanes, rivière, jungles, bases)
+  const mySide = myTeam === 200 ? 1 : 0;
+  const zoneOf = (p: Spot): string | null => {
+    const z = zoneAt(p.x, p.y);
+    switch (z) {
+      case "T": return t("en top");
+      case "M": return t("en mid");
+      case "B": return t("en bot");
+      case "R": return t("dans la rivière");
+      case "J": return mySide === 0 ? t("dans ta jungle") : t("dans la jungle adverse");
+      case "K": return mySide === 1 ? t("dans ta jungle") : t("dans la jungle adverse");
+      default: return null;   // bases et murs
+    }
   };
   const zc = new Map<string, number>();
-  for (const p of path) if (p.min >= 1.5) zc.set(zoneOf(p), (zc.get(zoneOf(p)) ?? 0) + 1);
-  const zones = [...zc.entries()].filter(([z]) => z !== t("dans ta base")).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([z]) => z);
+  for (const p of path) { const z = p.min >= 1.5 ? zoneOf(p) : null; if (z) zc.set(z, (zc.get(z) ?? 0) + 1); }
+  const zones = [...zc.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([z]) => z);
 
   return {
     gameId: g.gameId, win, remake, champ: mine.championId, role, side: myTeam === 200 ? 1 : 0, duration,

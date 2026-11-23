@@ -365,6 +365,35 @@ export function blindExposure(stats: Stats, champ: number, role: number, params:
   return value;
 }
 
+/** Vis-à-vis courants (≥ 1 % des parties du rôle, assez de parties) où le champion gagne et perd le plus, en Master+. */
+export function laneExtremes(stats: Stats, champ: number, role: number, n = 2, params: Params = stats.params): { good: number[]; bad: number[] } {
+  const [g, w] = stats.base.get(k2(champ, role)) ?? [0, 0];
+  const base = smoothed(g, w, 0.5, params.k_base);
+  let total = 0;
+  const inRole: [number, number][] = [];
+  for (const [k, [gg]] of stats.base) {
+    const [cs, rs] = k.split("|");
+    if (Number(rs) !== role) continue;
+    total += gg;
+    inRole.push([Number(cs), gg]);
+  }
+  const deltas: [number, number][] = [];
+  for (const [c, gg] of inRole) {
+    if (c === champ || !total || gg / total < BLIND_MIN_SHARE) continue;
+    const [lg, lw] = stats.lane.get(k3(champ, role, c)) ?? [0, 0];
+    if (lg >= BLIND_MIN_GAMES) deltas.push([c, smoothed(lg, lw, base, params.k_delta) - base]);
+  }
+  deltas.sort((a, b) => b[1] - a[1]);
+  return { good: deltas.filter(([, d]) => d > 0).slice(0, n).map(([c]) => c),
+           bad: deltas.filter(([, d]) => d < 0).slice(-n).reverse().map(([c]) => c) };
+}
+
+/** Sûr à l'aveugle : peu de mauvais matchups (même seuil que l'explication de la draft). */
+export function blindSafe(stats: Stats, champ: number, role: number): boolean | null {
+  if (gamesIn(stats, champ, role) < LOW_DATA_GAMES) return null;   // pas assez de parties pour le dire
+  return blindExposure(stats, champ, role) > -BLIND_SAFE;
+}
+
 /** Ton vis-à-vis a-t-il déjà choisi ? (un adversaire joue ton rôle dans au moins la moitié de ses parties) */
 export function laneOpponentKnown(stats: Stats, role: number, enemies: number[]): boolean {
   return enemies.some((e) => roleProbability(stats, e, role) >= 0.5);
