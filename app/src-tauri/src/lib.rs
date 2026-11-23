@@ -78,11 +78,48 @@ fn side_window(app: &tauri::AppHandle, label: &'static str) -> Result<(), String
     let builder = match label {
         "compact" => builder.inner_size(400.0, 720.0).min_inner_size(360.0, 560.0).resizable(true).focused(false),
         "bubble" => builder.inner_size(380.0, 76.0).resizable(false).skip_taskbar(true).shadow(false).focused(false),
-        _ => builder.inner_size(1060.0, 600.0).resizable(false).skip_taskbar(true).shadow(false).focused(true).center(),
+        _ => {
+            let (w, h) = build_size(app);
+            builder.inner_size(w, h).resizable(false).skip_taskbar(true).shadow(false).focused(true).center()
+        }
     };
     #[cfg(not(target_os = "macos"))]
     let builder = if label == "compact" { builder } else { builder.transparent(true) };
     builder.build().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Taille du menu de build : une grande part de l'écran (en points logiques), pour qu'il s'adapte du 1080p au 4K.
+fn build_size(app: &tauri::AppHandle) -> (f64, f64) {
+    match app.primary_monitor() {
+        Ok(Some(m)) => {
+            let scale = m.scale_factor();
+            let (sw, sh) = (m.size().width as f64 / scale, m.size().height as f64 / scale);
+            ((sw * 0.72).clamp(1000.0, 1800.0), (sh * 0.8).clamp(600.0, 1200.0))
+        }
+        _ => (1060.0, 640.0),
+    }
+}
+
+/// Raccourci en partie : affiche le menu de build, ou le cache s'il est déjà affiché.
+/// La fenêtre est gardée cachée plutôt que fermée : un nouvel appui ne tombe jamais sur une fenêtre en train de se fermer.
+#[tauri::command]
+async fn overlay_toggle(app: tauri::AppHandle, kind: String) -> Result<bool, String> {
+    let label = overlay_label(&kind)?;
+    if label != "build" { return Err("unsupported".into()); }
+    if let Some(w) = app.get_webview_window(label) {
+        if w.is_visible().unwrap_or(false) {
+            w.hide().map_err(|e| e.to_string())?;
+            return Ok(false);
+        }
+        let (bw, bh) = build_size(&app);
+        let _ = w.set_size(tauri::LogicalSize::new(bw, bh));
+        let _ = w.center();
+        w.show().map_err(|e| e.to_string())?;
+        let _ = w.set_focus();
+        return Ok(true);
+    }
+    side_window(&app, label)?;
+    Ok(true)
 }
 
 #[tauri::command]
@@ -223,7 +260,8 @@ pub fn run() {
         .manage(Lcu::new())
         .invoke_handler(tauri::generate_handler![
             lcu_get, lcu_preselect, lcu_accept_queue, lcu_set_rune_page, lcu_match_history,
-            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, lcu_set_item_set, live_game, overlay_open, overlay_close, overlay_interactive, install_path, client_window
+            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, lcu_set_item_set, live_game, overlay_open,
+            overlay_toggle, overlay_close, overlay_interactive, install_path, client_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -99,8 +99,8 @@ export function SettingsScreen({ account, registered, compact, onCompact, onTop,
           <Choice value={flashKey} onChange={setFlashKey} options={[["D", "D"], ["F", "F"]]} />
         </Row>
         <Row label={t("Mode compact pendant la draft")}
-             desc={t("Spec l’ouvre en plus de sa fenêtre quand la sélection des champions commence. Côté : à côté du client LoL. Bulle : posée sur le client, elle s’ouvre au survol et quand c’est à toi.")}>
-          <Choice value={shape} onChange={setShape} options={[["side", t("Côté")], ["bubble", t("Bulle")], ["off", t("Désactivé")]]} />
+             desc={t("Spec l’ouvre en plus de sa fenêtre quand la sélection des champions commence. Bulle : posée sur le client, elle s’ouvre au survol et quand c’est à toi. Côté : à côté du client LoL.")}>
+          <Choice value={shape} onChange={setShape} options={[["bubble", t("Bulle")], ["side", t("Côté")], ["off", t("Désactivé")]]} />
         </Row>
         {shape === "side" && (
           <Row label={t("Coller le mode compact au client")}

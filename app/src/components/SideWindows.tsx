@@ -262,12 +262,18 @@ function Bubble({ stats, shared, draft, open }: { stats: Stats; shared: SharedSt
 
   // ---- annonce des picks, attente et ton tour
   const glow = !!draft.myTurn;
-  const title = !best ? t("Spec") : draft.planning ? t("Annonce {c}", { c: champName(stats, best.champ) })
-    : glow ? t("À toi : {c}", { c: champName(stats, best.champ) }) : champName(stats, best.champ);
-  const sub = !best ? t("Pas encore assez de parties pour ce rôle.")
-    : draft.planning ? t("{pct} · ton meilleur pick", { pct: pct(best.score) })
-    : !glow && (draft.picksBefore ?? 0) > 0 ? t("{pct} · ton tour dans {n} picks", { pct: pct(best.score), n: draft.picksBefore ?? 0 })
-    : t("{pct} · winrate estimé", { pct: pct(best.score) });
+  // la pastille montre ton champion présélectionné dans le client, sinon celui choisi dans la liste, sinon le meilleur
+  const hovered = draft.myChamp != null ? pages.flat().find((r) => r.champ === draft.myChamp) ?? { champ: draft.myChamp, score: NaN, sub: "" } : null;
+  const pill = hovered ?? selRow ?? best;
+  const isBest = !!pill && pill.champ === best?.champ;
+  const title = !pill ? t("Spec") : draft.planning ? t("Annonce {c}", { c: champName(stats, pill.champ) })
+    : glow ? t("À toi : {c}", { c: champName(stats, pill.champ) }) : champName(stats, pill.champ);
+  const wr = pill && Number.isFinite(pill.score) ? pct(pill.score) : "—";
+  const sub = !pill ? t("Pas encore assez de parties pour ce rôle.")
+    : hovered ? t("{pct} · présélectionné", { pct: wr })
+    : draft.planning && isBest ? t("{pct} · ton meilleur pick", { pct: wr })
+    : !glow && (draft.picksBefore ?? 0) > 0 ? t("{pct} · ton tour dans {n} picks", { pct: wr, n: draft.picksBefore ?? 0 })
+    : t("{pct} · winrate estimé", { pct: wr });
   return (
     <>
       {open && selRow && (
@@ -311,9 +317,9 @@ function Bubble({ stats, shared, draft, open }: { stats: Stats; shared: SharedSt
           <button className="link bubble-card__more" onClick={expand}>{t("Agrandir ↗")}</button>
         </div>
       )}
-      {best && (
-        <Pill stats={stats} champ={best.champ} tone="accent" glow={glow} title={title} sub={sub} subTone={wrTone(best.score)}
-              action={draft.myChamp === best.champ ? undefined : t("Présélectionner")} onAction={() => doPick(best.champ)} />
+      {pill && (
+        <Pill stats={stats} champ={pill.champ} tone="accent" glow={glow} title={title} sub={sub} subTone={wrTone(pill.score)}
+              action={draft.myChamp === pill.champ ? undefined : t("Présélectionner")} onAction={() => doPick(pill.champ)} />
       )}
       {notice && <div className="bubble-toast" role="status">{notice}</div>}
     </>
@@ -354,9 +360,18 @@ export function BuildWindow() {
   const shared = useSharedState();
   const game = useLiveGame(true, false);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => { if (IN_APP) currentWindow().then((w) => w.show()); }, []);
+  const [shown, setShown] = useState(0);   // relance le message « Rappuie sur… » à chaque affichage
+  useEffect(() => {
+    if (!IN_APP) return;
+    let off: (() => void) | undefined;
+    currentWindow().then(async (w) => {
+      await w.show(); await w.setFocus();
+      off = await w.onFocusChanged(({ payload }) => { if (payload) setShown((n) => n + 1); });
+    });
+    return () => off?.();
+  }, []);
   const [shortcut] = useSpecShortcut();
-  const close = async () => { (await currentWindow()).close(); };
+  const close = async () => { (await currentWindow()).hide(); };   // gardée cachée : le raccourci la réaffiche aussitôt
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     window.addEventListener("keydown", onKey);
@@ -375,7 +390,7 @@ export function BuildWindow() {
             : <div className="empty-state"><div className="spinner" /></div>}
         </div>
       </TopBarSlot.Provider>
-      {shortcut && <div className="build-window__hint" role="status">{t("Rappuie sur {k} pour revenir au jeu", { k: shortcutLabel(shortcut) })}</div>}
+      {shortcut && <div key={shown} className="build-window__hint" role="status">{t("Rappuie sur {k} pour revenir au jeu", { k: shortcutLabel(shortcut) })}</div>}
     </div>
   );
 }

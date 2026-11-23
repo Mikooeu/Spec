@@ -190,12 +190,11 @@ export async function showMainWindow(): Promise<void> {
   } catch { /* ignoré */ }
 }
 
-/** En partie : ouvre le menu de build seul par-dessus le jeu, ou le referme s'il est déjà affiché. */
+/** En partie : ouvre le menu de build seul par-dessus le jeu, ou le cache s'il est déjà affiché (bascule faite côté Rust, sans course). */
 export async function toggleBuildWindow(): Promise<void> {
   if (!IN_APP) return;
-  const { openOverlay, closeOverlay } = await import("./overlay");
   try {
-    const { Window } = await import("@tauri-apps/api/window");
-    if (await Window.getByLabel("build")) await closeOverlay("build"); else await openOverlay("build");
-  } catch { await openOverlay("build"); }
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("overlay_toggle", { kind: "build" });
+  } catch (e) { console.warn("[Spec] menu de build", e); }
 }

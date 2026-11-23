@@ -26,7 +26,7 @@ export const useDockCompact = () => usePersistent<boolean>("spec.compact.dock", 
 export type CompactShape = "side" | "bubble" | "off";
 // avant la 0.18.1, un interrupteur à part (spec.compact.auto) : désactivé, il donne « Désactivé »
 const oldAutoOff = () => { try { return localStorage.getItem("spec.compact.auto") === "false"; } catch { return false; } };
-export const useCompactShape = () => usePersistent<CompactShape>("spec.compact.shape", oldAutoOff() ? "off" : "side");
+export const useCompactShape = () => usePersistent<CompactShape>("spec.compact.shape", oldAutoOff() ? "off" : "bubble");
 /** Raccourci global pour afficher ou cacher Spec (format des raccourcis Tauri, ex. « Alt+S »). Vide : désactivé. */
 export const useSpecShortcut = () => usePersistent<string>("spec.shortcut", "Alt+S");
 /** « Alt+S » → « Alt + S » pour l'affichage. */
