@@ -30,6 +30,7 @@ interface Props {
 }
 
 const ROLE_MIN_GAMES = 200;   // un rôle est proposé à partir de ce nombre de parties
+const RANK_ITEMS = 3;          // objets montrés par rang d'achat (les 3 plus joués)
 const RARE = 0.01;            // en dessous de 1 % des parties, l'objet est grisé
 const RELATIVE = 0.015;       // vert / rouge à 1,5 point de la moyenne du rang
 
@@ -185,12 +186,13 @@ export function ChampionScreen({ stats, champ, role, onRole, onBack, inGame = fa
                     return (
                       <div key={k} className="cp-rank" title={`${t("moy. ")}${pct(avg)}`}>
                         <h3>{getLang() === "en" ? `${ordinal(k + 1)} item` : `${ordinal(k + 1)} objet`}</h3>
-                        {list.map(([id, ig, iw]) => (
-                          <div key={id} className={`cp-line${ig / rankGames < RARE ? " is-rare" : ""}`}>
+                        {list.slice(0, RANK_ITEMS).map(([id, ig, iw]) => (
+                          <div key={id} className={`cp-line cp-line--rank${ig / rankGames < RARE ? " is-rare" : ""}`}>
                             <ItemIcon id={id} data={items} />
-                            <strong className={`tone-${relTone(iw / ig, avg)}`}>{pct(iw / ig)}</strong>
-                            <span className="grow" />
-                            <small>{pctN(Math.round((ig / rankGames) * 100))}</small>
+                            <span className="cp-line__stat">
+                              <strong className={`tone-${relTone(iw / ig, avg)}`}>{pct(iw / ig)}</strong>
+                              <small title={t("{n} des parties", { n: pctN(Math.round((ig / rankGames) * 100)) })}>{t("{n} pick", { n: pctN(Math.round((ig / rankGames) * 100)) })}</small>
+                            </span>
                           </div>
                         ))}
                       </div>

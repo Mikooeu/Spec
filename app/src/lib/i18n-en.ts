@@ -1311,4 +1311,5 @@ export const EN: Record<string, string> = {
   "dans la base adverse": "in the enemy base",
   "Carte de la Faille": "Summoner's Rift map",
   "{n} de tes {total} morts {place}": "{n} of your {total} deaths {place}",
+  "{n} pick": "{n} pick rate",
 };
