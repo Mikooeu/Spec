@@ -2,7 +2,6 @@
 // quand tu gagnes contre ton vis-à-vis (parties Master+ du matchup découpées par durée) et ce qu'il faut respecter
 // (ta note, puis des tendances tirées des stats). Carte fixe, préparée avant la partie : jamais d'alerte (règle Riot).
 
-import type { InfoMap } from "../lib/ddragon";
 import { t } from "../lib/i18n";
 import type { Stats } from "../lib/score";
 import { champName, patchLabel, pct } from "../lib/ui";
@@ -11,10 +10,10 @@ import { MatchupNote } from "./MatchupNote";
 const MIN_LANE = 30;     // parties du matchup en dessous desquelles on ne donne pas de chiffres
 const MIN_PHASE = 15;    // parties minimum dans une tranche de durée pour l'afficher
 const GAP = 0.03;        // écart de winrate entre tranches à partir duquel on en tire une phrase
-const IGNITE = 14, EXHAUST = 3, TELEPORT = 12;
+const LEVEL_FROM = [1, 3, 5, 6, 9, 12];   // tranches de niveau des duels (voir scoring/builds.py, DUEL_LEVELS)
+const MIN_DUELS = 6;     // duels (pondérés) minimum dans une tranche pour en parler
 
-export function MatchupCard({ stats, champ, role, enemy, items, spells }:
-  { stats: Stats; champ: number; role: number; enemy: number; items: InfoMap | null; spells: InfoMap | null }) {
+export function MatchupCard({ stats, champ, role, enemy }: { stats: Stats; champ: number; role: number; enemy: number }) {
   const name = champName(stats, enemy);
   const [lg, lw] = stats.lane.get(`${champ}|${role}|${enemy}`) ?? [0, 0];
   const wr = lg >= MIN_LANE ? lw / lg : null;
@@ -34,24 +33,8 @@ export function MatchupCard({ stats, champ, role, enemy, items, spells }:
     }
   }
 
-  // à respecter : tendances de ton adversaire, tirées de ses parties Master+ dans le même rôle
-  const trends: string[] = [];
-  const foe = stats.champPages.get(`${enemy}|${role}`);
-  if (foe?.spells.length) {
-    const total = foe.spells.reduce((a, s) => a + s[2], 0);
-    for (const [id, verb] of [[IGNITE, t("Embrasement")], [EXHAUST, t("Fatigue")], [TELEPORT, t("Téléportation")]] as const) {
-      const share = total ? foe.spells.filter((s) => s[0] === id || s[1] === id).reduce((a, s) => a + s[2], 0) / total : 0;
-      if (share >= 0.4) { trends.push(t("{c} prend {s} dans {p} des parties.", { c: name, s: spells?.get(id)?.name ?? verb, p: pct(share) })); break; }
-    }
-  }
-  const first = foe?.items[0]?.[1]?.slice().sort((a, b) => b[1] - a[1])[0];
-  if (first && items?.get(first[0])) trends.push(t("Son premier objet habituel : {i}.", { i: items.get(first[0])!.name }));
-  const dmg = stats.damage.get(enemy);
-  if (dmg && dmg[3] >= MIN_LANE) {
-    const [ad, ap] = dmg;
-    if (ap >= 0.65) trends.push(t("Dégâts surtout magiques ({p}).", { p: pct(ap) }));
-    else if (ad >= 0.65) trends.push(t("Dégâts surtout physiques ({p}).", { p: pct(ad) }));
-  }
+  // à respecter : ce que disent les 1v1 entre vis-à-vis (kills sans aide, selon TON niveau au moment du kill)
+  const tips = duelTips(stats, champ, role, enemy, name);
 
   return (
     <section className="ig2-card mcard">
@@ -82,12 +65,49 @@ export function MatchupCard({ stats, champ, role, enemy, items, spells }:
 
       <h3 className="mcard__sub">{t("À respecter")}</h3>
       <MatchupNote stats={stats} champ={champ} role={role} enemy={enemy} />
-      {trends.length > 0 && (
+      {tips.lines.length > 0 && (
         <div className="mcard__trend">
-          <span className="mcard__trend-label">{t("Tendance des stats")}</span>
-          {trends.slice(0, 2).map((x) => <p key={x}>{x}</p>)}
+          <span className="mcard__trend-label">{t("D’après les 1v1 de {n} parties Master+", { n: Math.round(tips.games).toLocaleString() })}</span>
+          {tips.lines.map((x) => <p key={x.text} className={x.tone ? `mcard__tip mcard__tip--${x.tone}` : "mcard__tip"}>{x.text}</p>)}
         </div>
       )}
     </section>
   );
+}
+
+type Tip = { text: string; tone?: "bad" | "good" };
+
+/** Conseils tirés des 1v1 entre vis-à-vis en Master+ : all-in à craindre tôt, niveau à partir duquel tu gagnes le duel. */
+function duelTips(stats: Stats, champ: number, role: number, enemy: number, name: string): { games: number; lines: Tip[] } {
+  const row = stats.champPages.get(`${champ}|${role}`)?.duels?.find((r) => r[0] === enemy);
+  if (!row) return { games: 0, lines: [] };
+  const n = LEVEL_FROM.length, games = row[1];
+  const win = row.slice(2, 2 + n), lose = row.slice(2 + n, 2 + 2 * n);
+  const lines: Tip[] = [];
+  let turnAt: number | null = null;   // niveau où le duel tourne, déjà annoncé
+  // all-in tôt : il te tue en 1v1 avant le niveau 5
+  const earlyLose = lose[0] + lose[1], earlyWin = win[0] + win[1];
+  if (earlyLose >= MIN_DUELS && earlyLose / games >= 0.08 && earlyLose >= 1.3 * earlyWin) {
+    lines.push({ tone: "bad", text: t("Attention au all-in {lv} : {c} te tue en 1v1 avant le niveau 5 dans {p} des parties.",
+      { lv: lose[0] >= lose[1] ? t("niveau 2") : t("niveau 3-4"), c: name, p: pct(earlyLose / games) }) });
+  }
+  // à partir de quel niveau le duel tourne
+  const share = LEVEL_FROM.map((_, i) => (win[i] + lose[i] >= MIN_DUELS ? win[i] / (win[i] + lose[i]) : null));
+  const known = share.map((v, i) => ({ v, i })).filter((x) => x.v != null) as { v: number; i: number }[];
+  if (known.length >= 2) {
+    const turnFor = (good: boolean) => known.find((x, k) => (good ? x.v >= 0.55 : x.v <= 0.45) && k > 0
+      && known.slice(k).every((y) => (good ? y.v >= 0.5 : y.v <= 0.5)) && known.slice(0, k).some((y) => (good ? y.v < 0.5 : y.v > 0.5)));
+    const after = (i: number) => { const w = win.slice(i).reduce((a, b) => a + b, 0), l = lose.slice(i).reduce((a, b) => a + b, 0); return w / Math.max(1, w + l); };
+    const mine = turnFor(true), his = turnFor(false);
+    turnAt = mine ? LEVEL_FROM[mine.i] : his ? LEVEL_FROM[his.i] : null;
+    const total = known.reduce((a, x) => a + win[x.i] + lose[x.i], 0), wins = known.reduce((a, x) => a + win[x.i], 0);
+    if (mine) lines.push({ tone: "good", text: t("Tu gagnes le 1v1 à partir du niveau {lv} ({p} des duels ensuite).", { lv: LEVEL_FROM[mine.i], p: pct(after(mine.i)) }) });
+    else if (his) lines.push({ tone: "bad", text: t("{c} gagne le 1v1 à partir du niveau {lv} : prends l’avantage avant.", { c: name, lv: LEVEL_FROM[his.i] }) });
+    else if (wins / total >= 0.56) lines.push({ tone: "good", text: t("Tu gagnes la plupart des 1v1 ({p}) : cherche les échanges.", { p: pct(wins / total) }) });
+    else if (wins / total <= 0.44) lines.push({ tone: "bad", text: t("{c} gagne la plupart des 1v1 ({p}) : évite les échanges longs.", { c: name, p: pct(1 - wins / total) }) });
+  }
+  // son niveau 6, quand il retourne le duel
+  if (share[2] != null && share[3] != null && share[2] >= 0.5 && share[3] <= 0.42 && turnAt !== 6)
+    lines.push({ tone: "bad", text: t("Attention à son niveau 6 : {c} gagne {p} des 1v1 entre les niveaux 6 et 8.", { c: name, p: pct(1 - share[3]) }) });
+  return { games, lines: lines.slice(0, 3) };
 }

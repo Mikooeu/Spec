@@ -76,6 +76,19 @@ CREATE TABLE IF NOT EXISTS builds (
     skills VARCHAR,                  -- ordre des sorts « QEWQQR… » (déroulé uniquement)
     purchases VARCHAR                -- achats « 1056@14,2003@14,… » en secondes (déroulé uniquement)
 );
+-- depuis la 0.20 : kills en 1v1 entre vis-à-vis de lane, avec les niveaux (parties avec déroulé uniquement)
+CREATE TABLE IF NOT EXISTS duels (
+    match_id VARCHAR,
+    team_id INTEGER,                 -- équipe du tueur
+    killer_champ INTEGER,
+    victim_champ INTEGER,
+    team_position VARCHAR,
+    seconds INTEGER,
+    killer_level INTEGER,
+    victim_level INTEGER
+);
+-- parties dont les duels ont été relevés (même sans aucun duel) : le dénominateur des taux de duel
+CREATE TABLE IF NOT EXISTS duel_matches (match_id VARCHAR PRIMARY KEY);
 -- depuis la 0.6 : dégâts infligés aux champions, par type (profil AD / AP / brut de chaque champion)
 CREATE TABLE IF NOT EXISTS damage (
     match_id VARCHAR,
@@ -227,6 +240,11 @@ class Store:
                     if match.get("builds"):
                         con.executemany("INSERT INTO builds VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                         match["builds"])
+                if "duels" in match:
+                    con.execute("DELETE FROM duels WHERE match_id = ?", [match["match_id"]])
+                    con.execute("INSERT INTO duel_matches VALUES (?) ON CONFLICT DO NOTHING", [match["match_id"]])
+                    if match["duels"]:
+                        con.executemany("INSERT INTO duels VALUES (?, ?, ?, ?, ?, ?, ?, ?)", match["duels"])
                 if match.get("damage"):
                     con.execute("DELETE FROM damage WHERE match_id = ?", [match["match_id"]])
                     con.executemany("INSERT INTO damage VALUES (?, ?, ?, ?, ?, ?)", match["damage"])

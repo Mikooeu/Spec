@@ -1332,4 +1332,13 @@ export const EN: Record<string, string> = {
   "Quand tu gagnes": "When you win",
   "À respecter": "Watch out for",
   "Tendance des stats": "Stats trend",
+  "D’après les 1v1 de {n} parties Master+": "From the 1v1s of {n} Master+ games",
+  "Attention au all-in {lv} : {c} te tue en 1v1 avant le niveau 5 dans {p} des parties.": "Watch out for the {lv} all-in: {c} kills you 1v1 before level 5 in {p} of games.",
+  "niveau 2": "level 2",
+  "niveau 3-4": "level 3-4",
+  "Tu gagnes le 1v1 à partir du niveau {lv} ({p} des duels ensuite).": "You win the 1v1 from level {lv} ({p} of duels after that).",
+  "{c} gagne le 1v1 à partir du niveau {lv} : prends l’avantage avant.": "{c} wins the 1v1 from level {lv}: get ahead before then.",
+  "Tu gagnes la plupart des 1v1 ({p}) : cherche les échanges.": "You win most 1v1s ({p}): look for trades.",
+  "{c} gagne la plupart des 1v1 ({p}) : évite les échanges longs.": "{c} wins most 1v1s ({p}): avoid long trades.",
+  "Attention à son niveau 6 : {c} gagne {p} des 1v1 entre les niveaux 6 et 8.": "Watch out for their level 6: {c} wins {p} of 1v1s between levels 6 and 8.",
 };

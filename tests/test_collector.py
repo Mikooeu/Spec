@@ -240,3 +240,25 @@ def test_save_match_stores_damage_by_type():
     store.save_match(match, rows)  # rejouer ne duplique rien
     with store._connect() as con:
         assert con.execute("SELECT count(*), sum(true_dmg) FROM damage").fetchone() == (10, 10000)
+
+
+def test_timeline_keeps_only_solo_kills_between_lane_opponents_with_levels():
+    from collector.collect import attach_timeline
+    data = _with_details(make_match("EUW1_3"))
+    match, _ = parse_match(data, "euw1")
+    lv = lambda pid, level, ts: {"type": "LEVEL_UP", "participantId": pid, "level": level, "timestamp": ts}
+    kill = lambda killer, victim, ts, assists=(): {"type": "CHAMPION_KILL", "killerId": killer, "victimId": victim,
+                                                   "timestamp": ts, "assistingParticipantIds": list(assists)}
+    frames = [{"events": [lv(1, 2, 90_000), lv(6, 2, 120_000), kill(1, 6, 150_000),   # top contre top, seul : gardé
+                          kill(3, 6, 200_000),                                          # le mid tue le top : pas un duel
+                          lv(1, 6, 600_000), lv(6, 7, 650_000), kill(6, 1, 680_000, [7]),  # avec une aide : pas un 1v1
+                          kill(6, 1, 700_000)]}]
+    attach_timeline(match, data["info"]["participants"], {"info": {"frames": frames}})
+    # (partie, équipe du tueur, champion du tueur, champion tué, rôle, secondes, niveau du tueur, niveau du tué)
+    assert match["duels"] == [("EUW1_3", 100, 100, 105, "TOP", 150, 2, 2), ("EUW1_3", 200, 105, 100, "TOP", 700, 7, 6)]
+    store = Store(":memory:")
+    store.save_match(match, parse_match(data, "euw1")[1])
+    store.save_match(match, parse_match(data, "euw1")[1])   # rejouer ne duplique rien
+    with store._connect() as con:
+        assert con.execute("SELECT count(*) FROM duels").fetchone()[0] == 2
+        assert con.execute("SELECT count(*) FROM duel_matches").fetchone()[0] == 1

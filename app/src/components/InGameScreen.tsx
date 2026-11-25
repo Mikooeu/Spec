@@ -224,7 +224,7 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
         </div>
 
         <div className="ig2__col">
-          {opponent != null && <MatchupCard stats={stats} champ={champ} role={role} enemy={opponent} items={items} spells={spells} />}
+          {opponent != null && <MatchupCard stats={stats} champ={champ} role={role} enemy={opponent} />}
           <section className="ig2-card">
             <h2>{t("Départ et sorts")}</h2>
             <StartRow page={page} items={items} spells={spells} opponent={opponent} />

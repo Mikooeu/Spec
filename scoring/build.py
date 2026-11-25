@@ -16,7 +16,7 @@ import duckdb
 
 from collector.db import connect_with_retry
 
-from .builds import add_length, add_length_vs, compute_builds
+from .builds import add_duels, add_length, add_length_vs, compute_builds
 from .items import Items
 from .runes import compute_runes
 from .situational import compute_situational
@@ -47,7 +47,7 @@ def choose_patches(src_con) -> tuple[str, str | None, dict]:
 HOLDOUT_SQL = "hash(m.match_id) % 10 = 0"   # 10 % des parties, toujours les mêmes
 
 
-SOURCE_TABLES = ("matches", "participants", "runes", "match_ext", "bans", "builds", "damage")
+SOURCE_TABLES = ("matches", "participants", "runes", "match_ext", "bans", "builds", "damage", "duels", "duel_matches")
 
 
 def _attach(con, path: Path, alias: str) -> None:
@@ -181,6 +181,17 @@ def build_stats(db_path: Path | list[Path], out_path: Path, patch: str | None = 
                 FROM p a JOIN src.matches m USING (match_id)
                 JOIN p o ON o.match_id = a.match_id AND o.team_id <> a.team_id AND o.role = a.role""")
             champ_pages = add_length_vs(champ_pages, _stream(cur))
+        # duels entre vis-à-vis (relevés depuis la 0.20) : conseils de matchup du menu de build en partie
+        if champ_pages and _has(con, "duels") and _has(con, "duel_matches"):
+            duel_games = con.execute("""
+                SELECT a.champ, a.role, o.champ, a.w
+                FROM p a JOIN src.duel_matches d USING (match_id)
+                JOIN p o ON o.match_id = a.match_id AND o.team_id <> a.team_id AND o.role = a.role""").fetchall()
+            duel_rows = con.execute("""
+                SELECT d.killer_champ, d.victim_champ, d.team_position, d.killer_level, d.victim_level, a.w
+                FROM src.duels d JOIN p a
+                  ON a.match_id = d.match_id AND a.team_id = d.team_id AND a.champ = d.killer_champ""").fetchall()
+            champ_pages = add_duels(champ_pages, duel_games, duel_rows)
         # dégâts par type (collectés depuis la 0.6) : part physique, magique et brute de chaque champion dans son rôle
         damage_rows = []
         if _has(con, "damage"):

@@ -2552,3 +2552,7 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .mcard__trend { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.625rem 0.75rem; border-radius: 0.625rem; background: var(--bg-surface-2); font-size: 0.75rem; line-height: 1.4; }
 .mcard__trend p { margin: 0; }
 .mcard__trend-label { font-size: 0.6875rem; color: var(--text-2); }
+.mcard__tip { position: relative; padding-left: 0.75rem; }
+.mcard__tip::before { content: ""; position: absolute; left: 0; top: 0.45em; width: 0.375rem; height: 0.375rem; border-radius: 50%; background: var(--text-3); }
+.mcard__tip--bad::before { background: var(--bad); }
+.mcard__tip--good::before { background: var(--good); }

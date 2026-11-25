@@ -207,6 +207,37 @@ def add_length_vs(pages: list, rows) -> list:
     return pages
 
 
+DUEL_LEVELS = (1, 3, 5, 6, 9, 12)            # tranches de niveau : 1-2, 3-4, 5, 6-8, 9-11, 12 et plus
+DUEL_MIN_GAMES = 40                          # parties (pondérées) avec duels relevés minimum d'un matchup
+
+
+def _duel_bucket(level: int) -> int:
+    return max(i for i, lv in enumerate(DUEL_LEVELS) if level >= lv) if level >= 1 else 0
+
+
+def add_duels(pages: list, games, duels) -> list:
+    """games : (champ, role, adversaire de lane, w), une ligne par partie dont les duels ont été relevés.
+    duels : (champion du tueur, champion tué, rôle, niveau du tueur, niveau du tué, w), kills en 1v1 entre vis-à-vis.
+    Ajoute « duels » = [[adversaire, parties, victoires par tranche de niveau…, défaites par tranche…], ...],
+    les tranches suivant TON niveau au moment du kill (conseils « all-in niveau 2 », « tu gagnes à partir du niveau 6 »)."""
+    n = len(DUEL_LEVELS)
+    count: dict = defaultdict(float)
+    for champ, role, opp, w in games:
+        count[(champ, role, opp)] += w
+    acc: dict = defaultdict(lambda: [0.0] * (2 * n))
+    for killer, victim, role, k_lv, v_lv, w in duels:
+        acc[(killer, role, victim)][_duel_bucket(int(k_lv))] += w       # le tueur gagne, à son niveau
+        acc[(victim, role, killer)][n + _duel_bucket(int(v_lv))] += w   # le tué perd, à son niveau
+    per: dict = defaultdict(list)
+    for (champ, role, opp), g in count.items():
+        if g >= DUEL_MIN_GAMES:
+            per[(champ, role)].append([opp, _r(g), *(_r(x) for x in acc.get((champ, role, opp), [0.0] * (2 * n)))])
+    for champ, role, entry in pages:
+        if per.get((champ, role)):
+            entry["duels"] = sorted(per[(champ, role)])
+    return pages
+
+
 def add_length(pages: list, rows) -> list:
     """rows : (champ, role, durée en secondes, win, w). Ajoute « length » = [[tranche, parties, victoires], ...]
     aux pages des champions (les tranches trop peu jouées sont omises)."""

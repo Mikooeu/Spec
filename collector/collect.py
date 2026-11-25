@@ -96,14 +96,36 @@ def parse_timeline(data: dict) -> dict[int, tuple[str, str]]:
     return out
 
 
+def parse_duels(match_id: str, data: dict, players: list[dict]) -> list[tuple]:
+    """Kills en 1v1 (sans aucune aide) entre les deux joueurs d'une même lane, avec le niveau de chacun :
+    (partie, équipe du tueur, champion du tueur, champion tué, rôle, secondes, niveau du tueur, niveau du tué).
+    Sert aux conseils de matchup (« attention au all-in niveau 2 », « tu gagnes le 1v1 à partir du niveau 6 »)."""
+    who = {int(p.get("participantId", i + 1)): (int(p["teamId"]), int(p["championId"]), p.get("teamPosition") or "")
+           for i, p in enumerate(players)}
+    level = {pid: 1 for pid in who}
+    out = []
+    for frame in (data.get("info") or {}).get("frames", []):
+        for e in sorted(frame.get("events", []), key=lambda e: e.get("timestamp", 0)):
+            kind = e.get("type")
+            if kind == "LEVEL_UP" and e.get("participantId") in level:
+                level[e["participantId"]] = int(e.get("level") or level[e["participantId"]])
+            elif kind == "CHAMPION_KILL" and not e.get("assistingParticipantIds"):
+                k, v = who.get(e.get("killerId")), who.get(e.get("victimId"))
+                if k and v and k[0] != v[0] and k[2] and k[2] == v[2]:
+                    out.append((match_id, k[0], k[1], v[1], k[2], int(e.get("timestamp", 0)) // 1000,
+                                level[e["killerId"]], level[e["victimId"]]))
+    return out
+
+
 def attach_timeline(match: dict, players: list[dict], timeline: dict | None) -> None:
-    """Complète les lignes `builds` avec le déroulé, si on l'a."""
+    """Complète les lignes `builds` avec le déroulé, si on l'a, et garde les duels entre vis-à-vis."""
     if not timeline:
         return
     per = parse_timeline(timeline)
     match["has_timeline"] = True
     match["builds"] = [build_row(match["match_id"], p, *per.get(int(p.get("participantId", i + 1)), (None, None)))
                        for i, p in enumerate(players)]
+    match["duels"] = parse_duels(match["match_id"], timeline, players)
 
 
 def rune_row(match_id: str, p: dict) -> tuple | None:

@@ -460,3 +460,16 @@ def test_add_length_vs_three_phases_and_floor():
     add_length_vs(pages, rows)
     assert pages[0][2]["lengthVs"] == [[9, 40, 30, 30, 15, 20, 5]]   # contre 8 : trop peu de parties, omis
     assert "lengthVs" not in pages[1][2]                             # sans vis-à-vis ni durée : rien
+
+
+def test_add_duels_counts_solo_kills_by_my_level_and_floor():
+    from scoring.builds import DUEL_LEVELS, add_duels
+    assert DUEL_LEVELS == (1, 3, 5, 6, 9, 12)
+    pages = [[1, "TOP", {}], [9, "TOP", {}]]
+    # 50 parties avec déroulé de 1 contre 9 : 1 se fait tuer au niveau 2 dans 10 parties, gagne au niveau 7 dans 20
+    games = [(1, "TOP", 9, 1.0)] * 50 + [(9, "TOP", 1, 1.0)] * 50 + [(1, "TOP", 8, 1.0)] * 5
+    duels = [(9, 1, "TOP", 2, 2, 1.0)] * 10 + [(1, 9, "TOP", 7, 7, 1.0)] * 20
+    add_duels(pages, games, duels)
+    # pour 1 contre 9 : [adversaire, parties, victoires par tranche de niveau (1-2, 3-4, 5, 6-8, 9-11, 12+), défaites par tranche]
+    assert pages[0][2]["duels"] == [[9, 50, 0, 0, 0, 20, 0, 0, 10, 0, 0, 0, 0, 0]]
+    assert pages[1][2]["duels"] == [[1, 50, 10, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0]]
