@@ -446,3 +446,17 @@ def test_add_length_buckets_and_floor():
     add_length(pages, rows)
     assert pages[0][2]["length"] == [[15, 40, 40], [30, 40, 0]]   # tranche 40 trop peu jouée : omise
     assert "length" not in pages[1][2]                              # une seule tranche : pas de courbe
+
+
+def test_add_length_vs_three_phases_and_floor():
+    from scoring.builds import add_length_vs
+    pages = [[1, "TOP", {}], [2, "TOP", {}]]
+    # contre 9 : 40 parties avant 20 min (30 gagnées), 30 entre 20 et 30 (15), 20 après 30 (5)
+    rows = [(1, "TOP", 900, 1, 1.0, 9)] * 30 + [(1, "TOP", 900, 0, 1.0, 9)] * 10 \
+        + [(1, "TOP", 1500, 1, 1.0, 9)] * 15 + [(1, "TOP", 1500, 0, 1.0, 9)] * 15 \
+        + [(1, "TOP", 2000, 1, 1.0, 9)] * 5 + [(1, "TOP", 2000, 0, 1.0, 9)] * 15 \
+        + [(1, "TOP", 900, 1, 1.0, 8)] * 10 \
+        + [(2, "TOP", 900, 1, 1.0, None)] * 80 + [(2, "TOP", None, 1, 1.0, 9)] * 80
+    add_length_vs(pages, rows)
+    assert pages[0][2]["lengthVs"] == [[9, 40, 30, 30, 15, 20, 5]]   # contre 8 : trop peu de parties, omis
+    assert "lengthVs" not in pages[1][2]                             # sans vis-à-vis ni durée : rien

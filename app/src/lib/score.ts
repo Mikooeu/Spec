@@ -84,6 +84,7 @@ export interface ChampPage {
   bootsAt?: [number, number];                          // objets finis avant les bottes (le plus fréquent), parties
   support?: [number, number, number][];                // supports : évolution finale de l’objet de quête, parties, victoires
   length?: [number, number, number][];                 // winrate selon la durée : début de tranche (min), parties, victoires
+  lengthVs?: [number, number, number, number, number, number, number][]; // vis-à-vis, puis parties et victoires avant 20 min, de 20 à 30 min, après 30 min
   start: [string, number, number][];                   // « 1056,2003,2003 », parties, victoires
   skills: [string, string, number, number] | null;     // ordre, priorité, parties, victoires
   items: [number, [number, number, number][]][];       // par rang : parties à ce rang, [objet, parties, victoires]

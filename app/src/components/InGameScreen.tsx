@@ -13,6 +13,7 @@ import { ChampionIcon } from "./ChampionIcon";
 import { groupIcons, ItemIcon, mergeStarts, SkillGrid, SkillStrip } from "./ChampionScreen";
 
 import { MatchupNote } from "./MatchupNote";
+import { MatchupCard } from "./MatchupCard";
 interface Props {
   stats: Stats;
   champ: number;
@@ -223,6 +224,7 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
         </div>
 
         <div className="ig2__col">
+          {opponent != null && <MatchupCard stats={stats} champ={champ} role={role} enemy={opponent} items={items} spells={spells} />}
           <section className="ig2-card">
             <h2>{t("Départ et sorts")}</h2>
             <StartRow page={page} items={items} spells={spells} opponent={opponent} />
@@ -251,7 +253,6 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
           )}
 
           <FoeColumn stats={stats} foes={foes} adapts={adapts} items={items} name={name} />
-          {opponent != null && <MatchupNote stats={stats} champ={champ} role={role} enemy={opponent} />}
         </div>
       </div>
     </div>

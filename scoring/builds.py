@@ -181,6 +181,32 @@ def length_bucket(seconds: int) -> int:
     return max(15, min(40, int(seconds // 300) * 5))
 
 
+LENGTH_VS_MIN_GAMES = 60                     # parties (pondérées) minimum d'un matchup pour le découper par durée
+PHASES = (1200, 1800)                        # avant 20 min, de 20 à 30 min, après 30 min
+
+
+def add_length_vs(pages: list, rows) -> list:
+    """rows : (champ, role, durée en secondes, win, w, adversaire de lane). Ajoute « lengthVs » =
+    [[adversaire, parties < 20 min, victoires, parties 20-30 min, victoires, parties > 30 min, victoires], ...]
+    aux pages : quand le joueur gagne contre ce vis-à-vis (menu de build en partie). Matchups trop peu joués omis."""
+    acc: dict = defaultdict(lambda: defaultdict(lambda: [0.0] * 6))
+    for champ, role, seconds, win, w, opp in rows:
+        if seconds is None or opp is None:
+            continue
+        i = 0 if seconds < PHASES[0] else 1 if seconds < PHASES[1] else 2
+        gw = acc[(champ, role)][opp]
+        gw[2 * i] += w
+        gw[2 * i + 1] += w * win
+    for champ, role, entry in pages:
+        per = acc.get((champ, role))
+        if not per:
+            continue
+        out = [[opp, *(_r(x) for x in v)] for opp, v in sorted(per.items()) if v[0] + v[2] + v[4] >= LENGTH_VS_MIN_GAMES]
+        if out:
+            entry["lengthVs"] = out
+    return pages
+
+
 def add_length(pages: list, rows) -> list:
     """rows : (champ, role, durée en secondes, win, w). Ajoute « length » = [[tranche, parties, victoires], ...]
     aux pages des champions (les tranches trop peu jouées sont omises)."""

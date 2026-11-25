@@ -102,6 +102,59 @@ fn build_size(app: &tauri::AppHandle) -> (f64, f64) {
 
 /// Raccourci en partie : affiche le menu de build, ou le cache s'il est déjà affiché.
 /// La fenêtre est gardée cachée plutôt que fermée : un nouvel appui ne tombe jamais sur une fenêtre en train de se fermer.
+/// Raccourci en partie (Windows). Le jeu ignore les raccourcis globaux des autres applis quand il est au premier plan
+/// (RegisterHotKey ne reçoit rien) : pendant la partie, Spec regarde donc l'état des seules touches du raccourci,
+/// toutes les 25 ms, et prévient la fenêtre principale à l'appui. Rien n'est enregistré ni envoyé ailleurs.
+#[derive(Default)]
+struct InGameShortcut(std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>);
+
+#[cfg(windows)]
+fn parse_accel(accel: &str) -> Option<(Vec<i32>, i32)> {
+    let mut mods = Vec::new();
+    let mut key = None;
+    for part in accel.split('+').map(str::trim) {
+        match part.to_ascii_lowercase().as_str() {
+            "control" | "ctrl" => mods.push(0x11),
+            "alt" => mods.push(0x12),
+            "shift" => mods.push(0x10),
+            p if p.len() == 1 && p.chars().all(|c| c.is_ascii_alphanumeric()) => key = Some(p.to_ascii_uppercase().as_bytes()[0] as i32),
+            p if p.starts_with('f') => key = p[1..].parse::<i32>().ok().filter(|n| (1..=24).contains(n)).map(|n| 0x6F + n),
+            _ => return None,
+        }
+    }
+    key.map(|k| (mods, k))
+}
+
+#[tauri::command]
+fn ingame_shortcut(app: tauri::AppHandle, state: tauri::State<'_, InGameShortcut>, accel: Option<String>) -> bool {
+    use std::sync::atomic::Ordering;
+    let mut cur = state.0.lock().unwrap();
+    if let Some(stop) = cur.take() { stop.store(true, Ordering::Relaxed); }
+    #[cfg(windows)]
+    {
+        use tauri::Emitter;
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+        let Some((mods, key)) = accel.as_deref().and_then(parse_accel) else { return false };
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        *cur = Some(stop.clone());
+        std::thread::spawn(move || {
+            let down = |vk: i32| unsafe { (GetAsyncKeyState(vk) as u16 & 0x8000) != 0 };
+            let mut was = false;
+            while !stop.load(Ordering::Relaxed) {
+                // exactement ces modificateurs : Ctrl + Alt + S ne déclenche pas Alt + S
+                let extra = [0x10, 0x11, 0x12].iter().any(|m| !mods.contains(m) && down(*m));
+                let now = !extra && mods.iter().all(|m| down(*m)) && down(key);
+                if now && !was { let _ = app.emit("spec-ingame-shortcut", ()); }
+                was = now;
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+        });
+        return true;
+    }
+    #[cfg(not(windows))]
+    { let _ = (app, accel); false }
+}
+
 #[tauri::command]
 async fn overlay_toggle(app: tauri::AppHandle, kind: String) -> Result<bool, String> {
     let label = overlay_label(&kind)?;
@@ -258,10 +311,11 @@ pub fn run() {
             Ok(())
         })
         .manage(Lcu::new())
+        .manage(InGameShortcut::default())
         .invoke_handler(tauri::generate_handler![
             lcu_get, lcu_preselect, lcu_accept_queue, lcu_set_rune_page, lcu_match_history,
             lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, lcu_set_item_set, live_game, overlay_open,
-            overlay_toggle, overlay_close, overlay_interactive, install_path, client_window
+            overlay_toggle, ingame_shortcut, overlay_close, overlay_interactive, install_path, client_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

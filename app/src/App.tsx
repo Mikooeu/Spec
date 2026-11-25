@@ -15,7 +15,7 @@ import { orderSpells, recommend, runePageFor, scoreChampion, spellsFor, topForRo
 import { recordPick } from "./lib/impact";
 import { loadStats, register, usePersonal, useRegionStats, type Region } from "./lib/api";
 import { champName, int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
-import { importRunes, importSpells, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
+import { IN_APP, importRunes, importSpells, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
 import { AutoImportContext, ItemSetImportContext, RuneImportContext, SpellImportContext, useFlashKey, type AutoImport } from "./components/Runes";
 import { importItemSet } from "./lib/itemset";
 import { loadItems, useInfo } from "./lib/ddragon";
@@ -273,16 +273,35 @@ export default function App() {
   const onTopNow = useRef(false);
   onTopNow.current = compact && onTop;
   const inGameNow = useRef(false);
+  const inGameKeys = useRef(false);   // vrai quand la surveillance des touches en partie tourne (Windows)
   inGameNow.current = inGame != null;
   useEffect(() => {
     let stop: () => void = () => undefined, cancelled = false;
-    registerShortcut(shortcut, () => (inGameNow.current ? toggleBuildWindow() : toggleFromShortcut(onTopNow.current))).then((r) => {
+    // en partie sous Windows, c'est la surveillance des touches ci-dessous qui répond (le jeu bloque ce raccourci global)
+    registerShortcut(shortcut, () => (inGameNow.current ? (inGameKeys.current ? undefined : toggleBuildWindow()) : toggleFromShortcut(onTopNow.current))).then((r) => {
       if (cancelled) r.stop(); else stop = r.stop;
       if (r.error) console.warn("[Spec] raccourci indisponible", shortcut, r.error);
     });
     return () => { cancelled = true; stop(); };
   }, [shortcut]);
   useEffect(() => { if (!inGame) closeOverlay("build"); }, [inGame == null]); // eslint-disable-line react-hooks/exhaustive-deps
+  // pendant la partie : le raccourci est lu directement sur le clavier (le jeu au premier plan ignore les raccourcis globaux)
+  useEffect(() => {
+    if (!IN_APP || inGame == null || !shortcut) return;
+    let off: (() => void) | undefined, cancelled = false;
+    (async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const { listen } = await import("@tauri-apps/api/event");
+      const un = await listen("spec-ingame-shortcut", () => { toggleBuildWindow(); });
+      if (cancelled) { un(); return; }
+      off = un;
+      inGameKeys.current = await invoke<boolean>("ingame_shortcut", { accel: shortcut }).catch(() => false);
+    })();
+    return () => {
+      cancelled = true; off?.(); inGameKeys.current = false;
+      import("@tauri-apps/api/core").then(({ invoke }) => invoke("ingame_shortcut", { accel: null })).catch(() => undefined);
+    };
+  }, [inGame == null, shortcut]); // eslint-disable-line react-hooks/exhaustive-deps
   // champion verrouillé : import des runes et des sorts conseillés, si le joueur a activé le réglage
   const [flashKey] = useFlashKey();
   const [autoImport, setAutoImport] = useState<AutoImport | null>(null);
