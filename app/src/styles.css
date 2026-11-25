@@ -2417,8 +2417,10 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .bubble-pill.is-glow, .bubble-card.is-glow { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 1.5rem rgba(64, 156, 255, 0.45); }
 .bubble-card { display: flex; flex-direction: column; gap: 0.625rem; padding: 0.875rem; border-radius: 1rem;
   background: rgba(28, 28, 31, 0.96); border: 1px solid var(--border); box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.5);
-  animation: bubble-in 160ms ease-out; }
-@keyframes bubble-in { from { opacity: 0; transform: translateY(0.375rem); } to { opacity: 1; transform: none; } }
+  transform-origin: 50% 100%; animation: bubble-in 220ms cubic-bezier(0.2, 0.9, 0.25, 1); }
+.bubble-card.is-leaving { animation: bubble-out 180ms cubic-bezier(0.4, 0, 1, 1) forwards; pointer-events: none; }
+@keyframes bubble-in { from { opacity: 0; transform: translateY(0.75rem) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes bubble-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(0.5rem) scale(0.97); } }
 .bubble-card__head { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; }
 .bubble-card__head .link { font-size: 0.75rem; }
 .bubble-card__hint { margin: 0; font-size: 0.75rem; color: var(--text-2); }
@@ -2449,7 +2451,7 @@ button.game.game--win:hover, button.game.game--loss:hover { border-color: var(--
 .bubble-dots i.is-on { background: var(--accent); }
 .bubble-toast { position: absolute; left: 0; right: 0; bottom: calc(100% + 0.5rem); padding: 0.5rem 0.75rem; border-radius: 0.625rem;
   font-size: 0.75rem; background: rgba(28, 28, 31, 0.96); border: 1px solid var(--border); }
-@media (prefers-reduced-motion: reduce) { .bubble-pager__track, .bubble-card { transition: none; animation: none; } }
+@media (prefers-reduced-motion: reduce) { .bubble-pager__track, .bubble-card, .bubble-card.is-leaving { transition: none; animation: none; } }
 
 .build-window { position: relative; height: 100%; display: flex; flex-direction: column; margin: 1rem; height: calc(100% - 2rem);
   border-radius: 1rem; overflow: hidden; background: var(--bg-window); border: 1px solid var(--border);

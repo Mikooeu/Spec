@@ -174,8 +174,23 @@ export function BubbleWindow() {
 
 type Row = { champ: number; score: number; sub: string };
 
+/** Durée de l'animation de fermeture de la carte (doit suivre .bubble-card.is-leaving dans styles.css). */
+const CARD_OUT_MS = 180;
+
+/** Garde la carte affichée le temps de son animation de sortie : [affichée, en train de se fermer]. */
+function usePresence(open: boolean, outMs: number): [boolean, boolean] {
+  const [shown, setShown] = useState(open);
+  useEffect(() => {
+    if (open) { setShown(true); return; }
+    const id = window.setTimeout(() => setShown(false), outMs);
+    return () => window.clearTimeout(id);
+  }, [open, outMs]);
+  return [shown || open, shown && !open];
+}
+
 function Bubble({ stats, shared, draft, open }: { stats: Stats; shared: SharedState; draft: Draft; open: boolean }) {
   const { autofill, rows } = useRecos(stats, draft, shared.pool);
+  const [shown, leaving] = usePresence(open, CARD_OUT_MS);
   const [page, setPage] = useState(0);
   const [picked, setPicked] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -215,8 +230,8 @@ function Bubble({ stats, shared, draft, open }: { stats: Stats; shared: SharedSt
     };
     return (
       <>
-        {open && list.length > 0 && (
-          <div className="bubble-card">
+        {shown && list.length > 0 && (
+          <div className={`bubble-card${leaving ? " is-leaving" : ""}`}>
             <BubbleHead stats={stats} draft={draft} tag={t("Bans")} tone="bad" />
             <p className="bubble-card__hint">{draft.myChamp != null ? t("Bans conseillés · d’après {c}, ton pick annoncé", { c: champName(stats, draft.myChamp) }) : t("Bans conseillés en {role}", { role: ROLE_LABELS[draft.role] })}</p>
             <div className="bubble-rows">
@@ -246,8 +261,8 @@ function Bubble({ stats, shared, draft, open }: { stats: Stats; shared: SharedSt
     const auto = shared.autoImport?.champ === draft.myChamp ? shared.autoImport : null;
     return (
       <>
-        {open && (
-          <div className="bubble-card">
+        {shown && (
+          <div className={`bubble-card${leaving ? " is-leaving" : ""}`}>
             <BubbleHead stats={stats} draft={draft} tag={t("Verrouillé")} tone="good" />
             <RunePage stats={stats} champ={draft.myChamp} role={draft.role} laner={null} />
             <button className="link bubble-card__more" onClick={expand}>{t("Agrandir ↗")}</button>
@@ -276,8 +291,8 @@ function Bubble({ stats, shared, draft, open }: { stats: Stats; shared: SharedSt
     : t("{pct} · winrate estimé", { pct: wr });
   return (
     <>
-      {open && selRow && (
-        <div className={`bubble-card${glow ? " is-glow" : ""}`}>
+      {shown && selRow && (
+        <div className={`bubble-card${glow ? " is-glow" : ""}${leaving ? " is-leaving" : ""}`}>
           <BubbleHead stats={stats} draft={draft} tag={glow ? t("À toi") : draft.planning ? t("Annonce") : t("Sélection")} tone="accent" />
           {draft.planning && <p className="bubble-card__hint">{t("Ton pick à annoncer · adversaires encore inconnus")}</p>}
           <div className="bubble-pager">
