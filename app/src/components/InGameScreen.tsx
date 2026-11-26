@@ -15,6 +15,8 @@ import { groupIcons, ItemIcon, mergeStarts, SkillGrid, SkillStrip } from "./Cham
 import { MatchupNote } from "./MatchupNote";
 import { MatchupCard } from "./MatchupCard";
 interface Props {
+  /** Menu de build affiché par-dessus le jeu sans en prendre la souris : rien à cliquer, rien à faire défiler. */
+  passive?: boolean;
   stats: Stats;
   champ: number;
   role: number;
@@ -34,7 +36,7 @@ export interface Step { id: number; state: "done" | "next" | "later" }
 export interface GameStart { champ: number | null; role: number | null; enemies: number[] }
 
 /** Menu de build en partie : champion et rôle pris dans la partie dès qu'elle est chargée, sinon ceux de la draft. */
-export function InGameView({ stats, start, game, compact = false }: { stats: Stats; start: GameStart; game: LiveGame | null; compact?: boolean }) {
+export function InGameView({ stats, start, game, compact = false, passive = false }: { stats: Stats; start: GameStart; game: LiveGame | null; compact?: boolean; passive?: boolean }) {
   const champ = champIdOf(stats, game?.champion ?? null) ?? start.champ;
   const role = (game?.position ? POSITION_ROLE[game.position] : undefined) ?? start.role ?? 2;
   if (champ == null) {
@@ -45,11 +47,11 @@ export function InGameView({ stats, start, game, compact = false }: { stats: Sta
       </div></div>
     );
   }
-  return <InGameScreen stats={stats} champ={champ} role={role} enemies={start.enemies} game={game} compact={compact} />;
+  return <InGameScreen stats={stats} champ={champ} role={role} enemies={start.enemies} game={game} compact={compact} passive={passive} />;
 }
 
 /** Menu de build pendant la partie : ordre des sorts, départ, bottes, build et objets face à l'équipe adverse. */
-export function InGameScreen({ stats, champ, role, enemies, game, compact = false }: Props) {
+export function InGameScreen({ stats, champ, role, enemies, game, compact = false, passive = false }: Props) {
   const items = useInfo(loadItems, stats.ddragon);
   const spells = useInfo(loadSpells, stats.ddragon);
   const page = stats.champPages.get(`${champ}|${role}`) ?? null;
@@ -215,7 +217,7 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
             : <Collecting />}
           </section>
 
-          {(page?.length?.length ?? 0) >= 2 && (
+          {!passive && (page?.length?.length ?? 0) >= 2 && (
             <section className="ig2-card">
               <h2>{t("Winrate selon la durée de la partie")}</h2>
               <LengthChart points={page!.length!} now={game ? game.time / 60 : null} height={170} />
@@ -224,7 +226,7 @@ export function InGameScreen({ stats, champ, role, enemies, game, compact = fals
         </div>
 
         <div className="ig2__col">
-          {opponent != null && <MatchupCard stats={stats} champ={champ} role={role} enemy={opponent} />}
+          {opponent != null && <MatchupCard stats={stats} champ={champ} role={role} enemy={opponent} readOnly={passive} />}
           <section className="ig2-card">
             <h2>{t("Départ et sorts")}</h2>
             <StartRow page={page} items={items} spells={spells} opponent={opponent} />

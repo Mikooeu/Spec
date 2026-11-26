@@ -1341,4 +1341,5 @@ export const EN: Record<string, string> = {
   "Tu gagnes la plupart des 1v1 ({p}) : cherche les échanges.": "You win most 1v1s ({p}): look for trades.",
   "{c} gagne la plupart des 1v1 ({p}) : évite les échanges longs.": "{c} wins most 1v1s ({p}): avoid long trades.",
   "Attention à son niveau 6 : {c} gagne {p} des 1v1 entre les niveaux 6 et 8.": "Watch out for their level 6: {c} wins {p} of 1v1s between levels 6 and 8.",
+  "Rappuie sur {k} pour le fermer": "Press {k} again to close it",
 };

@@ -375,37 +375,27 @@ export function BuildWindow() {
   const shared = useSharedState();
   const game = useLiveGame(true, false);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [shortcut] = useSpecShortcut();
   const [shown, setShown] = useState(0);   // relance le message « Rappuie sur… » à chaque affichage
   useEffect(() => {
     if (!IN_APP) return;
     let off: (() => void) | undefined;
-    currentWindow().then(async (w) => {
-      await w.show(); await w.setFocus();
-      off = await w.onFocusChanged(({ payload }) => { if (payload) setShown((n) => n + 1); });
-    });
+    import("@tauri-apps/api/event").then(async ({ listen }) => { off = await listen("spec:build-shown", () => setShown((n) => n + 1)); });
     return () => off?.();
-  }, []);
-  const [shortcut] = useSpecShortcut();
-  const close = async () => { (await currentWindow()).hide(); };   // gardée cachée : le raccourci la réaffiche aussitôt
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
   }, []);
   const start = shared?.inGame ?? null;
   return (
     <div className="build-window">
       <header className="topbar build-window__bar" data-tauri-drag-region>
         <div className="topbar__slot" ref={setSlot} />
-        <button className="icon-btn" onClick={close} aria-label={t("Fermer")} title={t("Fermer")}>×</button>
       </header>
       <TopBarSlot.Provider value={slot}>
         <div className="build-window__body">
-          {stats && start ? <InGameView stats={stats} start={start} game={game} />
+          {stats && start ? <InGameView stats={stats} start={start} game={game} passive />
             : <div className="empty-state"><div className="spinner" /></div>}
         </div>
       </TopBarSlot.Provider>
-      {shortcut && <div key={shown} className="build-window__hint" role="status">{t("Rappuie sur {k} pour revenir au jeu", { k: shortcutLabel(shortcut) })}</div>}
+      {shortcut && <div key={shown} className="build-window__hint" role="status">{t("Rappuie sur {k} pour le fermer", { k: shortcutLabel(shortcut) })}</div>}
     </div>
   );
 }

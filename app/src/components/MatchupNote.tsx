@@ -6,7 +6,7 @@ import type { Stats } from "../lib/score";
 import { champName } from "../lib/ui";
 
 /** Carte bleue avec la note, ou lien « Ajouter une note » quand il n'y en a pas encore. */
-export function MatchupNote({ stats, champ, role, enemy, compact = false }: { stats: Stats; champ: number; role: number; enemy: number; compact?: boolean }) {
+export function MatchupNote({ stats, champ, role, enemy, compact = false, readOnly = false }: { stats: Stats; champ: number; role: number; enemy: number; compact?: boolean; readOnly?: boolean }) {
   const [notes, setNotes] = useMatchupNotes();
   const [editing, setEditing] = useState(false);
   const note = getNote(notes, champ, role, enemy);
@@ -18,11 +18,11 @@ export function MatchupNote({ stats, champ, role, enemy, compact = false }: { st
         <div className={`mnote${compact ? " mnote--compact" : ""}`} onClick={(e) => e.stopPropagation()}>
           <div className="mnote__head">
             <span className="mnote__label">{t("Ta note face à {e}", { e: enemyName })}</span>
-            <button className="link-btn" onClick={() => setEditing(true)}>{t("Modifier")}</button>
+            {!readOnly && <button className="link-btn" onClick={() => setEditing(true)}>{t("Modifier")}</button>}
           </div>
           <p className="mnote__text">{note}</p>
         </div>
-      ) : (
+      ) : readOnly ? null : (
         <button className="link-btn mnote__add" onClick={(e) => { e.stopPropagation(); setEditing(true); }}>
           {t("Ajouter une note face à {e}", { e: enemyName })}
         </button>

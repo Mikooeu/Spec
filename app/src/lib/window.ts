@@ -195,6 +195,8 @@ export async function toggleBuildWindow(): Promise<void> {
   if (!IN_APP) return;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("overlay_toggle", { kind: "build" });
+    const shown = await invoke<boolean>("overlay_toggle", { kind: "build" });
+    // la fenêtre ne prend jamais le focus : on la prévient qu'elle vient d'être affichée (message « Rappuie sur… »)
+    if (shown) (await import("@tauri-apps/api/event")).emit("spec:build-shown");
   } catch (e) { console.warn("[Spec] menu de build", e); }
 }

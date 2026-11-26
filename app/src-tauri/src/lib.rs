@@ -80,7 +80,8 @@ fn side_window(app: &tauri::AppHandle, label: &'static str) -> Result<(), String
         "bubble" => builder.inner_size(380.0, 76.0).resizable(false).skip_taskbar(true).shadow(false).focused(false),
         _ => {
             let (w, h) = build_size(app);
-            builder.inner_size(w, h).resizable(false).skip_taskbar(true).shadow(false).focused(true).center()
+            // comme Porofessor : un écran posé devant le jeu, qui ne prend ni le clavier ni la souris
+            builder.inner_size(w, h).resizable(false).skip_taskbar(true).shadow(false).focused(false).focusable(false).center()
         }
     };
     #[cfg(not(target_os = "macos"))]
@@ -167,12 +168,30 @@ async fn overlay_toggle(app: tauri::AppHandle, kind: String) -> Result<bool, Str
         let (bw, bh) = build_size(&app);
         let _ = w.set_size(tauri::LogicalSize::new(bw, bh));
         let _ = w.center();
-        w.show().map_err(|e| e.to_string())?;
-        let _ = w.set_focus();
+        show_passive(&w)?;
         return Ok(true);
     }
     side_window(&app, label)?;
+    match app.get_webview_window(label) {
+        Some(w) => show_passive(&w)?,
+        None => return Err("build_window".into()),
+    }
     Ok(true)
+}
+
+/// Affiche le menu de build sans activer sa fenêtre : League of Legends garde le clavier et la souris
+/// (la caméra bouge toujours au bord de l'écran, les clics passent au jeu). Le raccourci le referme.
+fn show_passive(w: &tauri::WebviewWindow) -> Result<(), String> {
+    let _ = w.set_ignore_cursor_events(true);
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE};
+        let hwnd = w.hwnd().map_err(|e| e.to_string())?;
+        unsafe { ShowWindow(hwnd.0 as _, SW_SHOWNOACTIVATE) };
+        return Ok(());
+    }
+    #[cfg(not(windows))]
+    w.show().map_err(|e| e.to_string())
 }
 
 #[tauri::command]

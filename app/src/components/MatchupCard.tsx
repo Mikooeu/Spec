@@ -5,6 +5,7 @@
 import { t } from "../lib/i18n";
 import type { Stats } from "../lib/score";
 import { champName, patchLabel, pct } from "../lib/ui";
+import { getNote, useMatchupNotes } from "../lib/notes";
 import { MatchupNote } from "./MatchupNote";
 
 const MIN_LANE = 30;     // parties du matchup en dessous desquelles on ne donne pas de chiffres
@@ -13,7 +14,7 @@ const GAP = 0.03;        // écart de winrate entre tranches à partir duquel on
 const LEVEL_FROM = [1, 3, 5, 6, 9, 12];   // tranches de niveau des duels (voir scoring/builds.py, DUEL_LEVELS)
 const MIN_DUELS = 6;     // duels (pondérés) minimum dans une tranche pour en parler
 
-export function MatchupCard({ stats, champ, role, enemy }: { stats: Stats; champ: number; role: number; enemy: number }) {
+export function MatchupCard({ stats, champ, role, enemy, readOnly = false }: { stats: Stats; champ: number; role: number; enemy: number; readOnly?: boolean }) {
   const name = champName(stats, enemy);
   const [lg, lw] = stats.lane.get(`${champ}|${role}|${enemy}`) ?? [0, 0];
   const wr = lg >= MIN_LANE ? lw / lg : null;
@@ -35,6 +36,8 @@ export function MatchupCard({ stats, champ, role, enemy }: { stats: Stats; champ
 
   // à respecter : ce que disent les 1v1 entre vis-à-vis (kills sans aide, selon TON niveau au moment du kill)
   const tips = duelTips(stats, champ, role, enemy, name);
+  const [notes] = useMatchupNotes();
+  const hasNote = !!getNote(notes, champ, role, enemy);
 
   return (
     <section className="ig2-card mcard">
@@ -63,11 +66,10 @@ export function MatchupCard({ stats, champ, role, enemy }: { stats: Stats; champ
         </>
       )}
 
-      <h3 className="mcard__sub">{t("À respecter")}</h3>
-      <MatchupNote stats={stats} champ={champ} role={role} enemy={enemy} />
+      {(!readOnly || tips.lines.length > 0 || hasNote) && <h3 className="mcard__sub">{t("À respecter")}</h3>}
+      <MatchupNote stats={stats} champ={champ} role={role} enemy={enemy} readOnly={readOnly} />
       {tips.lines.length > 0 && (
         <div className="mcard__trend">
-          <span className="mcard__trend-label">{t("D’après les 1v1 de {n} parties Master+", { n: Math.round(tips.games).toLocaleString() })}</span>
           {tips.lines.map((x) => <p key={x.text} className={x.tone ? `mcard__tip mcard__tip--${x.tone}` : "mcard__tip"}>{x.text}</p>)}
         </div>
       )}
