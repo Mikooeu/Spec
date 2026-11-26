@@ -162,7 +162,7 @@ async fn overlay_toggle(app: tauri::AppHandle, kind: String) -> Result<bool, Str
     if label != "build" { return Err("unsupported".into()); }
     if let Some(w) = app.get_webview_window(label) {
         if w.is_visible().unwrap_or(false) {
-            w.hide().map_err(|e| e.to_string())?;
+            hide_passive(&w)?;
             return Ok(false);
         }
         let (bw, bh) = build_size(&app);
@@ -192,6 +192,20 @@ fn show_passive(w: &tauri::WebviewWindow) -> Result<(), String> {
     }
     #[cfg(not(windows))]
     w.show().map_err(|e| e.to_string())
+}
+
+/// Cache le menu de build. Il a été affiché directement par Windows (show_passive) : Tauri le croit encore caché
+/// et ignorerait un hide() (c'était le bug du menu impossible à refermer en 0.20.2), donc on le cache de la même façon.
+fn hide_passive(w: &tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE};
+        let hwnd = w.hwnd().map_err(|e| e.to_string())?;
+        unsafe { ShowWindow(hwnd.0 as _, SW_HIDE) };
+        return Ok(());
+    }
+    #[cfg(not(windows))]
+    w.hide().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -236,7 +250,7 @@ fn overlay_interactive(app: tauri::AppHandle, kind: String, on: bool) -> Result<
 fn overlay_close(app: tauri::AppHandle, kind: String) -> Result<(), String> {
     if let Some(w) = app.get_webview_window(overlay_label(&kind)?) {
         // masquée tout de suite, même si la fermeture tarde
-        let _ = w.hide();
+        let _ = hide_passive(&w);
         w.close().map_err(|e| e.to_string())?;
     }
     Ok(())
