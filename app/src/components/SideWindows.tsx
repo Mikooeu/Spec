@@ -10,6 +10,7 @@ import { loadItems, localizeChampions, useInfo } from "../lib/ddragon";
 import { banSuggestions, ROLE_LABELS, type Stats } from "../lib/score";
 import { champName, pct, usePersistent, wrTone } from "../lib/ui";
 import { sendAction, useSharedState, type SharedState } from "../lib/bridge";
+import { FullscreenNotice } from "./FullscreenNotice";
 import { importRunes, importSpells, IN_APP } from "../lib/lcu";
 import { importItemSet } from "../lib/itemset";
 import { dockToClient, resetDock, setOnTop } from "../lib/window";
@@ -62,6 +63,7 @@ function Importers({ stats, shared, children }: { stats: Stats; shared: SharedSt
 const preselect = (champ: number) => sendAction({ kind: "preselect", champ });
 const ban = (champ: number) => sendAction({ kind: "ban", champ });
 const expand = () => { sendAction({ kind: "expand" }); };
+const borderless = () => { sendAction({ kind: "borderless" }); };
 
 // ---------------------------------------------------------------------------------------------
 // Mode compact collé au client
@@ -90,6 +92,7 @@ export function CompactWindow() {
   if (!stats || !shared) return <div className="compact"><div className="compact__body compact__waiting"><div className="spinner" /></div></div>;
   return (
     <Importers stats={stats} shared={shared}>
+      {shared.fullscreen && <div className="compact__fsn"><FullscreenNotice state={shared.fullscreen} onSwitch={borderless} compact /></div>}
       <CompactScreen stats={stats} draft={shared.draft} pool={shared.pool} live={shared.live}
                      onTop={onTop} clientOn={shared.clientOn} clientText={shared.clientText}
                      onRole={(role) => { sendAction({ kind: "role", role }); }}
@@ -244,11 +247,12 @@ function Bubble({ stats, shared, draft, open }: { stats: Stats; shared: SharedSt
               ))}
             </div>
             {top && <button className="btn btn--primary bubble-card__cta" onClick={() => doBan(top.champ)}>{t("Présélectionner {c} dans le client", { c: champName(stats, top.champ) })}</button>}
+            <FullscreenNotice state={shared.fullscreen ?? null} onSwitch={borderless} compact />
             <button className="link bubble-card__more" onClick={expand}>{t("Agrandir ↗")}</button>
           </div>
         )}
         {top && (
-          <Pill stats={stats} champ={top.champ} tone="bad" title={t("Bannir {c}", { c: champName(stats, top.champ) })}
+          <Pill alert={shared.fullscreen === "full" || shared.fullscreen === "error"} stats={stats} champ={top.champ} tone="bad" title={t("Bannir {c}", { c: champName(stats, top.champ) })}
                 sub={why(top.winrate, top.mine)} subTone="bad" action={t("Présélectionner")} onAction={() => doBan(top.champ)} />
         )}
         {notice && <div className="bubble-toast" role="status">{notice}</div>}
@@ -265,10 +269,11 @@ function Bubble({ stats, shared, draft, open }: { stats: Stats; shared: SharedSt
           <div className={`bubble-card${leaving ? " is-leaving" : ""}`}>
             <BubbleHead stats={stats} draft={draft} tag={t("Verrouillé")} tone="good" />
             <RunePage stats={stats} champ={draft.myChamp} role={draft.role} laner={null} />
+            <FullscreenNotice state={shared.fullscreen ?? null} onSwitch={borderless} compact />
             <button className="link bubble-card__more" onClick={expand}>{t("Agrandir ↗")}</button>
           </div>
         )}
-        <Pill stats={stats} champ={draft.myChamp} tone={auto?.ok ? "good" : "accent"}
+        <Pill alert={shared.fullscreen === "full" || shared.fullscreen === "error"} stats={stats} champ={draft.myChamp} tone={auto?.ok ? "good" : "accent"}
               title={t("{c} verrouillé", { c: champName(stats, draft.myChamp) })}
               sub={auto?.ok ? t("✓ Runes et sorts importés") : t("Passe la souris pour importer tes runes")} subTone={auto?.ok ? "good" : "neutral"} />
       </>
@@ -329,11 +334,12 @@ function Bubble({ stats, shared, draft, open }: { stats: Stats; shared: SharedSt
             ? <p className="bubble-card__ok">{t("✓ Présélectionné dans le client")}</p>
             : sel != null && <button className="btn btn--primary bubble-card__cta" onClick={() => doPick(sel)}>{t("Présélectionner {c} dans le client", { c: champName(stats, sel) })}</button>}
           {glow && <p className="bubble-card__hint bubble-card__hint--center">{t("Ensuite, verrouille dans le client")}</p>}
+          <FullscreenNotice state={shared.fullscreen ?? null} onSwitch={borderless} compact />
           <button className="link bubble-card__more" onClick={expand}>{t("Agrandir ↗")}</button>
         </div>
       )}
       {pill && (
-        <Pill stats={stats} champ={pill.champ} tone="accent" glow={glow} title={title} sub={sub} subTone={wrTone(pill.score)}
+        <Pill alert={shared.fullscreen === "full" || shared.fullscreen === "error"} stats={stats} champ={pill.champ} tone="accent" glow={glow} title={title} sub={sub} subTone={wrTone(pill.score)}
               action={draft.myChamp === pill.champ ? undefined : t("Présélectionner")} onAction={() => doPick(pill.champ)} />
       )}
       {notice && <div className="bubble-toast" role="status">{notice}</div>}
@@ -354,14 +360,15 @@ function BubbleHead({ stats, draft, tag, tone }: { stats: Stats; draft: Draft; t
   );
 }
 
-function Pill({ stats, champ, title, sub, subTone, tone, glow = false, action, onAction }:
-  { stats: Stats; champ: number; title: string; sub: string; subTone: string; tone: "accent" | "bad" | "good"; glow?: boolean; action?: string; onAction?: () => void }) {
+function Pill({ stats, champ, title, sub, subTone, tone, glow = false, action, onAction, alert = false }:
+  { stats: Stats; champ: number; title: string; sub: string; subTone: string; tone: "accent" | "bad" | "good"; glow?: boolean; action?: string; onAction?: () => void; alert?: boolean }) {
   return (
     <div className={`bubble-pill bubble-pill--${tone}${glow ? " is-glow" : ""}`}>
       <Logo className="bubble-pill__logo" />
       <ChampionIcon stats={stats} champ={champ} size={2.25} round />
       <span className="bubble-pill__text"><strong>{title}</strong><small className={`tone-${subTone}`}>{sub}</small></span>
       {action && <button className="btn btn--primary bubble-pill__action" onClick={onAction}>{action}</button>}
+      {alert && <span className="bubble-pill__alert" title={t("Ton jeu est en Plein écran")} aria-label={t("Ton jeu est en Plein écran")} />}
     </div>
   );
 }

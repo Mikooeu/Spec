@@ -8,7 +8,11 @@
 //! - trois écritures seulement : la présélection (hover) d'un champion, sans jamais envoyer
 //!   `completed` (Spec ne verrouille pas un pick), l'import de runes dans la page sélectionnée
 //!   dans la draft (ou une page « Spec » si celle-ci n'est pas modifiable ; aucune autre page n'est touchée),
-//!   et le choix des deux sorts d'invocateur pendant la draft.
+//!   et le choix des deux sorts d'invocateur pendant la draft ;
+//! - le mode d'affichage du jeu passé en « Sans bordure », seulement sur un clic du joueur (pendant la draft),
+//!   pour que le menu de build puisse s'afficher par-dessus la partie. Aucun autre réglage n'est touché.
+//! - lectures en plus : le mode d'affichage du jeu (rien d'autre n'est renvoyé à l'interface) et la liste d'amis,
+//!   réduite à ce qu'affiche la recherche de joueur (Riot ID, icône, statut) et jamais envoyée au serveur.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -99,6 +103,51 @@ pub fn spells_body(spell1: u32, spell2: u32) -> Result<Value, String> {
     let ok = |s: u32| (1..=99).contains(&s);
     if !ok(spell1) || !ok(spell2) || spell1 == spell2 { return Err("bad_spells".into()); }
     Ok(json!({ "spell1Id": spell1, "spell2Id": spell2 }))
+}
+
+/// Réglages du jeu (contenu de game.cfg) : on ne lit et n'écrit que General.WindowMode.
+pub const GAME_SETTINGS: &str = "/lol-game-settings/v1/game-settings";
+const GAME_SETTINGS_SAVE: &str = "/lol-game-settings/v1/save";
+/// Liste d'amis du client.
+pub const FRIENDS: &str = "/lol-chat/v1/friends";
+/// General.WindowMode : 0 plein écran, 1 fenêtré, 2 sans bordure (vérifié dans game.cfg).
+pub const WINDOW_FULLSCREEN: i64 = 0;
+pub const WINDOW_BORDERLESS: i64 = 2;
+
+pub fn window_mode_of(v: &Value) -> Option<i64> {
+    v.get("General")?.get("WindowMode")?.as_i64()
+}
+
+/// Corps de l'écriture : uniquement le mode d'affichage.
+pub fn borderless_body() -> Value {
+    json!({ "General": { "WindowMode": WINDOW_BORDERLESS } })
+}
+
+/// Amis réduits à ce qu'affiche la recherche : nom, tag, identifiant, icône, statut et champion en cours.
+pub fn trim_friends(v: &Value) -> Value {
+    let Some(list) = v.as_array() else { return json!([]) };
+    let out: Vec<Value> = list.iter().filter_map(|f| {
+        let name = f.get("gameName")?.as_str()?.trim();
+        let tag = f.get("gameTag").and_then(Value::as_str).unwrap_or("").trim();
+        let puuid = f.get("puuid")?.as_str()?;
+        if name.is_empty() || !valid_puuid(puuid) { return None; }
+        let avail = f.get("availability").and_then(Value::as_str).unwrap_or("offline");
+        let lol = f.get("lol");
+        let game = lol.and_then(|l| l.get("gameStatus")).and_then(Value::as_str).unwrap_or("");
+        let status = if avail == "offline" { "offline" } else {
+            match game {
+                "inGame" => "inGame",
+                "championSelect" => "championSelect",
+                "inQueue" => "inQueue",
+                _ => match avail { "away" => "away", "dnd" => "dnd", "mobile" => "mobile", _ => "chat" },
+            }
+        };
+        let champ = lol.and_then(|l| l.get("championId")).and_then(|c| c.as_u64().or_else(|| c.as_str()?.parse().ok())).filter(|c| *c > 0 && *c < 10_000);
+        let icon = f.get("icon").and_then(Value::as_i64).filter(|i| *i >= 0);
+        Some(json!({ "name": name, "tag": tag, "puuid": puuid, "icon": icon, "status": status,
+                     "champ": if status == "inGame" { champ } else { None } }))
+    }).take(500).collect();
+    Value::Array(out)
 }
 
 pub fn is_allowed(path: &str) -> bool {
@@ -384,6 +433,26 @@ impl Lcu {
         Ok(json!({ "summoner": summoner, "ranked": ranked, "history": history }))
     }
 
+    /// Mode d'affichage du jeu (General.WindowMode), ou None si le client ne le donne pas.
+    pub async fn window_mode(&self) -> Result<Option<i64>, String> {
+        Ok(window_mode_of(&self.read(GAME_SETTINGS).await?))
+    }
+
+    /// Passe le jeu en « Sans bordure ». Seulement sur un clic du joueur. Vérifie ensuite que le client l'a gardé.
+    pub async fn set_borderless(&self) -> Result<(), String> {
+        self.raw(reqwest::Method::PATCH, GAME_SETTINGS, Some(&borderless_body())).await?;
+        let _ = self.raw(reqwest::Method::POST, GAME_SETTINGS_SAVE, None).await;   // écrit game.cfg tout de suite si le client le propose
+        match self.window_mode().await? {
+            Some(WINDOW_BORDERLESS) => Ok(()),
+            _ => Err("not_applied".into()),
+        }
+    }
+
+    /// Amis du client, réduits (voir trim_friends).
+    pub async fn friends(&self) -> Result<Value, String> {
+        Ok(trim_friends(&self.read(FRIENDS).await?))
+    }
+
     /// Accepte la partie trouvée (ready check). Seulement sur un clic du joueur, jamais automatiquement.
     pub async fn accept_ready_check(&self) -> Result<(), String> {
         self.raw(reqwest::Method::POST, "/lol-matchmaking/v1/ready-check/accept", None).await.map(|_| ())
@@ -586,6 +655,35 @@ pub fn preselect_body(champion_id: u32) -> Value {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn window_mode_and_body() {
+        let v = json!({ "General": { "WindowMode": 0, "Width": 1920 }, "HUD": {} });
+        assert_eq!(window_mode_of(&v), Some(WINDOW_FULLSCREEN));
+        assert_eq!(window_mode_of(&json!({})), None);
+        assert_eq!(borderless_body(), json!({ "General": { "WindowMode": 2 } }));
+        assert!(!is_allowed(GAME_SETTINGS));   // pas lisible en entier depuis l'interface
+        assert!(!is_allowed(FRIENDS));
+    }
+
+    #[test]
+    fn friends_are_trimmed() {
+        let uuid = "8d5b4ea5-0bd3-5e19-9f0a-1b2c3d4e5f60";
+        let v = json!([
+            { "gameName": "Mistral", "gameTag": "FR1", "puuid": uuid, "icon": 588, "availability": "dnd",
+              "lol": { "gameStatus": "inGame", "championId": "103", "level": "30" }, "note": "secret", "summonerId": 1 },
+            { "gameName": "Orage", "gameTag": "EUW", "puuid": uuid, "availability": "offline", "lol": { "gameStatus": "inGame" } },
+            { "gameName": "", "puuid": uuid },
+            { "gameName": "Bad", "puuid": "../x" },
+        ]);
+        let out = trim_friends(&v);
+        let a = out.as_array().unwrap();
+        assert_eq!(a.len(), 2);
+        assert_eq!(a[0], json!({ "name": "Mistral", "tag": "FR1", "puuid": uuid, "icon": 588, "status": "inGame", "champ": 103 }));
+        assert_eq!(a[1]["status"], "offline");
+        assert!(a[1]["champ"].is_null());
+        assert_eq!(trim_friends(&json!({"x": 1})), json!([]));
+    }
+
     use super::*;
 
     #[test]

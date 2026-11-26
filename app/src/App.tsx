@@ -42,6 +42,7 @@ import { useCompactShape, useDefaultRegion, useImportOnLock, useSpecShortcut, us
 import { t } from "./lib/i18n";
 import { usePublishState, type SharedState } from "./lib/bridge";
 import { TopBar, TopBarSlot } from "./components/TopBar";
+import { FullscreenNotice, type FullscreenState } from "./components/FullscreenNotice";
 
 type Screen = "draft" | "profile" | "tier" | "pool" | "champion" | "overlay" | "settings";
 interface ChampView { champ: number; role: number }
@@ -114,6 +115,23 @@ export default function App() {
   const session = client.status === "champselect" ? client.session : null;
   useEffect(() => { if (!session) setRoleOverride(null); }, [session == null]); // eslint-disable-line react-hooks/exhaustive-deps
   const live = session ? sessionToDraft(session, roleOverride) : null;
+  // jeu réglé en Plein écran : on prévient pendant la draft (le menu de build ne passerait pas par-dessus la partie)
+  const [fullscreen, setFullscreen] = useState<FullscreenState>(null);
+  useEffect(() => {
+    if (!live || !IN_APP) { setFullscreen(null); return; }
+    let alive = true;
+    import("@tauri-apps/api/core").then(({ invoke }) => invoke<boolean | null>("lcu_window_mode"))
+      .then((full) => { if (alive && full) setFullscreen("full"); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [!!live]); // eslint-disable-line react-hooks/exhaustive-deps
+  const switchBorderless = async () => {
+    setFullscreen("switching");
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("lcu_set_borderless");
+      setFullscreen("done");
+    } catch { setFullscreen("error"); }
+  };
   // set d'objets du shop : remis à jour quand la draft se termine (ton champion et les 5 adversaires verrouillés)
   const [importOnLock] = useImportOnLock();   // runes et sorts au verrouillage, set d'objets à la fin de la draft
   const itemInfo = useInfo(loadItems, stats?.ddragon ?? "");
@@ -352,8 +370,8 @@ export default function App() {
   const sideDraft = live ?? null;
   const shared = useMemo<SharedState>(() => ({
     draft: sideDraft, live: !!live, pool: sideDraft ? pools[sideDraft.role] : [], perso, autoImport,
-    clientOn, clientText, inGame,
-  }), [JSON.stringify(sideDraft), !!live, pools, perso, autoImport, clientOn, clientText, inGame]); // eslint-disable-line react-hooks/exhaustive-deps
+    clientOn, clientText, inGame, fullscreen,
+  }), [JSON.stringify(sideDraft), !!live, pools, perso, autoImport, clientOn, clientText, inGame, fullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
   usePublishState(shared, async (a) => {
     switch (a.kind) {
       case "preselect": return session ? preselect(session, a.champ) : t("La sélection des champions est terminée.");
@@ -361,6 +379,7 @@ export default function App() {
       case "role": setRoleOverride(a.role); return null;
       case "pool": setSideDismissed(true); onPool(a.role); await showMainWindow(); return null;
       case "expand": setSideDismissed(true); setScreen("draft"); await showMainWindow(); return null;
+      case "borderless": await switchBorderless(); return null;
     }
   });
 
@@ -515,6 +534,7 @@ export default function App() {
         )}
         {stats && screen === "draft" && live && (
           <DraftScreen stats={stats} draft={live} pool={pools[live.role]} wide={wide} live
+                       banner={<FullscreenNotice state={fullscreen} onSwitch={switchBorderless} onDismiss={() => setFullscreen(null)} />}
                        onChange={(d) => setRoleOverride(d.role)}
                        onPreselect={doPreselect} onBan={doBan} perso={perso} />
         )}

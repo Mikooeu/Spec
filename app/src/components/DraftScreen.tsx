@@ -1,5 +1,5 @@
 import { Chip, TopBar } from "./TopBar";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   LOW_DATA_GAMES, ROLE_LABELS, banSuggestions, type BanSuggestion, draftGain, explain, isBlind, recommend,
   scoreChampion, topForRole, type Result, type Stats,
@@ -48,11 +48,13 @@ interface Props {
   /** En direct : survole le champion pour ton ban, renvoie un message d'erreur ou null. */
   onBan?: (champ: number) => Promise<string | null>;
   perso?: PersonalState;
+  /** Bandeau sous le titre (jeu en Plein écran). */
+  banner?: ReactNode;
 }
 
 type Slot = { side: "ally" | "enemy"; index: number } | null;
 
-export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = false, onPreselect, onBan, perso }: Props) {
+export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = false, onPreselect, onBan, perso, banner }: Props) {
   const [picking, setPicking] = useState<Slot>(null);
   const [openChamp, setOpenChamp] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -97,6 +99,7 @@ export function DraftScreen({ stats, draft, pool, wide, onChange, onEnd, live = 
           )}
           {!live && onEnd && <button className="btn btn--secondary" onClick={onEnd}>{t("Terminer la démo")}</button>}
       </TopBar>
+      {banner}
 
       <DraftBand stats={stats} draft={draft} live={live} onPick={live ? undefined : setPicking} />
 

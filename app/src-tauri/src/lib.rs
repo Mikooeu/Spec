@@ -248,6 +248,24 @@ async fn lcu_find_player(state: tauri::State<'_, Lcu>, game_name: String, tag_li
     state.find_player(&game_name, &tag_line).await
 }
 
+/// Le jeu est-il réglé en Plein écran ? (None si le client ne donne pas le réglage)
+#[tauri::command]
+async fn lcu_window_mode(state: tauri::State<'_, Lcu>) -> Result<Option<bool>, String> {
+    Ok(state.window_mode().await?.map(|m| m == lcu::WINDOW_FULLSCREEN))
+}
+
+/// Passe le jeu en Sans bordure (clic du joueur pendant la draft).
+#[tauri::command]
+async fn lcu_set_borderless(state: tauri::State<'_, Lcu>) -> Result<(), String> {
+    state.set_borderless().await
+}
+
+/// Amis du client (Riot ID, icône, statut), pour la recherche de joueur.
+#[tauri::command]
+async fn lcu_friends(state: tauri::State<'_, Lcu>) -> Result<Value, String> {
+    state.friends().await
+}
+
 /// Profil, rang et dernières parties d'un joueur.
 #[tauri::command]
 async fn lcu_player(state: tauri::State<'_, Lcu>, puuid: String, count: u32) -> Result<Value, String> {
@@ -333,7 +351,7 @@ pub fn run() {
         .manage(InGameShortcut::default())
         .invoke_handler(tauri::generate_handler![
             lcu_get, lcu_preselect, lcu_accept_queue, lcu_set_rune_page, lcu_match_history,
-            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_set_spells, lcu_set_item_set, live_game, overlay_open,
+            lcu_game, lcu_timeline, lcu_find_player, lcu_player, lcu_window_mode, lcu_set_borderless, lcu_friends, lcu_set_spells, lcu_set_item_set, live_game, overlay_open,
             overlay_toggle, ingame_shortcut, overlay_close, overlay_interactive, install_path, client_window
         ])
         .run(tauri::generate_context!())

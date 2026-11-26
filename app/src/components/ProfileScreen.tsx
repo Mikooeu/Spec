@@ -23,6 +23,7 @@ import { Segmented } from "./Segmented";
 import { DayBars, StatsView } from "./StatsView";
 import { loadSeasonStats, statsOf, type SeasonStats } from "../lib/seasonStats";
 import { t, locale, ordinal, plural } from "../lib/i18n";
+import { addRecent, loadFriends, matchLength, removeRecent, splitRiotId, useRecentPlayers, type Friend, type FriendStatus, type RecentPlayer } from "../lib/players";
 
 export type { Pools } from "./PoolScreen";
 
@@ -72,7 +73,7 @@ export function ProfileScreen({ stats, account, clientOn, perso, onRegister, lpV
       <TopBar title={t("Profil")}>
         {viewing && <button className="link-back" onClick={() => setViewing(null)}>{t("← Ton profil")}</button>}
         <div className="topbar__sub" ref={setBar} />
-        <PlayerSearch region={account?.region ?? null} clientOn={clientOn} onFound={open} />
+        <PlayerSearch stats={stats} region={account?.region ?? null} clientOn={clientOn} onFound={open} />
       </TopBar>
       <ProfileBar.Provider value={bar}>
       <div key={viewing ?? "me"} className="profile-view fade-in">
@@ -87,38 +88,153 @@ export function ProfileScreen({ stats, account, clientOn, perso, onRegister, lpV
   );
 }
 
-function PlayerSearch({ region, clientOn, onFound }: { region: string | null; clientOn: boolean; onFound: (puuid: string) => void }) {
+type Suggestion =
+  | { kind: "recent"; p: RecentPlayer; bold: number }
+  | { kind: "friend"; p: Friend; bold: number }
+  | { kind: "search"; name: string; tag: string };
+
+const FRIEND_DOT: Partial<Record<FriendStatus, string>> = {
+  inGame: "accent", championSelect: "accent", inQueue: "accent", chat: "good", away: "warn", dnd: "bad",
+};
+
+function friendStatus(stats: Stats, f: Friend): string {
+  switch (f.status) {
+    case "inGame": return f.champ != null && stats.champions.has(f.champ) ? t("En partie · {c}", { c: champName(stats, f.champ) }) : t("En partie");
+    case "championSelect": return t("En sélection des champions");
+    case "inQueue": return t("En file d’attente");
+    case "chat": return t("En ligne");
+    case "away": return t("Absent");
+    case "dnd": return t("Occupé");
+    case "mobile": return t("Sur mobile");
+    default: return t("Hors ligne");
+  }
+}
+
+/** Recherche de joueur : dernières recherches et amis en suggestions, sinon Riot ID complet via le client. */
+function PlayerSearch({ stats, region, clientOn, onFound }: { stats: Stats; region: string | null; clientOn: boolean; onFound: (puuid: string) => void }) {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const search = async () => {
-    if (!query.trim()) return;
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const recent = useRecentPlayers();
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open || !clientOn) return;
+    let alive = true;
+    loadFriends().then((l) => alive && setFriends(l)).catch(() => alive && setFriends([]));
+    return () => { alive = false; };
+  }, [open, clientOn]);
+
+  const q = query.trim();
+  const full = /^\s*([^#]{3,16})#([A-Za-z0-9]{2,5})\s*$/u.exec(q);
+  const items: Suggestion[] = useMemo(() => {
+    const rec = recent.map((p) => ({ kind: "recent" as const, p, bold: matchLength(q, p.name, p.tag) })).filter((x) => x.bold >= 0).slice(0, 5);
+    const seen = new Set(rec.map((x) => x.p.puuid));
+    const fr = clientOn ? friends.filter((f) => !seen.has(f.puuid)).map((p) => ({ kind: "friend" as const, p, bold: matchLength(q, p.name, p.tag) }))
+      .filter((x) => x.bold >= 0).slice(0, q ? 8 : 5) : [];
+    const exact = full && [...rec, ...fr].some((x) => `${x.p.name}#${x.p.tag}`.toLowerCase() === q.toLowerCase());
+    const search: Suggestion[] = full && !exact ? [{ kind: "search", name: full[1].trim(), tag: full[2] }] : [];
+    return [...search, ...rec, ...fr];
+  }, [recent, friends, q, clientOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setActive(-1); }, [q]);
+
+  const close = () => { setOpen(false); setActive(-1); };
+  const openPlayer = (puuid: string) => {
+    if (!clientOn) { setError(t("Lance le client LoL pour chercher un joueur.")); return; }
+    setQuery(""); setError(null); close(); input.current?.blur();
+    onFound(puuid);
+  };
+  const search = async (text = query) => {
+    if (!text.trim()) return;
     if (!clientOn) { setError(t("Lance le client LoL pour chercher un joueur.")); return; }
     setBusy(true);
-    const r = await findPlayer(query);
+    const r = await findPlayer(text);
     setBusy(false);
-    if ("error" in r) { setError(r.error); return; }
-    setError(null);
-    setQuery("");
-    onFound(r.puuid);
+    if ("error" in r) { setError(r.error); setOpen(true); return; }
+    openPlayer(r.puuid);
   };
+  const choose = (s: Suggestion) => {
+    if (s.kind === "search") search(`${s.name}#${s.tag}`);
+    else openPlayer(s.p.puuid);
+  };
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown" && items.length) { e.preventDefault(); setOpen(true); setActive((a) => (a + 1) % items.length); }
+    else if (e.key === "ArrowUp" && items.length) { e.preventDefault(); setActive((a) => (a <= 0 ? items.length - 1 : a - 1)); }
+    else if (e.key === "Escape") { if (query) { setQuery(""); setError(null); } else { close(); input.current?.blur(); } }
+  };
+
+  const showList = open && (items.length > 0 || !!error || !clientOn || (!!q && !full));
+  const firstFriend = items.findIndex((x) => x.kind === "friend");
+  const firstRecent = items.findIndex((x) => x.kind === "recent");
+  const optId = (i: number) => `psearch-opt-${i}`;
+
   return (
-    <div className="psearch-wrap">
-      <form className="psearch" onSubmit={(e) => { e.preventDefault(); search(); }} role="search">
+    <div className="psearch-wrap" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) close(); }}>
+      <form className="psearch" role="search"
+            onSubmit={(e) => { e.preventDefault(); const s = items[active]; if (s) choose(s); else search(); }}>
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden className="psearch__lens">
           <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
           <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
-        <input className="psearch__input" placeholder={t("Rechercher un joueur : Pseudo#TAG")} value={query}
-               aria-label={t("Rechercher un joueur par son Riot ID")} spellCheck={false}
-               onChange={(e) => { setQuery(e.target.value); setError(null); }}
-               onKeyDown={(e) => { if (e.key === "Escape") { setQuery(""); setError(null); } }} />
+        <input ref={input} className="psearch__input" placeholder={t("Rechercher un joueur : Pseudo#TAG")} value={query}
+               aria-label={t("Rechercher un joueur par son Riot ID")} spellCheck={false} autoComplete="off"
+               role="combobox" aria-expanded={showList} aria-controls="psearch-list" aria-autocomplete="list"
+               aria-activedescendant={active >= 0 ? optId(active) : undefined}
+               onFocus={() => setOpen(true)}
+               onChange={(e) => { setQuery(e.target.value); setError(null); setOpen(true); }}
+               onKeyDown={onKey} />
         {busy && <span className="muted small">{t("Recherche…")}</span>}
         <span className="psearch__region" title={t("La recherche passe par le client LoL : joueurs de ce serveur seulement")}>
           {region ?? "—"}
         </span>
       </form>
-      {error && <p className="small tone-bad" role="alert">{error}</p>}
+      {showList && (
+        <div className="psearch__list" id="psearch-list" role="listbox" aria-label={t("Suggestions")}
+             onMouseDown={(e) => e.preventDefault()}>
+          {(error || !clientOn) && (
+            <p className="psearch__warn" role="alert"><span aria-hidden className="psearch__warn-dot" />{error ?? t("Lance le client LoL pour chercher un joueur.")}</p>
+          )}
+          {items.map((s, i) => (
+            <Fragment key={s.kind === "search" ? "search" : s.kind + s.p.puuid}>
+              {i === firstRecent && <p className="psearch__head">{t("Dernières recherches")}</p>}
+              {i === firstFriend && <p className="psearch__head">{t("Amis")}</p>}
+              <div id={optId(i)} role="option" aria-selected={i === active}
+                   className={`psearch__opt${i === active ? " is-active" : ""}${s.kind === "search" ? " psearch__opt--search" : ""}`}
+                   onMouseEnter={() => setActive(i)} onClick={() => choose(s)}>
+                {s.kind === "search" ? (
+                  <>
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden className="psearch__lens">
+                      <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
+                      <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                    <span className="psearch__opt-text"><span className="psearch__id">{busy ? t("Recherche…") : <>{t("Chercher")} <strong>{s.name}</strong><span className="psearch__tag">#{s.tag}</span></>}</span></span>
+                    <kbd className="psearch__key">{t("Entrée")}</kbd>
+                  </>
+                ) : (
+                  <>
+                    <ProfileIcon version={stats.ddragon} icon={s.p.icon} size={1.75} />
+                    <span className="psearch__opt-text">
+                      <span className="psearch__id"><strong>{s.p.name.slice(0, s.bold)}</strong><span className={s.bold ? "psearch__rest" : "psearch__name"}>{s.p.name.slice(s.bold)}</span><span className="psearch__tag">#{s.p.tag}</span></span>
+                      <small>
+                        {s.kind === "friend" && FRIEND_DOT[s.p.status] && <span className={`psearch__dot tone-bg-${FRIEND_DOT[s.p.status]}`} aria-hidden />}
+                        {s.kind === "recent" ? `${s.p.rank ?? t("Non classé")} · ${ago(s.p.at)}` : friendStatus(stats, s.p)}
+                      </small>
+                    </span>
+                    {s.kind === "recent" && (
+                      <button className="psearch__remove" aria-label={t("Retirer {n} des dernières recherches", { n: `${s.p.name}#${s.p.tag}` })}
+                              onClick={(e) => { e.stopPropagation(); removeRecent(s.p.puuid); }}>×</button>
+                    )}
+                  </>
+                )}
+              </div>
+            </Fragment>
+          ))}
+          {!!q && !full && <p className="psearch__hint">{t("Pour un autre joueur, tape son Riot ID complet : Pseudo#TAG")}</p>}
+        </div>
+      )}
     </div>
   );
 }
@@ -415,7 +531,12 @@ function OtherProfile({ stats, puuid, me, assets, onOpenPlayer }:
   const [queue, setQueue] = useState<"all" | QueueKind>("all");
   useEffect(() => {
     let alive = true;
-    loadPlayer(puuid, guess).then((p) => alive && setPlayer(p)).catch(() => alive && setError(true));
+    loadPlayer(puuid, guess).then((p) => {
+      if (!alive) return;
+      setPlayer(p);
+      const [name, tag] = splitRiotId(p.name);
+      if (tag) addRecent({ puuid, name, tag, icon: p.icon, rank: p.rank?.replace(/ · \d+ LP$/, "") ?? null });   // dernières recherches, gardées sur ce PC
+    }).catch(() => alive && setError(true));
     return () => { alive = false; };
   }, [puuid, guess]);
 

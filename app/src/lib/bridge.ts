@@ -9,6 +9,7 @@ import type { Draft } from "../components/DraftScreen";
 import type { PersonalState } from "./api";
 import type { AutoImport } from "../components/Runes";
 import type { GameStart } from "../components/InGameScreen";
+import type { FullscreenState } from "../components/FullscreenNotice";
 
 export interface SharedState {
   draft: Draft | null;
@@ -19,6 +20,8 @@ export interface SharedState {
   clientOn: boolean;
   clientText: string;
   inGame: GameStart | null;
+  /** Jeu réglé en Plein écran pendant la draft (voir FullscreenNotice). */
+  fullscreen?: FullscreenState;
 }
 
 export type BridgeAction =
@@ -26,7 +29,8 @@ export type BridgeAction =
   | { kind: "ban"; champ: number }
   | { kind: "role"; role: number }
   | { kind: "pool"; role: number }
-  | { kind: "expand" };
+  | { kind: "expand" }
+  | { kind: "borderless" };
 
 const STATE = "spec:state", HELLO = "spec:hello", ACTION = "spec:action", RESULT = "spec:result";
 
