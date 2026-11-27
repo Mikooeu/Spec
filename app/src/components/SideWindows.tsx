@@ -143,7 +143,8 @@ export function BubbleWindow() {
   const leave = useRef<number | undefined>(undefined);
   const box = useRef<HTMLDivElement>(null);
   const draft = shared?.draft ?? null;
-  const open = hover || (!!draft?.myTurn && !draft.myLocked);
+  // pas d’ouverture automatique à ton tour : la carte cacherait les picks adverses. La bulle s’illumine, la carte s’ouvre au survol.
+  const open = hover;
 
   // la fenêtre prend la taille de la bulle (repliée ou ouverte) et reste calée dans le coin du client
   useEffect(() => {
