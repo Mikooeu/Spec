@@ -16,7 +16,7 @@ import { recordPick } from "./lib/impact";
 import { loadStats, register, usePersonal, useRegionStats, type Region } from "./lib/api";
 import { champName, int, normalize, patchLabel, usePersistent, useUiScale } from "./lib/ui";
 import { IN_APP, importRunes, importSpells, preselect, preselectBan, sessionToDraft, useLolClient, type Account, type ClientState } from "./lib/lcu";
-import { AutoImportContext, ItemSetImportContext, RuneImportContext, SpellImportContext, useFlashKey, type AutoImport } from "./components/Runes";
+import { AutoImportContext, ImportReportContext, ItemSetImportContext, RuneImportContext, SpellImportContext, useFlashKey, type AutoImport } from "./components/Runes";
 import { importItemSet } from "./lib/itemset";
 import { loadItems, useInfo } from "./lib/ddragon";
 import { REGION_LABEL, RegionSelect } from "./components/RegionSelect";
@@ -377,6 +377,7 @@ export default function App() {
       case "pool": setSideDismissed(true); onPool(a.role); await showMainWindow(); return null;
       case "expand": setSideDismissed(true); setScreen("draft"); await showMainWindow(); return null;
       case "borderless": await switchBorderless(); return null;
+      case "imported": setAutoImport(a.rec); return null;
     }
   });
 
@@ -434,7 +435,7 @@ export default function App() {
     const game = inGame ? <InGameView stats={stats} start={inGame} game={liveGame} compact /> : null;
     return (
       <RuneImportContext.Provider value={runeImporter}>
-      <AutoImportContext.Provider value={autoImport}>
+      <AutoImportContext.Provider value={autoImport}><ImportReportContext.Provider value={setAutoImport}>
       <SpellImportContext.Provider value={spellImporter}>
       <ItemSetImportContext.Provider value={itemSetImporter}>
       <CompactScreen stats={stats} draft={current} pool={current ? pools[current.role] : []} live={!!live}
@@ -448,14 +449,14 @@ export default function App() {
       <ReadyCheckToast check={readyCheck} compact />
       </ItemSetImportContext.Provider>
       </SpellImportContext.Provider>
-      </AutoImportContext.Provider>
+      </ImportReportContext.Provider></AutoImportContext.Provider>
       </RuneImportContext.Provider>
     );
   }
 
   return (
     <RuneImportContext.Provider value={runeImporter}>
-      <AutoImportContext.Provider value={autoImport}>
+      <AutoImportContext.Provider value={autoImport}><ImportReportContext.Provider value={setAutoImport}>
     <SpellImportContext.Provider value={spellImporter}>
     <ItemSetImportContext.Provider value={itemSetImporter}>
     <TopBarSlot.Provider value={topSlot}>
@@ -574,7 +575,7 @@ export default function App() {
     </TopBarSlot.Provider>
     </ItemSetImportContext.Provider>
     </SpellImportContext.Provider>
-    </AutoImportContext.Provider>
+    </ImportReportContext.Provider></AutoImportContext.Provider>
       </RuneImportContext.Provider>
   );
 }

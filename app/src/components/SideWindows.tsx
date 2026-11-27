@@ -18,7 +18,7 @@ import { shortcutLabel, useSpecShortcut } from "../lib/settings";
 import { useLiveGame } from "../lib/live";
 import { t } from "../lib/i18n";
 import { CompactScreen } from "./CompactScreen";
-import { AutoImportContext, ItemSetImportContext, RunePage, RuneImportContext, SpellImportContext } from "./Runes";
+import { AutoImportContext, ImportReportContext, ItemSetImportContext, RunePage, type AutoImport, RuneImportContext, SpellImportContext } from "./Runes";
 import { persoCell, useRecos, type Draft } from "./DraftScreen";
 import { ChampionIcon } from "./ChampionIcon";
 import { Logo } from "./Logo";
@@ -52,9 +52,11 @@ function Importers({ stats, shared, children }: { stats: Stats; shared: SharedSt
   return (
     <RuneImportContext.Provider value={shared.live ? importRunes : null}>
       <AutoImportContext.Provider value={shared.autoImport}>
-        <SpellImportContext.Provider value={shared.live ? importSpells : null}>
-          <ItemSetImportContext.Provider value={itemSet}>{children}</ItemSetImportContext.Provider>
-        </SpellImportContext.Provider>
+        <ImportReportContext.Provider value={reportImport}>
+          <SpellImportContext.Provider value={shared.live ? importSpells : null}>
+            <ItemSetImportContext.Provider value={itemSet}>{children}</ItemSetImportContext.Provider>
+          </SpellImportContext.Provider>
+        </ImportReportContext.Provider>
       </AutoImportContext.Provider>
     </RuneImportContext.Provider>
   );
@@ -64,6 +66,7 @@ const preselect = (champ: number) => sendAction({ kind: "preselect", champ });
 const ban = (champ: number) => sendAction({ kind: "ban", champ });
 const expand = () => { sendAction({ kind: "expand" }); };
 const borderless = () => { sendAction({ kind: "borderless" }); };
+const reportImport = (rec: AutoImport) => { sendAction({ kind: "imported", rec }); };
 
 // ---------------------------------------------------------------------------------------------
 // Mode compact collé au client

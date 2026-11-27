@@ -30,7 +30,8 @@ export type BridgeAction =
   | { kind: "role"; role: number }
   | { kind: "pool"; role: number }
   | { kind: "expand" }
-  | { kind: "borderless" };
+  | { kind: "borderless" }
+  | { kind: "imported"; rec: AutoImport };
 
 const STATE = "spec:state", HELLO = "spec:hello", ACTION = "spec:action", RESULT = "spec:result";
 

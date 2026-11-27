@@ -21,8 +21,11 @@ export const RuneImportContext = createContext<((page: Page, champion: string) =
 export const SpellImportContext = createContext<((spell1: number, spell2: number) => Promise<string | null>) | null>(null);
 
 /** Import fait tout seul au verrouillage (réglage « Importer runes et sorts au verrouillage ») : affiché sous les runes du pick. */
-export interface AutoImport { champ: number; vs: number | null; ok: boolean; text: string }
+export interface AutoImport { champ: number; vs: number | null; ok: boolean; text: string; /** runes importées mais sorts ou objets non */ partial?: boolean }
 export const AutoImportContext = createContext<AutoImport | null>(null);
+/** Remonte un import réussi à l'appli (et de là à toutes les fenêtres) : la carte de la bulle peut se refermer
+ *  et se rouvrir, ou l'écran changer, sans reproposer « Mettre à jour » pour des runes déjà importées. */
+export const ImportReportContext = createContext<((r: AutoImport) => void) | null>(null);
 
 /** Touche de Flash choisie par le joueur (F par défaut), gardée d'une partie à l'autre. */
 export function useFlashKey(): ["D" | "F", (k: "D" | "F") => void] {
@@ -122,15 +125,16 @@ function RunePageView({ stats, champ, role, page, vs, data, spells }:
   const [flashKey, setFlashKey] = useFlashKey();
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  // vis-à-vis visé par le dernier import réussi : null = runes génériques, undefined = rien importé
-  const [importedVs, setImportedVs] = useState<number | null | undefined>(undefined);
-  // import fait au verrouillage par Spec : même retour que si le joueur avait cliqué
+  // vis-à-vis visé par le dernier import réussi : null = runes génériques, undefined = rien importé.
+  // Gardé par l'appli (AutoImportContext) et pas seulement ici : cette vue est recréée à chaque ouverture de la bulle.
+  const [localVs, setLocalVs] = useState<number | null | undefined>(undefined);
   const auto = useContext(AutoImportContext);
+  const report = useContext(ImportReportContext);
+  const mine = auto && auto.champ === champ ? auto : null;
+  const importedVs = mine?.ok ? mine.vs : localVs;
   useEffect(() => {
-    if (!auto || auto.champ !== champ) return;
-    if (auto.ok) setImportedVs(auto.vs);
-    setStatus({ ok: auto.ok, text: auto.text });
-  }, [auto, champ]);
+    if (mine) setStatus({ ok: mine.ok && !mine.partial, text: mine.text });
+  }, [mine?.ok, mine?.partial, mine?.text, mine?.vs, champ]); // eslint-disable-line react-hooks/exhaustive-deps
   const outdated = importedVs === null && vs != null;
   const ordered = spells ? orderSpells(spells.spells, flashKey) : null;
   const run = async () => {
@@ -144,12 +148,17 @@ function RunePageView({ stats, champ, role, page, vs, data, spells }:
     const spellError = !error && ordered && spellImporter ? await spellImporter(ordered[0], ordered[1]) : null;
     const itemError = !error && itemImporter ? await itemImporter(champ, role) : null;
     setBusy(false);
-    if (!error) setImportedVs(vs);
-    setStatus(error ? { ok: false, text: error }
+    const next = error ? { ok: false, text: error }
       : spellError ? { ok: false, text: t("Runes importées, mais pas les sorts : {spellError}", { spellError: spellError }) }
       : itemError ? { ok: false, text: t("Runes et sorts importés, mais pas le set d’objets : {itemError}", { itemError }) }
       : { ok: true, text: t("Runes importées dans ta page « Spec : {name} runes »{v}{w}.", { name: name,
-          v: ordered && spellImporter ? t(", sorts choisis") : "", w: itemImporter ? t(", set d’objets dans ton shop") : "" }) });
+          v: ordered && spellImporter ? t(", sorts choisis") : "", w: itemImporter ? t(", set d’objets dans ton shop") : "" }) };
+    setStatus(next);
+    if (!error) {
+      setLocalVs(vs);
+      // les runes sont dans le client même si les sorts ou le set d'objets ont échoué
+      report?.({ champ, vs, ok: true, partial: !next.ok, text: next.text });
+    }
   };
   const wr = page.games ? pct(page.wins / page.games) : "";
   return (
