@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { loadStats } from "../lib/api";
 import { loadItems, localizeChampions, useInfo } from "../lib/ddragon";
-import { banSuggestions, ROLE_LABELS, type Stats } from "../lib/score";
+import { banSuggestions, lockedLaner, ROLE_LABELS, type Stats } from "../lib/score";
 import { champName, pct, usePersistent, wrTone } from "../lib/ui";
 import { sendAction, useSharedState, type SharedState } from "../lib/bridge";
 import { FullscreenNotice } from "./FullscreenNotice";
@@ -269,7 +269,7 @@ function Bubble({ stats, shared, draft, open }: { stats: Stats; shared: SharedSt
         {shown && (
           <div className={`bubble-card${leaving ? " is-leaving" : ""}`}>
             <BubbleHead stats={stats} draft={draft} tag={t("Verrouillé")} tone="good" />
-            <RunePage stats={stats} champ={draft.myChamp} role={draft.role} laner={null} />
+            <RunePage stats={stats} champ={draft.myChamp} role={draft.role} laner={lockedLaner(stats, draft.myChamp, draft.role, draft.allies, draft.enemies)} />
             <FullscreenNotice state={shared.fullscreen ?? null} onSwitch={borderless} compact />
             <button className="link bubble-card__more" onClick={expand}>{t("Agrandir ↗")}</button>
           </div>

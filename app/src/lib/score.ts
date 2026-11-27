@@ -296,6 +296,16 @@ export interface Result {
   exposure: number;
 }
 
+/** Vis-à-vis probable une fois le pick verrouillé (≥ 50 % d'être en face), ou null.
+ *  Une seule règle pour l'écran Draft, la bulle, le mode compact et l'import au verrouillage :
+ *  sinon les runes affichées et importées divergent (bug 0.20.5 : la bulle montrait la page générale). */
+export function lockedLaner(stats: Stats, champ: number, role: number, allies: (number | null)[], enemies: (number | null)[]): number | null {
+  const a = allies.filter((c, i): c is number => c != null && i !== role);
+  const e = enemies.filter((c): c is number => c != null);
+  const lane = scoreChampion(stats, champ, role, a, e).details[0];
+  return lane && lane.p >= 0.5 ? lane.enemy : null;
+}
+
 export function scoreChampion(
   stats: Stats, champ: number, role: number, allies: number[], enemies: number[],
   params: Params = stats.params,
